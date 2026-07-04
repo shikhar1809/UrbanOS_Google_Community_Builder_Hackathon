@@ -100,7 +100,8 @@
             animation: flyPacket 1.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
         }
     </style>
-<link crossorigin="" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" rel="stylesheet"/><script crossorigin="" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script></head>
+<link crossorigin="" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" rel="stylesheet"/><script crossorigin="" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script><script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
 <body class="h-screen flex flex-col overflow-hidden">
 <div class="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#0A0A0A] transition-opacity duration-700" id="splash-screen">
 <div class="flex flex-col items-center">
@@ -378,38 +379,65 @@
 </div>
 </div>
 </div>
-<div class="view-content w-full h-full gap-5" id="view-insights">
-<aside class="w-[340px] flex flex-col gap-5 overflow-y-auto pr-1">
-<div class="card p-6 flex flex-col gap-5">
-<h3 class="text-lg text-white font-medium">Citizen Satisfaction</h3>
-<div class="text-5xl text-white font-medium tracking-tight serif text-center my-4"><span id="citizen-rating">0.0</span><span class="text-xl text-zinc-500">/5</span></div>
-<div class="flex justify-center gap-1 text-amber-400 mb-2">
-<span class="material-symbols-outlined">star</span>
-<span class="material-symbols-outlined">star</span>
-<span class="material-symbols-outlined">star</span>
-<span class="material-symbols-outlined">star</span>
-<span class="material-symbols-outlined text-zinc-600">star</span>
+<div class="view-content w-full h-full flex-col gap-5" id="view-insights">
+<!-- KPI Bar -->
+<div class="flex gap-5">
+    <div class="card p-5 flex-1 flex flex-col justify-center border-l-4 border-l-blue-500">
+        <div class="text-sm text-zinc-500">Annual Allocation</div>
+        <div class="text-2xl text-white font-medium">₹5.00 Cr</div>
+    </div>
+    <div class="card p-5 flex-1 flex flex-col justify-center border-l-4 border-l-amber-500">
+        <div class="text-sm text-zinc-500">Est. Funds Requested</div>
+        <div class="text-2xl text-white font-medium" id="kpi-funds-requested">₹0</div>
+    </div>
+    <div class="card p-5 flex-1 flex flex-col justify-center border-l-4 border-l-green-500">
+        <div class="text-sm text-zinc-500">Est. Unspent Balance</div>
+        <div class="text-2xl text-white font-medium" id="kpi-funds-balance">₹5.00 Cr</div>
+    </div>
+    <div class="card p-5 flex-1 flex flex-col justify-center border-l-4 border-l-purple-500">
+        <div class="text-sm text-zinc-500">Projects Sanctioned</div>
+        <div class="text-2xl text-white font-medium" id="kpi-sanctioned-count">0</div>
+    </div>
 </div>
-<div class="text-center text-xs text-zinc-500" id="citizen-responses">Based on 0 responses</div>
-</div>
-</aside>
-<div class="card flex-1 flex flex-col overflow-hidden bg-[#161616]">
-<div class="p-6 border-b border-[#262626]">
-<h3 class="serif text-xl text-white">Recent Feedback</h3>
-</div>
-<div class="flex-1 overflow-auto">
-<table class="w-full text-left text-sm whitespace-nowrap">
-<thead class="text-xs text-zinc-500 bg-[#161616] sticky top-0 border-b border-[#262626]">
-<tr>
-<th class="font-medium px-6 py-4">Citizen</th>
-<th class="font-medium px-4 py-4">Category</th>
-<th class="font-medium px-4 py-4">Feedback</th>
-<th class="font-medium px-6 py-4 text-right">Rating</th>
-</tr>
-</thead>
-<tbody class="divide-y divide-[#262626]" id="survey-queue-body"></tbody>
-</table>
-</div>
+
+<!-- Main Area -->
+<div class="flex flex-1 gap-5 overflow-hidden">
+    <!-- Charts Sidebar -->
+    <aside class="w-[400px] flex flex-col gap-5 overflow-y-auto pr-1">
+        <div class="card p-6 flex flex-col gap-4">
+            <h3 class="text-lg text-white font-medium">Sectoral Fund Demand</h3>
+            <div class="relative w-full aspect-square flex items-center justify-center">
+                <canvas id="sectorChart"></canvas>
+            </div>
+        </div>
+        <div class="card p-6 flex flex-col gap-4">
+            <h3 class="text-lg text-white font-medium">Project Lifecycle</h3>
+            <div class="relative w-full h-48">
+                <canvas id="lifecycleChart"></canvas>
+            </div>
+        </div>
+    </aside>
+    
+    <!-- Pipeline Table -->
+    <div class="card flex-1 flex flex-col overflow-hidden bg-[#161616]">
+        <div class="p-6 border-b border-[#262626] flex justify-between items-center">
+            <h3 class="serif text-xl text-white">High-Value Project Pipeline</h3>
+            <span class="text-xs text-zinc-500">Sorted by Estimated Budget Requirement</span>
+        </div>
+        <div class="flex-1 overflow-auto">
+            <table class="w-full text-left text-sm whitespace-nowrap">
+                <thead class="text-xs text-zinc-500 bg-[#161616] sticky top-0 border-b border-[#262626] z-10">
+                    <tr>
+                        <th class="font-medium px-6 py-4">Proposed Project</th>
+                        <th class="font-medium px-4 py-4">Sector</th>
+                        <th class="font-medium px-4 py-4 text-center">Status</th>
+                        <th class="font-medium px-6 py-4 text-right">Est. Budget</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-[#262626]" id="pipeline-queue-body"></tbody>
+            </table>
+        </div>
+    </div>
 </div>
 </div>
 <div class="view-content w-full h-full gap-5" id="view-coordination">
@@ -677,6 +705,91 @@
                 }
                 
                 lastMessageCount = data.length;
+                // --- MPLADS INSIGHTS LOGIC ---
+                let totalRequested = 0;
+                let projectsSanctioned = 0;
+                let sectorBudgets = { constr: 0, land: 0, infra: 0, util: 0 };
+                let lifecycle = { requested: 0, review: 0, sanctioned: 0, completed: 0 };
+                let pipelineProjects = [];
+                
+                data.forEach(msg => {
+                    let cat = (msg.category || "").toLowerCase();
+                    let feasi = (msg.sentiment || "").toLowerCase();
+                    let prio = (msg.priority || "").toLowerCase();
+                    
+                    // Estimate Budget (Mock logic based on priority)
+                    let estBudget = 500000; // base 5 Lakhs
+                    if (prio === "critical") estBudget = 5000000;
+                    else if (prio === "high") estBudget = 2500000;
+                    else if (prio === "medium") estBudget = 1000000;
+                    
+                    totalRequested += estBudget;
+                    
+                    if (cat.includes("construction")) sectorBudgets.constr += estBudget;
+                    else if (cat.includes("land")) sectorBudgets.land += estBudget;
+                    else if (cat.includes("infrastruct") || cat.includes("upgrade")) sectorBudgets.infra += estBudget;
+                    else sectorBudgets.util += estBudget;
+                    
+                    let status = "Requested";
+                    if (feasi === "high" || msg.status === "Closed") { status = "Sanctioned"; lifecycle.sanctioned++; projectsSanctioned++; }
+                    else if (feasi === "moderate") { status = "Under Review"; lifecycle.review++; }
+                    else if (feasi === "complex") { status = "Feasibility Check"; lifecycle.requested++; }
+                    else { lifecycle.requested++; }
+                    
+                    pipelineProjects.push({
+                        title: msg.summary || "New " + (msg.category || "Project"),
+                        sector: msg.category || "General",
+                        status: status,
+                        budget: estBudget,
+                        loc: msg.extracted_location || "Unknown"
+                    });
+                });
+                
+                // Update KPIs
+                const fmtMoney = val => '₹' + (val / 100000).toFixed(2) + ' L';
+                const fmtCr = val => '₹' + (val / 10000000).toFixed(2) + ' Cr';
+                
+                const elFundsReq = document.getElementById('kpi-funds-requested');
+                if(elFundsReq) elFundsReq.innerText = fmtCr(totalRequested);
+                
+                const elFundsBal = document.getElementById('kpi-funds-balance');
+                if(elFundsBal) elFundsBal.innerText = fmtCr(50000000 - totalRequested);
+                
+                const elSanc = document.getElementById('kpi-sanctioned-count');
+                if(elSanc) elSanc.innerText = projectsSanctioned;
+                
+                // Populate Pipeline Table
+                pipelineProjects.sort((a,b) => b.budget - a.budget);
+                const plBody = document.getElementById('pipeline-queue-body');
+                if(plBody) {
+                    plBody.innerHTML = pipelineProjects.slice(0, 15).map(p => {
+                        let statColor = "text-yellow-400";
+                        if (p.status === "Sanctioned") statColor = "text-green-400";
+                        if (p.status === "Feasibility Check") statColor = "text-red-400";
+                        
+                        return `<tr>
+                            <td class="px-6 py-4">
+                                <div class="font-medium text-white">${p.title}</div>
+                                <div class="text-xs text-zinc-500">Loc: ${p.loc}</div>
+                            </td>
+                            <td class="px-4 py-4 text-zinc-300">${p.sector}</td>
+                            <td class="px-4 py-4 text-center ${statColor} font-medium">${p.status}</td>
+                            <td class="px-6 py-4 text-right font-mono text-white">${fmtMoney(p.budget)}</td>
+                        </tr>`;
+                    }).join('');
+                }
+                
+                // Update Charts
+                if (window.sectorChart) {
+                    window.sectorChart.data.datasets[0].data = [sectorBudgets.constr, sectorBudgets.land, sectorBudgets.infra, sectorBudgets.util];
+                    window.sectorChart.update();
+                }
+                if (window.lifecycleChart) {
+                    window.lifecycleChart.data.datasets[0].data = [lifecycle.requested, lifecycle.review, lifecycle.sanctioned, lifecycle.completed];
+                    window.lifecycleChart.update();
+                }
+                // --- END MPLADS INSIGHTS LOGIC ---
+
 
                 const tbody = document.getElementById('queue-body');
                 
