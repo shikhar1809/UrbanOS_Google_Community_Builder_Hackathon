@@ -308,24 +308,24 @@
 <div class="sparkline w-full mt-4"></div>
 </div>
 <div class="card p-6 flex flex-col gap-5">
-<h3 class="text-lg text-white font-medium">Sentiment Analysis</h3>
+<h3 class="text-lg text-white font-medium">Feasibility Assessment</h3>
 <div class="flex items-center justify-between text-sm">
-<div class="w-24 text-red-400">Angry</div>
+<div class="w-24 text-red-400">Complex</div>
 <div class="flex-1 px-4"><div class="segmented-bar" id="ana-seg-angry"></div></div>
 <div class="w-8 text-right text-white" id="ana-pct-angry">0%</div>
 </div>
 <div class="flex items-center justify-between text-sm">
-<div class="w-24 text-orange-400">Frustrated</div>
+<div class="w-24 text-orange-400">Unknown</div>
 <div class="flex-1 px-4"><div class="segmented-bar" id="ana-seg-frust"></div></div>
 <div class="w-8 text-right text-white" id="ana-pct-frust">0%</div>
 </div>
 <div class="flex items-center justify-between text-sm">
-<div class="w-24 text-yellow-400">Urgent</div>
+<div class="w-24 text-yellow-400">Moderate</div>
 <div class="flex-1 px-4"><div class="segmented-bar" id="ana-seg-urgent"></div></div>
 <div class="w-8 text-right text-white" id="ana-pct-urgent">0%</div>
 </div>
 <div class="flex items-center justify-between text-sm">
-<div class="w-24 text-green-400">Neutral</div>
+<div class="w-24 text-green-400">High</div>
 <div class="flex-1 px-4"><div class="segmented-bar" id="ana-seg-neutral"></div></div>
 <div class="w-8 text-right text-white" id="ana-pct-neutral">0%</div>
 </div>
@@ -703,11 +703,11 @@
                         else if (cat.includes("transport") || cat.includes("bus") || cat.includes("road")) counts.road_failure++; // Maps to Transport
                         else counts.crime_general++; // Maps to Community/Other
                         
-                        const sent = (msg.sentiment || "").toLowerCase();
-                        if (sent.includes("angry")) sCounts.angry++;
-                        else if (sent.includes("frustrated")) sCounts.frust++;
-                        else if (sent.includes("urgent")) sCounts.urgent++;
-                        else sCounts.neutral++;
+                        const sent = (msg.sentiment || "").toLowerCase(); // Now contains feasibility
+                        if (sent.includes("complex")) sCounts.angry++;
+                        else if (sent.includes("unknown")) sCounts.frust++;
+                        else if (sent.includes("moderate")) sCounts.urgent++;
+                        else sCounts.neutral++; // High or other
                     });
                     
                     const total = data.length || 1;

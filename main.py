@@ -97,7 +97,7 @@ gemini_client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
 class TriageResult(BaseModel):
     category: str = Field(description="Must be one of: Education, Healthcare, Public Transport, Community Spaces, Infrastructure Upgrade, Other")
     priority: str = Field(description="Must be one of: Low, Medium, High, Critical")
-    sentiment: str = Field(description="Must be one of: Neutral, Frustrated, Angry, Urgent")
+    feasibility: str = Field(alias="sentiment", description="Must be one of: High, Moderate, Complex, Unknown. Maps to the old sentiment DB column.")
     extracted_location: str = Field(description="Street name, landmark, or area extracted from text. Empty string if none.")
     summary: str = Field(description="Short 4-5 word summary title of the project proposal.")
     original_language: str = Field(description="The language the user originally submitted their request in (e.g., Hindi, English, Spanish).")
@@ -284,7 +284,7 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db: Ses
                 triage = response.parsed
                 category = triage.category
                 priority = triage.priority
-                sentiment = triage.sentiment
+                feasibility = triage.feasibility
                 original_language = triage.original_language
 
                 if loc_source == "text":
@@ -304,7 +304,7 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db: Ses
             location_source=loc_source,
             category=category,
             priority=priority,
-            sentiment=sentiment,
+            sentiment=feasibility,
             extracted_location=extracted_location,
             summary=summary,
             original_language=original_language,
