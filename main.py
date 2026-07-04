@@ -74,6 +74,10 @@ async def root():
 async def service_worker():
     return FileResponse("sw.js", media_type="application/javascript")
 
+@app.get("/favicon.svg")
+async def favicon():
+    return FileResponse("favicon.svg", media_type="image/svg+xml")
+
 @app.post("/webhook/whatsapp")
 async def receive_whatsapp(request: Request, db: Session = Depends(get_db)):
     form_data = await request.form()
