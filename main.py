@@ -46,8 +46,15 @@ class Message(Base):
     reference_id = Column(String, nullable=True)
     status = Column(String, default="Open")
 
-# Ensure all models including state are created
-import state
+class ConversationSession(Base):
+    __tablename__ = "sessions"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    phone_number = Column(String, unique=True, index=True)
+    current_step = Column(String)
+    collected_data = Column(Text) # JSON string
+
+# Ensure all models are created
 Base.metadata.create_all(bind=engine)
 
 def get_db():
@@ -158,7 +165,7 @@ async def receive_whatsapp(request: Request, background_tasks: BackgroundTasks, 
     elif current_step == "awaiting_description":
         if "audio" in media_type and media_url:
             twiml.message("Voice note received, processing your description now...")
-            background_tasks.add_task(process_voice_note, media_url, sender, db)
+            background_tasks.add_task(process_voice_note, media_url, sender)
             return HTMLResponse(content=str(twiml), media_type="application/xml")
         
         elif body:
@@ -201,7 +208,11 @@ async def receive_whatsapp(request: Request, background_tasks: BackgroundTasks, 
     # Finalize Logic (Run if step moved to finalize above)
     session = get_session(db, sender) # refresh session
     if session and session.current_step == "finalize":
-        data = json.loads(session.collected_data)
+        data = {}
+        try:
+            data = json.loads(session.collected_data) if session.collected_data else {}
+        except Exception:
+            pass
         
         description = data.get("description", "")
         location_raw = data.get("location", "")

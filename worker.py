@@ -37,11 +37,19 @@ def notify_status_change(phone_number: str, reference_id: str, new_status: str, 
     body = f"Update on your report #{reference_id}: It is now '{new_status}' and has been assigned to {department}."
     return send_whatsapp_message(phone_number, body)
 
-async def process_voice_note(media_url: str, phone_number: str, db_session):
-    # Delayed import to avoid circular dependency
+async def process_voice_note(media_url: str, phone_number: str):
+    # Delayed imports to avoid circular dependency
     from state import update_session
+    from main import SessionLocal
     
+    db_session = SessionLocal()
     print(f"[WORKER] Starting transcription for {phone_number}...")
+    
+    if not gemini_client:
+        print(f"[WORKER ERROR] Gemini API key not configured. Cannot transcribe for {phone_number}.")
+        send_whatsapp_message(phone_number, "Transcription is currently unavailable. Could you please type your description instead?")
+        db_session.close()
+        return
     
     # 1. Download the audio file from Twilio
     try:
@@ -79,3 +87,5 @@ async def process_voice_note(media_url: str, phone_number: str, db_session):
     except Exception as e:
         print(f"[WORKER ERROR] Voice note processing failed: {e}")
         send_whatsapp_message(phone_number, "We had trouble transcribing your voice note. Could you please type your description instead?")
+    finally:
+        db_session.close()

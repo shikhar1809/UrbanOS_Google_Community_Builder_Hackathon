@@ -1,16 +1,7 @@
 import json
-from sqlalchemy import Column, Integer, String, Text
-from main import Base, SessionLocal
-
-class ConversationSession(Base):
-    __tablename__ = "sessions"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    phone_number = Column(String, unique=True, index=True)
-    current_step = Column(String)
-    collected_data = Column(Text) # JSON string
 
 def get_session(db_session, phone_number: str):
+    from main import ConversationSession
     return db_session.query(ConversationSession).filter_by(phone_number=phone_number).first()
 
 def update_session(db_session, phone_number: str, step: str, data: dict = None):
@@ -21,7 +12,9 @@ def update_session(db_session, phone_number: str, step: str, data: dict = None):
     if session and session.collected_data:
         try:
             new_data = json.loads(session.collected_data)
-        except:
+            if not isinstance(new_data, dict):
+                new_data = {}
+        except Exception:
             pass
             
     if data:
@@ -33,6 +26,7 @@ def update_session(db_session, phone_number: str, step: str, data: dict = None):
         session.current_step = step
         session.collected_data = data_str
     else:
+        from main import ConversationSession
         session = ConversationSession(
             phone_number=phone_number,
             current_step=step,
