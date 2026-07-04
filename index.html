@@ -307,7 +307,7 @@
 <aside class="w-[340px] flex flex-col gap-5 overflow-y-auto pr-1">
 <div class="card p-6 flex flex-col gap-5">
 <h3 class="text-lg text-white font-medium">Monthly Grievance Volume</h3>
-<div class="text-4xl text-white font-medium tracking-tight serif">12,450</div>
+<div class="text-4xl text-white font-medium tracking-tight serif"><span id="dynamic-volume">0</span></div>
 <div class="text-xs text-green-500">+14% vs last month</div>
 <div class="sparkline w-full mt-4"></div>
 </div>
@@ -382,20 +382,7 @@
 <th class="font-medium px-6 py-4 text-right">Rating</th>
 </tr>
 </thead>
-<tbody class="divide-y divide-[#262626]">
-<tr class="hover:bg-[#1C1C1C] transition">
-<td class="px-6 py-4 text-white">Rahul K.</td>
-<td class="px-4 py-4 text-zinc-400">Sanitation</td>
-<td class="px-4 py-4 text-zinc-300">Resolved quickly, but area was left messy.</td>
-<td class="px-6 py-4 text-right text-amber-400">⭐⭐⭐</td>
-</tr>
-<tr class="hover:bg-[#1C1C1C] transition">
-<td class="px-6 py-4 text-white">Priya S.</td>
-<td class="px-4 py-4 text-zinc-400">Medical</td>
-<td class="px-4 py-4 text-zinc-300">Excellent emergency response time!</td>
-<td class="px-6 py-4 text-right text-amber-400">⭐⭐⭐⭐⭐</td>
-</tr>
-</tbody>
+<tbody class="divide-y divide-[#262626]" id="survey-queue-body"></tbody>
 </table>
 </div>
 </div>
@@ -629,6 +616,45 @@
                 const tbody = document.getElementById('queue-body');
                 
                 if(tbody && data && data.length > 0) {
+                    
+                    // -- DYNAMIC UI BINDINGS --
+                    // 1. Update Monthly Volume
+                    const vol = document.getElementById('dynamic-volume');
+                    if(vol) vol.innerText = data.length.toLocaleString();
+                    
+                    // 2. Update Sentiment Score
+                    const sent = document.getElementById('dynamic-sentiment');
+                    if(sent) {
+                        let totalScore = data.reduce((acc, msg) => acc + (msg.body && msg.body.length > 30 ? 85 : 45), 0);
+                        let avg = data.length > 0 ? (totalScore / data.length) : 0;
+                        sent.innerText = avg.toFixed(1) + " (Live)";
+                    }
+                    
+                    // 3. Update Survey Table
+                    const survBody = document.getElementById('survey-queue-body');
+                    if(survBody) {
+                        survBody.innerHTML = data.slice(-5).reverse().map(msg => {
+                            let score = msg.body && msg.body.length > 30 ? 85 : 45;
+                            let rating = score > 80 ? '⭐⭐⭐' : '⭐⭐';
+                            return `<tr class="border-b border-[#262626]">
+                                <td class="px-6 py-4 text-white font-medium">${msg.from}</td>
+                                <td class="px-4 py-4 text-zinc-400">${msg.body || 'Media'}</td>
+                                <td class="px-4 py-4 text-right">${rating}</td>
+                            </tr>`;
+                        }).join('');
+                    }
+                    
+                    // 4. Update Live Map Pins / Heatmap
+                    if (window.liveHeatLayer) {
+                        // clear existing
+                        window.liveHeatLayer.setLatLngs([]);
+                        data.forEach(msg => {
+                            if (msg.latitude && msg.longitude) {
+                                window.liveHeatLayer.addLatLng([msg.latitude, msg.longitude, 1.0]);
+                            }
+                        });
+                    }
+            
                     const newRows = data.map((msg, index) => {
                         const date = new Date(msg.timestamp).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
                         let score = msg.body && msg.body.length > 30 ? 85 : 45;
@@ -694,26 +720,8 @@
                     maxZoom: 19
                 }).addTo(map3);
                 
-                // Generate some dummy heat points around central Lucknow
-                const heatPoints = [];
-                const centerLat = 26.8467;
-                const centerLng = 80.9462;
-                
-                // Hazratganj cluster
-                for(let i=0; i<150; i++) {
-                    heatPoints.push([centerLat + (Math.random() - 0.5) * 0.02, centerLng + (Math.random() - 0.5) * 0.02, Math.random()]);
-                }
-                // Chowk cluster
-                for(let i=0; i<80; i++) {
-                    heatPoints.push([centerLat + 0.02 + (Math.random() - 0.5) * 0.015, centerLng - 0.02 + (Math.random() - 0.5) * 0.015, Math.random()]);
-                }
-                // Gomti Nagar cluster
-                for(let i=0; i<100; i++) {
-                    heatPoints.push([centerLat + 0.01 + (Math.random() - 0.5) * 0.03, centerLng + 0.04 + (Math.random() - 0.5) * 0.03, Math.random()]);
-                }
-
                 if(typeof L.heatLayer !== 'undefined') {
-                    L.heatLayer(heatPoints, {
+                    window.liveHeatLayer = L.heatLayer([], {
                         radius: 20,
                         blur: 15,
                         maxZoom: 14,
