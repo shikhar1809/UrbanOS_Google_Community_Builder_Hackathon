@@ -168,13 +168,13 @@
 <h3 class="text-lg z-10 mb-6 text-white font-medium">Development Proposals Today</h3>
 <div class="relative z-10 flex-1">
 <div class="inline-flex items-center gap-2 bg-[#262626] border border-[#333] px-3 py-1.5 rounded-full text-xs text-white absolute top-0 left-0 shadow-lg">
-<span class="material-symbols-outlined text-[14px] text-zinc-400">school</span> Education 45
+<span class="material-symbols-outlined text-[14px] text-zinc-400">construction</span> Construction 45
                     </div>
 <div class="inline-flex items-center gap-2 bg-[#262626] border border-[#333] px-3 py-1.5 rounded-full text-xs text-white absolute top-10 right-0 shadow-lg">
-<span class="material-symbols-outlined text-[14px] text-zinc-400">local_hospital</span> Healthcare 28
+<span class="material-symbols-outlined text-[14px] text-zinc-400">landscape</span> Land Dev 28
                     </div>
 <div class="inline-flex items-center gap-2 bg-[#262626] border border-[#333] px-3 py-1.5 rounded-full text-xs text-white absolute bottom-12 left-6 shadow-lg">
-<span class="material-symbols-outlined text-[14px] text-zinc-400">directions_bus</span> Transport 61
+<span class="material-symbols-outlined text-[14px] text-zinc-400">domain</span> Infrastructure 61
                     </div>
 </div>
 <div class="relative z-10 mt-auto pt-6 border-t border-zinc-800">
@@ -196,32 +196,32 @@
 <h3 class="text-lg text-white font-medium">Development Sectors</h3>
 <div class="flex flex-col gap-4">
 <div class="flex items-center justify-between text-sm">
-<div class="flex items-center gap-2 w-32 text-zinc-300">
-<span class="material-symbols-outlined text-lg text-zinc-400">school</span> Education
+<div class="flex items-center gap-2 w-48 text-zinc-300">
+<span class="material-symbols-outlined text-lg text-zinc-400">construction</span> Construction
                         </div>
 <div class="flex-1 px-4"><div class="segmented-bar" id="seg-1"></div></div>
-<div class="w-8 text-right text-white" id="pct-clean">0%</div>
+<div class="w-8 text-right text-white" id="pct-constr">0%</div>
 </div>
 <div class="flex items-center justify-between text-sm">
-<div class="flex items-center gap-2 w-32 text-zinc-300">
-<span class="material-symbols-outlined text-lg text-zinc-400">local_hospital</span> Healthcare
+<div class="flex items-center gap-2 w-48 text-zinc-300">
+<span class="material-symbols-outlined text-lg text-zinc-400">landscape</span> Land Dev
                         </div>
 <div class="flex-1 px-4"><div class="segmented-bar" id="seg-2"></div></div>
-<div class="w-8 text-right text-white" id="pct-power">0%</div>
+<div class="w-8 text-right text-white" id="pct-land">0%</div>
 </div>
 <div class="flex items-center justify-between text-sm">
 <div class="flex items-center gap-2 w-48 text-zinc-300 whitespace-nowrap">
-<span class="material-symbols-outlined text-lg text-zinc-400">directions_bus</span> Public Transport
+<span class="material-symbols-outlined text-lg text-zinc-400">domain</span> Infrastructure
                         </div>
 <div class="flex-1 px-4"><div class="segmented-bar" id="seg-3"></div></div>
-<div class="w-8 text-right text-white" id="pct-roads">0%</div>
+<div class="w-8 text-right text-white" id="pct-infra">0%</div>
 </div>
 <div class="flex items-center justify-between text-sm">
 <div class="flex items-center gap-2 w-48 text-zinc-300 whitespace-nowrap">
-<span class="material-symbols-outlined text-lg text-zinc-400">park</span> Community Spaces
+<span class="material-symbols-outlined text-lg text-zinc-400">water_drop</span> Public Utility
                         </div>
 <div class="flex-1 px-4"><div class="segmented-bar" id="seg-4"></div></div>
-<div class="w-8 text-right text-white" id="pct-crime">0%</div>
+<div class="w-8 text-right text-white" id="pct-util">0%</div>
 </div>
 </div>
 </div>
@@ -565,7 +565,7 @@
         }, 500);
     
         // Generate Segmented Bars exactly like the reference image
-        function drawSegments(id, percentage) {
+        function updateSegmentedBar(id, percentage) {
             const container = document.getElementById(id);
             const totalSegments = 30; // More segments for fidelity
             const activeSegments = Math.round((percentage / 100) * totalSegments);
@@ -685,7 +685,7 @@
                     // -- DYNAMIC UI BINDINGS --
                     
                     // -- REALTIME NLP CATEGORIZATION ENGINE --
-                    const counts = { cleanliness: 0, powerwater: 0, road_failure: 0, crime_general: 0 };
+                    const counts = { constr: 0, land: 0, infra: 0, util: 0 };
                     const sCounts = { angry: 0, frust: 0, urgent: 0, neutral: 0 };
                     const now = Date.now();
                     let latestTs = 0;
@@ -698,10 +698,10 @@
                         }
                         
                         const cat = (msg.category || "").toLowerCase();
-                        if (cat.includes("education") || cat.includes("school")) counts.cleanliness++; // Maps to Education
-                        else if (cat.includes("healthcare") || cat.includes("hospital") || cat.includes("medical")) counts.powerwater++; // Maps to Healthcare
-                        else if (cat.includes("transport") || cat.includes("bus") || cat.includes("road")) counts.road_failure++; // Maps to Transport
-                        else counts.crime_general++; // Maps to Community/Other
+                        if (cat.includes("construction")) counts.constr++;
+                        else if (cat.includes("land")) counts.land++;
+                        else if (cat.includes("infrastruct") || cat.includes("upgrade")) counts.infra++;
+                        else counts.util++; // Public Utility or Other
                         
                         const sent = (msg.sentiment || "").toLowerCase(); // Now contains feasibility
                         if (sent.includes("complex")) sCounts.angry++;
@@ -711,38 +711,27 @@
                     });
                     
                     const total = data.length || 1;
-                    const pClean = Math.round((counts.cleanliness / total) * 100);
-                    const pPowerWater = Math.round((counts.powerwater / total) * 100);
-                    const pRoads = Math.round((counts.road_failure / total) * 100);
-                    const pCrime = Math.round((counts.crime_general / total) * 100);
+
+                    updateSegmentedBar('seg-1', (counts.constr/total)*100);
+                    updateSegmentedBar('seg-2', (counts.land/total)*100);
+                    updateSegmentedBar('seg-3', (counts.infra/total)*100);
+                    updateSegmentedBar('seg-4', (counts.util/total)*100);
                     
-                    const pAngry = Math.round((sCounts.angry / total) * 100);
-                    const pFrust = Math.round((sCounts.frust / total) * 100);
-                    const pUrgent = Math.round((sCounts.urgent / total) * 100);
-                    const pNeutral = Math.round((sCounts.neutral / total) * 100);
+                    document.getElementById('pct-constr').innerText = Math.round((counts.constr/total)*100) + '%';
+                    document.getElementById('pct-land').innerText = Math.round((counts.land/total)*100) + '%';
+                    document.getElementById('pct-infra').innerText = Math.round((counts.infra/total)*100) + '%';
+                    document.getElementById('pct-util').innerText = Math.round((counts.util/total)*100) + '%';
                     
-                    // Update Sidebar Graphs dynamically
-                    if(typeof drawSegments === 'function') {
-                        drawSegments('seg-1', pClean);
-                        drawSegments('seg-2', pPowerWater);
-                        drawSegments('seg-3', pRoads);
-                        drawSegments('seg-4', pCrime);
-                        
-                        drawSegments('ana-seg-angry', pAngry);
-                        drawSegments('ana-seg-frust', pFrust);
-                        drawSegments('ana-seg-urgent', pUrgent);
-                        drawSegments('ana-seg-neutral', pNeutral);
-                    }
+                    // Update Sidebar Graphs dynamically (Feasibility Assessment)
+                    updateSegmentedBar('ana-seg-angry', (sCounts.angry/total)*100);
+                    updateSegmentedBar('ana-seg-frust', (sCounts.frust/total)*100);
+                    updateSegmentedBar('ana-seg-urgent', (sCounts.urgent/total)*100);
+                    updateSegmentedBar('ana-seg-neutral', (sCounts.neutral/total)*100);
                     
-                    const elClean = document.getElementById('pct-clean'); if(elClean) elClean.innerText = pClean + '%';
-                    const elPower = document.getElementById('pct-power'); if(elPower) elPower.innerText = pPowerWater + '%';
-                    const elRoads = document.getElementById('pct-roads'); if(elRoads) elRoads.innerText = pRoads + '%';
-                    const elCrime = document.getElementById('pct-crime'); if(elCrime) elCrime.innerText = pCrime + '%';
-                    
-                    const elAngry = document.getElementById('ana-pct-angry'); if(elAngry) elAngry.innerText = pAngry + '%';
-                    const elFrust = document.getElementById('ana-pct-frust'); if(elFrust) elFrust.innerText = pFrust + '%';
-                    const elUrgent = document.getElementById('ana-pct-urgent'); if(elUrgent) elUrgent.innerText = pUrgent + '%';
-                    const elNeutral = document.getElementById('ana-pct-neutral'); if(elNeutral) elNeutral.innerText = pNeutral + '%';
+                    const elAngry = document.getElementById('ana-pct-angry'); if(elAngry) elAngry.innerText = Math.round((sCounts.angry/total)*100) + '%';
+                    const elFrust = document.getElementById('ana-pct-frust'); if(elFrust) elFrust.innerText = Math.round((sCounts.frust/total)*100) + '%';
+                    const elUrgent = document.getElementById('ana-pct-urgent'); if(elUrgent) elUrgent.innerText = Math.round((sCounts.urgent/total)*100) + '%';
+                    const elNeutral = document.getElementById('ana-pct-neutral'); if(elNeutral) elNeutral.innerText = Math.round((sCounts.neutral/total)*100) + '%';
 
                     // -- DYNAMIC REPORTS ANALYSIS --
                     let typeText = 0, typePhoto = 0, typePhotoText = 0, typeVoiceText = 0, typeVoice = 0, typeAll = 0;
@@ -829,7 +818,7 @@
                             let cat = msg.category || "General Infrastructure";
                             if (!projects[cat]) projects[cat] = { count: 0, urgency: 0, latestLoc: msg.extracted_location || "Various Locations", title: "New " + cat + " Initiative" };
                             projects[cat].count++;
-                            if(msg.sentiment === "Urgent" || msg.sentiment === "Angry") projects[cat].urgency++;
+                            if(msg.sentiment === "Complex" || msg.sentiment === "Moderate") projects[cat].urgency++;
                             if(msg.summary) projects[cat].title = msg.summary;
                         });
                         
