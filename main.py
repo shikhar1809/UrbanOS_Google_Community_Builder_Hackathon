@@ -66,7 +66,17 @@ TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
 twilio_validator = RequestValidator(TWILIO_AUTH_TOKEN) if TWILIO_AUTH_TOKEN else None
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-gemini_client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
+# Use Vertex AI mode (Application Default Credentials via Cloud Run service account).
+# Falls back to API key if GEMINI_API_KEY looks like a real key (starts with AIzaSy).
+try:
+    if GEMINI_API_KEY and GEMINI_API_KEY.startswith("AIzaSy"):
+        gemini_client = genai.Client(api_key=GEMINI_API_KEY)
+    else:
+        # Use Vertex AI ADC — works automatically in Cloud Run with service account
+        gemini_client = genai.Client(vertexai=True, project="urbanos101", location="us-central1")
+except Exception as _e:
+    logger.warning(f"Gemini client init failed: {_e}")
+    gemini_client = None
 
 class TriageResult(BaseModel):
     category: str = Field(description="Must be one of: Construction Development, Land Development, Infrastructure Upgrade, Public Utility Works, Environmental Project, Maintenance & Repair, Other")
@@ -398,6 +408,16 @@ async def activate_survey(survey_id: str, db = Depends(get_db)):
         doc.reference.update({"is_active": False})
     # Activate one by Firestore string ID
     db.collection('surveys').document(survey_id).update({"is_active": True})
+    return {"status": "success"}
+
+@app.post("/surveys/{survey_id}/stop")
+async def stop_survey(survey_id: str, db = Depends(get_db)):
+    db.collection('surveys').document(survey_id).update({"is_active": False})
+    return {"status": "success"}
+
+@app.delete("/surveys/{survey_id}")
+async def delete_survey(survey_id: str, db = Depends(get_db)):
+    db.collection('surveys').document(survey_id).delete()
     return {"status": "success"}
 
 

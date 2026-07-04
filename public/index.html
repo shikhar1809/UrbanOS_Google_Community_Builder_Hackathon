@@ -1767,7 +1767,16 @@
             let html = '';
             data.forEach(s => {
                 let activeBadge = s.is_active ? `<span class="px-2 py-0.5 bg-green-500/20 text-green-400 border border-green-500/50 rounded text-[10px] uppercase font-bold">Active</span>` : '';
-                let actBtn = s.is_active ? `<button onclick="broadcastSurvey(${s.id})" class="px-3 py-1 bg-blue-600 hover:bg-blue-500 rounded text-xs text-white transition font-bold flex items-center justify-center gap-1 w-full mt-2"><span class="material-symbols-outlined" style="font-size:14px;">send</span> Broadcast to All</button>` : `<button onclick="activateSurvey(${s.id})" class="px-3 py-1 bg-[#262626] hover:bg-[#333] rounded text-xs text-white transition border border-zinc-700">Set Active</button>`;
+                let actionBtns = s.is_active 
+                    ? `<div class="flex gap-2 mt-2">
+                        <button onclick="broadcastSurvey('${s.id}')" class="flex-1 px-3 py-1 bg-blue-600 hover:bg-blue-500 rounded text-xs text-white transition font-bold flex items-center justify-center gap-1"><span class="material-symbols-outlined" style="font-size:14px;">send</span> Broadcast</button>
+                        <button onclick="stopSurvey('${s.id}')" class="px-3 py-1 bg-amber-600/30 hover:bg-amber-600/50 border border-amber-600/50 rounded text-xs text-amber-400 transition font-bold flex items-center justify-center gap-1"><span class="material-symbols-outlined" style="font-size:14px;">stop_circle</span> Stop</button>
+                        <button onclick="deleteSurvey('${s.id}')" class="px-3 py-1 bg-red-600/20 hover:bg-red-600/40 border border-red-600/40 rounded text-xs text-red-400 transition font-bold flex items-center justify-center gap-1"><span class="material-symbols-outlined" style="font-size:14px;">delete</span></button>
+                      </div>`
+                    : `<div class="flex gap-2 mt-2">
+                        <button onclick="activateSurvey('${s.id}')" class="flex-1 px-3 py-1 bg-[#262626] hover:bg-[#333] rounded text-xs text-white transition border border-zinc-700">Set Active</button>
+                        <button onclick="deleteSurvey('${s.id}')" class="px-3 py-1 bg-red-600/20 hover:bg-red-600/40 border border-red-600/40 rounded text-xs text-red-400 transition font-bold flex items-center justify-center gap-1"><span class="material-symbols-outlined" style="font-size:14px;">delete</span></button>
+                      </div>`;
                 
                 let resHtml = '';
                 for(let opt in s.results) {
@@ -1783,11 +1792,11 @@
                     <div class="flex flex-wrap gap-1 mt-1 mb-1">
                         ${s.options.map(o => `<span class="px-1.5 py-0.5 bg-[#262626] rounded text-[10px] text-zinc-400 border border-zinc-800">${o}</span>`).join('')}
                     </div>
-                    <div class="bg-black/30 rounded p-2 mb-2">
+                    <div class="bg-black/30 rounded p-2 mb-1">
                         <div class="text-[10px] text-zinc-500 font-bold uppercase mb-1">Responses</div>
                         ${resHtml || '<div class="text-[10px] text-zinc-600 italic">No responses yet</div>'}
                     </div>
-                    ${actBtn}
+                    ${actionBtns}
                 </div>`;
             });
             document.getElementById('survey-list').innerHTML = html;
@@ -1855,6 +1864,17 @@
         } catch(e) {
             alert("Error: " + e.message);
         }
+    }
+    
+    async function stopSurvey(id) {
+        await fetch(`/surveys/${id}/stop`, {method: 'POST'});
+        loadSurveys();
+    }
+
+    async function deleteSurvey(id) {
+        if(!confirm('Delete this survey permanently? This cannot be undone.')) return;
+        await fetch(`/surveys/${id}`, {method: 'DELETE'});
+        loadSurveys();
     }
     
     async function activateSurvey(id) {
