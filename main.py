@@ -6,7 +6,10 @@ from twilio.twiml.messaging_response import MessagingResponse
 from state import get_session, update_session, clear_session
 from worker import process_voice_note
 import json
+import logging
+import asyncio
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse, FileResponse
+from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from twilio.request_validator import RequestValidator
 
@@ -17,6 +20,14 @@ from google import genai
 from pydantic import BaseModel, Field
 
 load_dotenv()
+
+# --- LOGGING SETUP ---
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[logging.StreamHandler()]
+)
+logger = logging.getLogger(__name__)
 
 # --- DATABASE SETUP ---
 DATABASE_URL = "sqlite:///./urbanos.db"
@@ -67,6 +78,14 @@ def get_db():
 
 app = FastAPI()
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
 twilio_validator = RequestValidator(TWILIO_AUTH_TOKEN) if TWILIO_AUTH_TOKEN else None
@@ -108,8 +127,13 @@ async def receive_whatsapp(request: Request, background_tasks: BackgroundTasks, 
             
         post_vars = {k: v for k, v in form_data.items()}
         if not twilio_validator.validate(url, post_vars, signature):
-            print(f"[SECURITY ALERT] Invalid Twilio signature from {request.client.host}. Dropping request.")
+            logger.warning(f"[SECURITY] Invalid Twilio signature from {request.client.host}. Dropping request.")
+            raise HTTPException(status_code=403, detail="Forbidden")
 
+    # Offload the blocking DB logic to a threadpool to prevent freezing the asyncio event loop
+    return await asyncio.to_thread(_process_whatsapp_sync, form_data, background_tasks, db)
+
+def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db: Session):
     sender = form_data.get("From", "")
     body = form_data.get("Body", "").strip()
     media_url = form_data.get("MediaUrl0")
@@ -123,25 +147,23 @@ async def receive_whatsapp(request: Request, background_tasks: BackgroundTasks, 
     body_lower = body.lower()
     if body_lower.startswith("status"):
         if body_lower == "status":
-            # Lookup all active for this sender
             reports = db.query(Message).filter(Message.sender == sender, Message.reference_id != None).order_by(Message.id.desc()).limit(3).all()
             if not reports:
                 twiml.message("You have no active reports.")
                 return HTMLResponse(content=str(twiml), media_type="application/xml")
             
-            msg = "Your Recent Reports:\n"
+            msg = "Your Recent Reports:\\n"
             for r in reports:
-                msg += f"#{r.reference_id} - {r.category or 'General'}\nStatus: {r.status}\n\n"
+                msg += f"#{r.reference_id} - {r.category or 'General'}\\nStatus: {r.status}\\n\\n"
             twiml.message(msg.strip())
             return HTMLResponse(content=str(twiml), media_type="application/xml")
         else:
-            # Lookup specific ID
             parts = body_lower.split()
             if len(parts) > 1:
                 ref_id = parts[1].strip('#')
                 report = db.query(Message).filter(Message.reference_id == ref_id).first()
                 if report:
-                    twiml.message(f"Report #{report.reference_id}\nCategory: {report.category or 'General'}\nStatus: {report.status}\nSummary: {report.summary}")
+                    twiml.message(f"Report #{report.reference_id}\\nCategory: {report.category or 'General'}\\nStatus: {report.status}\\nSummary: {report.summary}")
                 else:
                     twiml.message(f"Could not find report #{ref_id}.")
                 return HTMLResponse(content=str(twiml), media_type="application/xml")
@@ -157,7 +179,6 @@ async def receive_whatsapp(request: Request, background_tasks: BackgroundTasks, 
     current_step = session.current_step if session else None
     
     if current_step is None:
-        # Start new report
         twiml.message("New report started. What issue would you like to report? Please describe it in your own words. (You can also send a voice note!)")
         update_session(db, sender, "awaiting_description", {})
         return HTMLResponse(content=str(twiml), media_type="application/xml")
@@ -205,8 +226,8 @@ async def receive_whatsapp(request: Request, background_tasks: BackgroundTasks, 
             twiml.message("Please send a photo or reply 'skip'.")
             return HTMLResponse(content=str(twiml), media_type="application/xml")
             
-    # Finalize Logic (Run if step moved to finalize above)
-    session = get_session(db, sender) # refresh session
+    # Finalize Logic
+    session = get_session(db, sender)
     if session and session.current_step == "finalize":
         data = {}
         try:
@@ -223,9 +244,16 @@ async def receive_whatsapp(request: Request, background_tasks: BackgroundTasks, 
         lng = None
         if loc_source == "gps_pin" and "," in location_raw:
             try:
-                lat = float(location_raw.split(",")[0])
-                lng = float(location_raw.split(",")[1])
-            except:
+                parsed_lat = float(location_raw.split(",")[0])
+                parsed_lng = float(location_raw.split(",")[1])
+                # Geographic Bounds Checking
+                if -90 <= parsed_lat <= 90 and -180 <= parsed_lng <= 180:
+                    lat = parsed_lat
+                    lng = parsed_lng
+                else:
+                    logger.warning(f"[VALIDATION] Coordinates out of bounds: lat={parsed_lat}, lng={parsed_lng}")
+            except Exception:
+                logger.warning("[VALIDATION] Failed to parse coordinates.")
                 pass
                 
         # Generate Reference ID
@@ -241,7 +269,7 @@ async def receive_whatsapp(request: Request, background_tasks: BackgroundTasks, 
         
         if gemini_client and description:
             try:
-                prompt = f"Analyze this citizen grievance report from a Smart City WhatsApp tip-line. Extract the structured triage data.\n\nReport Text: {description}"
+                prompt = f"Analyze this citizen grievance report from a Smart City WhatsApp tip-line. Extract the structured triage data.\\n\\nReport Text: {description}"
                 response = gemini_client.models.generate_content(
                     model='gemini-2.5-flash',
                     contents=prompt,
@@ -258,7 +286,7 @@ async def receive_whatsapp(request: Request, background_tasks: BackgroundTasks, 
                     extracted_location = triage.extracted_location or location_raw
                 summary = triage.summary
             except Exception as e:
-                print(f"[AI ERROR] Gemini Triage Failed: {e}")
+                logger.error(f"[AI ERROR] Gemini Triage Failed: {e}", exc_info=True)
                 
         new_message = Message(
             timestamp=datetime.now().isoformat(),
@@ -282,9 +310,11 @@ async def receive_whatsapp(request: Request, background_tasks: BackgroundTasks, 
         clear_session(db, sender)
         db.commit()
         
-        # We append to the existing twiml response created above
         twiml.message(f"Report submitted successfully. Reference ID: #{ref_id}. Your MP's office has received this and it will be reviewed shortly.")
+        logger.info(f"Report {ref_id} successfully created for {sender}.")
         return HTMLResponse(content=str(twiml), media_type="application/xml")
+    
+    return HTMLResponse(content=str(twiml), media_type="application/xml")
 
 @app.get("/messages")
 async def get_messages(db: Session = Depends(get_db)):

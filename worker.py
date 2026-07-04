@@ -5,6 +5,10 @@ from dotenv import load_dotenv
 from google import genai
 import tempfile
 import time
+import logging
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
@@ -17,7 +21,7 @@ gemini_client = genai.Client(api_key=os.getenv("GEMINI_API_KEY")) if os.getenv("
 
 def send_whatsapp_message(to_number: str, body: str):
     if not client:
-        print(f"[WORKER] Cannot send message to {to_number}: Twilio client not configured.")
+        logger.error(f"[WORKER] Cannot send message to {to_number}: Twilio client not configured.")
         return None
         
     try:
@@ -27,7 +31,7 @@ def send_whatsapp_message(to_number: str, body: str):
             body=body
         )
     except Exception as e:
-        print(f"[WORKER ERROR] Failed to send message: {e}")
+        logger.error(f"[WORKER ERROR] Failed to send message: {e}", exc_info=True)
         return None
 
 def notify_status_change(phone_number: str, reference_id: str, new_status: str, department: str = "Relevant Department"):
@@ -43,10 +47,10 @@ async def process_voice_note(media_url: str, phone_number: str):
     from main import SessionLocal
     
     db_session = SessionLocal()
-    print(f"[WORKER] Starting transcription for {phone_number}...")
+    logger.info(f"[WORKER] Starting transcription for {phone_number}...")
     
     if not gemini_client:
-        print(f"[WORKER ERROR] Gemini API key not configured. Cannot transcribe for {phone_number}.")
+        logger.error(f"[WORKER ERROR] Gemini API key not configured. Cannot transcribe for {phone_number}.")
         send_whatsapp_message(phone_number, "Transcription is currently unavailable. Could you please type your description instead?")
         db_session.close()
         return
@@ -62,7 +66,7 @@ async def process_voice_note(media_url: str, phone_number: str):
                 tmp_path = tmp.name
                 
         # 2. Upload to Gemini
-        print(f"[WORKER] Uploading audio to Gemini for {phone_number}...")
+        logger.info(f"[WORKER] Uploading audio to Gemini for {phone_number}...")
         uploaded_file = gemini_client.files.upload(file=tmp_path)
         
         # 3. Transcribe
@@ -73,7 +77,7 @@ async def process_voice_note(media_url: str, phone_number: str):
         )
         
         transcript = transcription_response.text.strip()
-        print(f"[WORKER] Transcription success for {phone_number}: {transcript}")
+        logger.info(f"[WORKER] Transcription success for {phone_number}: {transcript}")
         
         # Clean up
         os.remove(tmp_path)
@@ -85,7 +89,7 @@ async def process_voice_note(media_url: str, phone_number: str):
         send_whatsapp_message(phone_number, reply)
         
     except Exception as e:
-        print(f"[WORKER ERROR] Voice note processing failed: {e}")
+        logger.error(f"[WORKER ERROR] Voice note processing failed: {e}", exc_info=True)
         send_whatsapp_message(phone_number, "We had trouble transcribing your voice note. Could you please type your description instead?")
     finally:
         db_session.close()
