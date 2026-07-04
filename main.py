@@ -3,6 +3,7 @@ import httpx
 from datetime import datetime
 from fastapi import FastAPI, Request, HTTPException, Depends, BackgroundTasks
 from twilio.twiml.messaging_response import MessagingResponse
+from twilio.rest import Client
 from state import get_session, update_session, clear_session
 from worker import process_voice_note
 import json
@@ -104,6 +105,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+TWILIO_WHATSAPP_NUMBER = os.getenv("TWILIO_WHATSAPP_NUMBER")
 TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
 twilio_validator = RequestValidator(TWILIO_AUTH_TOKEN) if TWILIO_AUTH_TOKEN else None
@@ -200,6 +202,21 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db: Ses
     current_step = session.current_step if session else None
     
     if current_step is None:
+        if body and body.strip().isdigit():
+            active_survey = db.query(Survey).filter(Survey.is_active == True).first()
+            if active_survey:
+                options = [opt.strip() for opt in active_survey.options.split(',')]
+                try:
+                    choice_idx = int(body.strip()) - 1
+                    if 0 <= choice_idx < len(options):
+                        choice = options[choice_idx]
+                        db.add(SurveyResponse(survey_id=active_survey.id, sender=sender, selected_option=choice))
+                        db.commit()
+                        twiml.message("Thank you! Your feedback has been recorded.")
+                        return HTMLResponse(content=str(twiml), media_type="application/xml")
+                except Exception:
+                    pass
+        
         twiml.message("What development project or community upgrade would you like to propose for your area? Please describe your idea. (You can also send a voice note!)")
         update_session(db, sender, "awaiting_description", {})
         return HTMLResponse(content=str(twiml), media_type="application/xml")
@@ -390,6 +407,40 @@ async def activate_survey(survey_id: int, db: Session = Depends(get_db)):
     db.query(Survey).filter(Survey.id == survey_id).update({Survey.is_active: True})
     db.commit()
     return {"status": "success"}
+
+
+@app.post("/surveys/{survey_id}/broadcast")
+async def broadcast_survey(survey_id: int, db: Session = Depends(get_db)):
+    survey = db.query(Survey).filter(Survey.id == survey_id).first()
+    if not survey:
+        raise HTTPException(status_code=404, detail="Survey not found")
+        
+    if not TWILIO_ACCOUNT_SID or not TWILIO_AUTH_TOKEN or not TWILIO_WHATSAPP_NUMBER:
+        raise HTTPException(status_code=500, detail="Twilio credentials missing")
+        
+    client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+    
+    # Get all unique senders
+    senders = db.query(Message.sender).distinct().all()
+    count = 0
+    
+    options = [opt.strip() for opt in survey.options.split(',')]
+    opt_text = "\n".join([f"{i+1}. {opt}" for i, opt in enumerate(options)])
+    msg_body = f"Your MP is requesting your feedback:\n*{survey.question}*\n\nReply with the number of your choice:\n{opt_text}"
+    
+    for s in senders:
+        sender_phone = s[0]
+        try:
+            client.messages.create(
+                from_=TWILIO_WHATSAPP_NUMBER,
+                body=msg_body,
+                to=sender_phone
+            )
+            count += 1
+        except Exception as e:
+            logger.error(f"Failed to broadcast to {sender_phone}: {e}")
+            
+    return {"status": "success", "broadcast_count": count}
 
 @app.get("/messages")
 async def get_messages(db: Session = Depends(get_db)):
