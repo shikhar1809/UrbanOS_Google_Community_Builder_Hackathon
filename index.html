@@ -196,32 +196,32 @@
 <h3 class="text-lg text-white font-medium">Grievance distribution</h3>
 <div class="flex flex-col gap-4">
 <div class="flex items-center justify-between text-sm">
-<div class="flex items-center gap-2 w-24">
-<span class="material-symbols-outlined text-lg text-zinc-400">water_drop</span> Sanitation
-                        </div>
-<div class="flex-1 px-4"><div class="segmented-bar" id="seg-1"></div></div>
-<div class="w-8 text-right text-white">84%</div>
-</div>
-<div class="flex items-center justify-between text-sm">
-<div class="flex items-center gap-2 w-24">
+<div class="flex items-center gap-2 w-32 text-zinc-300">
 <span class="material-symbols-outlined text-lg text-zinc-400">cleaning_services</span> Cleanliness
                         </div>
-<div class="flex-1 px-4"><div class="segmented-bar" id="seg-2"></div></div>
-<div class="w-8 text-right text-white">60%</div>
+<div class="flex-1 px-4"><div class="segmented-bar" id="seg-1"></div></div>
+<div class="w-8 text-right text-white" id="pct-clean">0%</div>
 </div>
 <div class="flex items-center justify-between text-sm">
-<div class="flex items-center gap-2 w-24">
-<span class="material-symbols-outlined text-lg text-zinc-400">electric_bolt</span> Power
+<div class="flex items-center gap-2 w-32 text-zinc-300">
+<span class="material-symbols-outlined text-lg text-zinc-400">electric_bolt</span> Water & Power
+                        </div>
+<div class="flex-1 px-4"><div class="segmented-bar" id="seg-2"></div></div>
+<div class="w-8 text-right text-white" id="pct-power">0%</div>
+</div>
+<div class="flex items-center justify-between text-sm">
+<div class="flex items-center gap-2 w-48 text-zinc-300 whitespace-nowrap">
+<span class="material-symbols-outlined text-lg text-zinc-400">construction</span> Construction & Road Failure
                         </div>
 <div class="flex-1 px-4"><div class="segmented-bar" id="seg-3"></div></div>
-<div class="w-8 text-right text-white">40%</div>
+<div class="w-8 text-right text-white" id="pct-roads">0%</div>
 </div>
 <div class="flex items-center justify-between text-sm">
-<div class="flex items-center gap-2 w-24">
-<span class="material-symbols-outlined text-lg text-zinc-400">local_hospital</span> Medical
+<div class="flex items-center gap-2 w-48 text-zinc-300 whitespace-nowrap">
+<span class="material-symbols-outlined text-lg text-zinc-400">gavel</span> Crime & Common Grievances
                         </div>
 <div class="flex-1 px-4"><div class="segmented-bar" id="seg-4"></div></div>
-<div class="w-8 text-right text-white">30%</div>
+<div class="w-8 text-right text-white" id="pct-crime">0%</div>
 </div>
 </div>
 </div>
@@ -671,7 +671,7 @@
                     // -- DYNAMIC UI BINDINGS --
                     
                     // -- REALTIME NLP CATEGORIZATION ENGINE --
-                    const counts = { cleanliness: 0, water: 0, power: 0, roads: 0, general: 0 };
+                    const counts = { cleanliness: 0, powerwater: 0, road_failure: 0, crime_general: 0 };
                     const now = Date.now();
                     let latestTs = 0;
                     
@@ -683,34 +683,33 @@
                         }
                         
                         const cat = (msg.category || "").toLowerCase();
-                        if (cat.includes("cleanliness")) counts.cleanliness++;
-                        else if (cat.includes("water")) counts.water++;
-                        else if (cat.includes("power")) counts.power++;
-                        else if (cat.includes("roads")) counts.roads++;
-                        else counts.general++;
+                        if (cat.includes("cleanliness") || cat.includes("sanitation")) counts.cleanliness++;
+                        else if (cat.includes("water") || cat.includes("power")) counts.powerwater++;
+                        else if (cat.includes("construction") || cat.includes("road") || cat.includes("pothole")) counts.road_failure++;
+                        else counts.crime_general++; // Fallback to Crime and Common Grievances
                     });
                     
                     const total = data.length || 1;
                     const pClean = Math.round((counts.cleanliness / total) * 100);
-                    const pWater = Math.round((counts.water / total) * 100);
-                    const pPower = Math.round((counts.power / total) * 100);
-                    const pRoads = Math.round((counts.roads / total) * 100);
+                    const pPowerWater = Math.round((counts.powerwater / total) * 100);
+                    const pRoads = Math.round((counts.road_failure / total) * 100);
+                    const pCrime = Math.round((counts.crime_general / total) * 100);
                     
                     // Update Sidebar Graphs dynamically
                     if(typeof drawSegments === 'function') {
                         drawSegments('seg-1', pClean);
-                        drawSegments('seg-2', pWater);
-                        drawSegments('seg-3', pPower);
-                        drawSegments('seg-4', pRoads);
+                        drawSegments('seg-2', pPowerWater);
+                        drawSegments('seg-3', pRoads);
+                        drawSegments('seg-4', pCrime);
                         drawSegments('ana-seg-1', pClean);
-                        drawSegments('ana-seg-2', pWater);
+                        drawSegments('ana-seg-2', pPowerWater);
                         drawSegments('ana-seg-3', pRoads);
                     }
                     
-                    const elClean = document.getElementById('cat-clean-pct'); if(elClean) elClean.innerText = pClean + '%';
-                    const elWater = document.getElementById('cat-water-pct'); if(elWater) elWater.innerText = pWater + '%';
-                    const elPower = document.getElementById('cat-power-pct'); if(elPower) elPower.innerText = pPower + '%';
-                    const elRoads = document.getElementById('cat-roads-pct'); if(elRoads) elRoads.innerText = pRoads + '%';
+                    const elClean = document.getElementById('pct-clean'); if(elClean) elClean.innerText = pClean + '%';
+                    const elPower = document.getElementById('pct-power'); if(elPower) elPower.innerText = pPowerWater + '%';
+                    const elRoads = document.getElementById('pct-roads'); if(elRoads) elRoads.innerText = pRoads + '%';
+                    const elCrime = document.getElementById('pct-crime'); if(elCrime) elCrime.innerText = pCrime + '%';
 
                     // -- DYNAMIC REPORTS ANALYSIS --
                     let typeText = 0, typePhoto = 0, typePhotoText = 0, typeVoiceText = 0, typeVoice = 0, typeAll = 0;

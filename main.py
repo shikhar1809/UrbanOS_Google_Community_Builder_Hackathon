@@ -75,7 +75,7 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 gemini_client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
 
 class TriageResult(BaseModel):
-    category: str = Field(description="Must be one of: Cleanliness, Water, Power, Roads, Emergency, Other")
+    category: str = Field(description="Must be one of: Cleanliness, Water, Power, Construction and Road Failure, Crime and Common Grievances, Emergency, Other")
     priority: str = Field(description="Must be one of: Low, Medium, High, Critical")
     sentiment: str = Field(description="Must be one of: Neutral, Frustrated, Angry, Urgent")
     extracted_location: str = Field(description="Street name, landmark, or area extracted from text. Empty string if none.")
