@@ -1139,18 +1139,14 @@
                 if (window.sectorChart) {
                     window.sectorChart.data.datasets[0].data = [sectorBudgets.constr, sectorBudgets.land, sectorBudgets.infra, sectorBudgets.util];
                     window.sectorChart.update();
-                }
-                if (window.lifecycleChart) {
+if (window.lifecycleChart) {
                     window.lifecycleChart.data.datasets[0].data = [lifecycle.requested, lifecycle.review, lifecycle.sanctioned, lifecycle.completed];
                     window.lifecycleChart.update();
                 }
-                // --- END MPLADS INSIGHTS LOGIC ---
-
-
-
+                
                 const tbody = document.getElementById('queue-body');
                 
-                if(tbody && data && data.length > 0) {
+                if(data && data.length > 0) {
                     // --- APPLY FILTERS ---
                     const typeFilter = document.getElementById('filter-type')?.value || 'all';
                     const mediumFilter = document.getElementById('filter-medium')?.value || 'all';
@@ -1165,7 +1161,7 @@
                         if (typeFilter === 'utility' && !cat.includes('utility')) return false;
                         
                         // 2. Filter Medium
-                        let mediaType = (msg.media_content_type || "").toLowerCase();
+                        let mediaType = (msg.media_type || msg.media_content_type || "").toLowerCase();
                         let isVoice = mediaType.includes("audio");
                         let isPhoto = mediaType.includes("image");
                         if (mediumFilter === 'text' && (isVoice || isPhoto)) return false;
@@ -1222,10 +1218,10 @@
                     updateSegmentedBar('seg-3', (counts.infra/total)*100);
                     updateSegmentedBar('seg-4', (counts.util/total)*100);
                     
-                    document.getElementById('pct-constr').innerText = Math.round((counts.constr/total)*100) + '%';
-                    document.getElementById('pct-land').innerText = Math.round((counts.land/total)*100) + '%';
-                    document.getElementById('pct-infra').innerText = Math.round((counts.infra/total)*100) + '%';
-                    document.getElementById('pct-util').innerText = Math.round((counts.util/total)*100) + '%';
+                    const pctConstr = document.getElementById('pct-constr'); if (pctConstr) pctConstr.innerText = Math.round((counts.constr/total)*100) + '%';
+                    const pctLand = document.getElementById('pct-land'); if (pctLand) pctLand.innerText = Math.round((counts.land/total)*100) + '%';
+                    const pctInfra = document.getElementById('pct-infra'); if (pctInfra) pctInfra.innerText = Math.round((counts.infra/total)*100) + '%';
+                    const pctUtil = document.getElementById('pct-util'); if (pctUtil) pctUtil.innerText = Math.round((counts.util/total)*100) + '%';
                     
                     // Update Sidebar Graphs dynamically (Feasibility Assessment)
                     updateSegmentedBar('ana-seg-angry', (sCounts.angry/total)*100);
@@ -1243,7 +1239,7 @@
                     let hasLoc = 0, hasPhoto = 0;
                     
                     data.forEach(msg => {
-                        let mediaType = (msg.media_content_type || "").toLowerCase();
+                        let mediaType = (msg.media_type || msg.media_content_type || "").toLowerCase();
                         let isVoice = mediaType.includes("audio");
                         let isPhoto = mediaType.includes("image");
                         let isText = msg.body && msg.body.trim().length > 0;
@@ -1259,15 +1255,15 @@
                         if (isPhoto) hasPhoto++;
                     });
                     
-                    if(document.getElementById('type-text')) document.getElementById('type-text').innerText = typeText;
-                    if(document.getElementById('type-photo')) document.getElementById('type-photo').innerText = typePhoto;
-                    if(document.getElementById('type-photo-text')) document.getElementById('type-photo-text').innerText = typePhotoText;
-                    if(document.getElementById('type-voice-text')) document.getElementById('type-voice-text').innerText = typeVoiceText;
-                    if(document.getElementById('type-voice')) document.getElementById('type-voice').innerText = typeVoice;
-                    if(document.getElementById('type-all')) document.getElementById('type-all').innerText = typeAll;
+                    const tt = document.getElementById('type-text'); if(tt) tt.innerText = typeText;
+                    const tp = document.getElementById('type-photo'); if(tp) tp.innerText = typePhoto;
+                    const tpt = document.getElementById('type-photo-text'); if(tpt) tpt.innerText = typePhotoText;
+                    const tvt = document.getElementById('type-voice-text'); if(tvt) tvt.innerText = typeVoiceText;
+                    const tv = document.getElementById('type-voice'); if(tv) tv.innerText = typeVoice;
+                    const ta = document.getElementById('type-all'); if(ta) ta.innerText = typeAll;
                     
-                    if(document.getElementById('track-loc')) document.getElementById('track-loc').innerText = total > 0 ? Math.round((hasLoc/total)*100) + '%' : '0%';
-                    if(document.getElementById('track-photo')) document.getElementById('track-photo').innerText = total > 0 ? Math.round((hasPhoto/total)*100) + '%' : '0%';
+                    const tL = document.getElementById('track-loc'); if(tL) tL.innerText = total > 0 ? Math.round((hasLoc/total)*100) + '%' : '0%';
+                    const tP = document.getElementById('track-photo'); if(tP) tP.innerText = total > 0 ? Math.round((hasPhoto/total)*100) + '%' : '0%';
 
 
                     // -- DYNAMIC CITIZEN SATISFACTION --
@@ -1345,14 +1341,14 @@
                                 let statuses = ['En Route', 'On Site', 'Assigned'];
                                 let status = statuses[i % statuses.length];
                                 let color = colors[i % colors.length];
-                                const senderShort = (msg.sender || msg.from || '0000').slice(-4);
+                                const senderShort = (msg.from || '0000').slice(-4);
                                 return `<div class="p-4 bg-[#0A0A0A] border border-[#262626] rounded-xl">
                                     <div class="flex justify-between items-start mb-2">
                                         <div class="font-medium text-white">Unit ${senderShort}</div>
                                         <div class="text-xs px-2 py-0.5 rounded-full ${color}">${status}</div>
                                     </div>
                                     <div class="text-xs text-zinc-500 mb-2">Response Team</div>
-                                    <div class="text-xs text-zinc-400 truncate">Responding to: ${msg.raw_body || msg.body || 'Location pin'}</div>
+                                    <div class="text-xs text-zinc-400 truncate">Responding to: ${msg.body || 'Location pin'}</div>
                                 </div>`;
                             }).join('');
                         }
@@ -1377,7 +1373,7 @@
                         });
                     }
             
-// 1. Update Monthly Volume
+                    // 1. Update Monthly Volume
                     const vol = document.getElementById('dynamic-volume');
                     if(vol) vol.innerText = data.length.toLocaleString();
                     
@@ -1443,7 +1439,7 @@
                         `;
                     }).join('');
                     
-                    if(newRows) {
+                    if(tbody && newRows) {
                         tbody.innerHTML = newRows;
                     }
                 }
@@ -1452,9 +1448,7 @@
             }
         }
         
-        setInterval(fetchMessages, 3000);
-        fetchMessages();
-    
+        // fetchMessages and polling are started inside DOMContentLoaded after splash screen
         // Initialize Open Source Maps (Leaflet + CartoDB Positron)
         setTimeout(() => {
             if(document.getElementById('priority-map')) {
