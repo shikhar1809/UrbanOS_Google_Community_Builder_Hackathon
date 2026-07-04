@@ -1315,64 +1315,7 @@
                     }
 
                     
-                    // -- LIVE AI-RANKED PROJECTS (from /projects/ranked) --
-                    const planBody = document.getElementById('plan-pipeline-body');
-                    const qBody = document.getElementById('queue-body'); // fallback for modal if it still exists
-                    
-                    fetch('/projects/ranked').then(r => r.json()).then(ranked => {
-                        const fmtCr = val => val >= 10000000 ? '₹' + (val/10000000).toFixed(1) + ' Cr' : '₹' + (val/100000).toFixed(1) + ' L';
-                        const zoneColors = {North:'text-blue-400', South:'text-emerald-400', East:'text-amber-400', West:'text-purple-400', Central:'text-rose-400'};
-                        
-                        // Calculate Planning Tab Budget KPIs from ranked pipeline
-                        let totalReq = 0, sancAmt = 0, sancCount = 0;
-                        ranked.forEach(p => {
-                            totalReq += p.estimated_budget;
-                            if (p.status === 'Sanctioned') { sancAmt += p.estimated_budget; sancCount++; }
-                        });
-                        
-                        const setEl = (id, v) => { const el = document.getElementById(id); if (el) el.innerText = v; };
-                        setEl('plan-sanc-count', sancCount);
-                        setEl('plan-req-amt', fmtCr(totalReq));
-                        setEl('plan-sanc-amt', fmtCr(sancAmt));
-                        setEl('plan-unspent', fmtCr(50000000 - sancAmt)); // 5Cr budget
-                        const bar = document.getElementById('plan-sanc-bar');
-                        if (bar) bar.style.width = Math.min(100, Math.round((sancAmt / 50000000) * 100)) + '%';
-
-                        const htmlRows = ranked.map((p, i) => {
-                            const impactColor = p.impact_score > 100 ? 'text-red-400' : (p.impact_score > 50 ? 'text-amber-400' : 'text-green-400');
-                            const zoneColor = zoneColors[p.zone] || 'text-zinc-400';
-                            const isAlreadySanctioned = (p.status === 'Sanctioned');
-                            const sanctionBtn = isAlreadySanctioned
-                                ? `<span class="px-3 py-1.5 bg-green-900/40 border border-green-700 text-green-400 text-xs font-bold rounded-lg">✓ Sanctioned</span>`
-                                : `<button onclick="sanctionProject('${p.id}','${p.title.replace(/'/g,"\\'").replace(/"/g,"&quot;")}','${p.zone}','${p.category}',${JSON.stringify(p.senders)})" class="px-3 py-1.5 bg-white hover:bg-zinc-200 text-black text-xs font-bold rounded-lg transition-all shadow-[0_0_10px_rgba(255,255,255,0.1)] hover:shadow-[0_0_15px_rgba(255,255,255,0.3)]">⚡ Sanction</button>`;
-                            
-                            const statColor = isAlreadySanctioned ? 'text-green-400' : 'text-yellow-400';
-                            
-                            return `<tr class="hover:bg-[#1C1C1C] transition border-b border-[#262626]">
-                                <td class="px-6 py-4 whitespace-normal min-w-[340px]">
-                                    <div class="text-white font-semibold flex items-center gap-2 mb-1">
-                                        <span class="text-[11px] font-bold ${zoneColor} bg-zinc-800 px-2 py-0.5 rounded">${p.zone.toUpperCase()}</span>
-                                        ${p.title}
-                                    </div>
-                                    <div class="text-[11px] text-amber-400/90 italic whitespace-normal max-w-md mb-1 leading-relaxed">
-                                        🤖 ${p.justification || 'AI analysis pending...'}
-                                    </div>
-                                    <div class="text-xs text-zinc-500">${p.demand_count} citizen proposals · ${p.unique_senders} unique voices</div>
-                                </td>
-                                <td class="px-4 py-4 text-center">
-                                    <div class="font-bold text-lg ${impactColor}">${p.impact_score}</div>
-                                    <div class="text-[10px] text-zinc-500">Impact Score</div>
-                                </td>
-                                <td class="px-4 py-4 text-center font-medium ${statColor}">${p.status || 'Open'}</td>
-                                <td class="px-6 py-4 text-right font-mono text-white text-sm">${fmtCr(p.estimated_budget)}</td>
-                                <td class="px-6 py-4 text-center">${sanctionBtn}</td>
-                            </tr>`;
-                        }).join('');
-
-                        if (planBody) planBody.innerHTML = htmlRows;
-                        if (qBody) qBody.innerHTML = htmlRows; // update modal too if it exists
-
-                    }).catch(err => console.error('Ranked projects error:', err));
+                    // (fetchRankedProjects moved outside of poll loop to prevent hammering the AI endpoint)
 
 
                     const dCount = document.getElementById('daily-count');
@@ -1557,6 +1500,70 @@
             });
         }
 
+        async function fetchRankedProjects() {
+            const planBody = document.getElementById('plan-pipeline-body');
+            const qBody = document.getElementById('queue-body');
+            
+            try {
+                const r = await fetch('/projects/ranked');
+                const ranked = await r.json();
+                const fmtCr = val => val >= 10000000 ? '₹' + (val/10000000).toFixed(1) + ' Cr' : '₹' + (val/100000).toFixed(1) + ' L';
+                const zoneColors = {North:'text-blue-400', South:'text-emerald-400', East:'text-amber-400', West:'text-purple-400', Central:'text-rose-400'};
+                
+                let totalReq = 0, sancAmt = 0, sancCount = 0;
+                ranked.forEach(p => {
+                    totalReq += p.estimated_budget;
+                    if (p.status === 'Sanctioned') { sancAmt += p.estimated_budget; sancCount++; }
+                });
+                
+                const setEl = (id, v) => { const el = document.getElementById(id); if (el) el.innerText = v; };
+                setEl('plan-sanc-count', sancCount);
+                setEl('plan-req-amt', fmtCr(totalReq));
+                setEl('plan-sanc-amt', fmtCr(sancAmt));
+                setEl('plan-unspent', fmtCr(50000000 - sancAmt)); // 5Cr budget
+                const bar = document.getElementById('plan-sanc-bar');
+                if (bar) bar.style.width = Math.min(100, Math.round((sancAmt / 50000000) * 100)) + '%';
+
+                const htmlRows = ranked.map((p, i) => {
+                    const impactColor = p.impact_score > 100 ? 'text-red-400' : (p.impact_score > 50 ? 'text-amber-400' : 'text-green-400');
+                    const zoneColor = zoneColors[p.zone] || 'text-zinc-400';
+                    const isAlreadySanctioned = (p.status === 'Sanctioned');
+                    const sanctionBtn = isAlreadySanctioned
+                        ? `<span class="px-3 py-1.5 bg-green-900/40 border border-green-700 text-green-400 text-xs font-bold rounded-lg">✓ Sanctioned</span>`
+                        : `<button onclick="sanctionProject('${p.id}','${p.title.replace(/'/g,"\\'").replace(/"/g,"&quot;")}','${p.zone}','${p.category}',${JSON.stringify(p.senders).replace(/"/g, '&quot;')})" class="px-3 py-1.5 bg-white hover:bg-zinc-200 text-black text-xs font-bold rounded-lg transition-all shadow-[0_0_10px_rgba(255,255,255,0.1)] hover:shadow-[0_0_15px_rgba(255,255,255,0.3)]">⚡ Sanction</button>`;
+                    
+                    const statColor = isAlreadySanctioned ? 'text-green-400' : 'text-yellow-400';
+                    
+                    return `<tr class="hover:bg-[#1C1C1C] transition border-b border-[#262626]">
+                        <td class="px-6 py-4 whitespace-normal min-w-[340px]">
+                            <div class="text-white font-semibold flex items-center gap-2 mb-1">
+                                <span class="text-[11px] font-bold ${zoneColor} bg-zinc-800 px-2 py-0.5 rounded">${p.zone.toUpperCase()}</span>
+                                ${p.title}
+                            </div>
+                            <div class="text-[11px] text-amber-400/90 italic whitespace-normal max-w-md mb-1 leading-relaxed">
+                                🤖 ${p.justification || 'AI analysis pending...'}
+                            </div>
+                            <div class="text-xs text-zinc-500">${p.demand_count} citizen proposals · ${p.unique_senders} unique voices</div>
+                        </td>
+                        <td class="px-4 py-4 text-center">
+                            <div class="font-bold text-lg ${impactColor}">${p.impact_score}</div>
+                            <div class="text-[10px] text-zinc-500">Impact Score</div>
+                        </td>
+                        <td class="px-4 py-4 text-center font-medium ${statColor}">${p.status || 'Open'}</td>
+                        <td class="px-6 py-4 text-right font-mono text-white text-sm">${fmtCr(p.estimated_budget)}</td>
+                        <td class="px-6 py-4 text-center">${sanctionBtn}</td>
+                    </tr>`;
+                }).join('');
+
+                if (planBody) planBody.innerHTML = htmlRows;
+                if (qBody) qBody.innerHTML = htmlRows;
+            } catch (err) {
+                console.error('Ranked projects error:', err);
+            }
+        }
+        
+        fetchRankedProjects();
+
         // --- Sanction Project ---
         async function sanctionProject(projectId, title, zone, category, senders) {
             if (!confirm(`Sanction "${title}"?\n\nThis will:\n✓ Mark all related proposals as Sanctioned\n✓ Notify all ${senders.length} contributing citizens via WhatsApp`)) return;
@@ -1580,6 +1587,8 @@
                     toast.textContent = `✓ "${title}" sanctioned! ${data.citizens_notified} citizens notified via WhatsApp.`;
                     document.body.appendChild(toast);
                     setTimeout(() => toast.remove(), 4000);
+                    
+                    fetchRankedProjects(); // Refresh the pipeline and budget KPIs
                 }
             } catch(e) {
                 btn.disabled = false;
