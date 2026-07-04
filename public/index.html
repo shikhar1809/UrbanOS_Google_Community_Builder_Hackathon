@@ -1,0 +1,1833 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>urbanOS</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Playfair+Display:wght@600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        body { font-family: 'Inter', sans-serif; background-color: #0A0A0A; color: #a1a1aa; }
+        h1, h2, h3, h4, .serif { font-family: 'Playfair Display', serif; color: #ffffff; letter-spacing: 0.02em; }
+        
+        .card {
+            background-color: #161616;
+            border: 1px solid #262626;
+            border-radius: 16px;
+        }
+        
+        /* Custom map styling */
+        .map-bg { background-color: #EDE8DC; }
+        .map-pin {
+            width: 28px; height: 28px; background: #111; color: white;
+            border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            position: absolute; border: 2px solid white;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        
+        /* Custom segmented progress bar */
+        .segmented-bar {
+            display: flex; gap: 2px; height: 12px; width: 100%;
+        }
+        .segment {
+            flex: 1; background: #333; border-radius: 1px;
+        }
+        .segment.active { background: #d4d4d8; }
+        
+        /* Chart line sparkline */
+        .sparkline {
+            width: 100%; height: 40px;
+            background: repeating-linear-gradient(90deg, #d4d4d8, #d4d4d8 2px, transparent 2px, transparent 4px);
+            opacity: 0.8;
+            mask-image: linear-gradient(to top, transparent, black);
+            -webkit-mask-image: linear-gradient(to top, transparent, black);
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+    
+        .view-content { display: none !important; }
+        .view-content.active { display: flex !important; }
+        .nav-link { cursor: pointer; border-bottom: 2px solid transparent; padding-bottom: 4px; }
+        .nav-link.active { color: white !important; border-bottom-color: white !important; font-weight: 500; }
+    
+        .leaflet-container { background: #EDE8DC; }
+        
+        /* Hide default leaflet controls to keep our custom UI clean */
+        .leaflet-control-zoom { display: none !important; }
+        .leaflet-control-attribution { display: none !important; }
+    
+        @keyframes flyPacket {
+            0% { transform: translateX(0) scale(1); opacity: 0; }
+            10% { opacity: 1; }
+            50% { transform: translateX(50vw) scale(1.2); opacity: 1; box-shadow: 0 0 20px 5px rgba(255,180,168,0.5); }
+            90% { opacity: 1; }
+            100% { transform: translateX(calc(100vw - 300px)) scale(1); opacity: 0; }
+        }
+        .data-packet {
+            position: absolute;
+            left: 100px;
+            top: 50%;
+            margin-top: -6px;
+            width: 12px;
+            height: 12px;
+            background-color: #ffb4a8;
+            border-radius: 50%;
+            box-shadow: 0 0 10px 2px rgba(255,180,168,0.4);
+            
+            z-index: 20;
+        }
+        
+        
+        
+        .pulse-dot {
+            width: 8px; height: 8px; background-color: #4ade80; border-radius: 50%;
+            box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.7);
+            animation: pulse-green 2s infinite;
+        }
+        @keyframes pulse-green {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(74, 222, 128, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(74, 222, 128, 0); }
+        }
+    
+        .fly-once {
+            animation: flyPacket 1.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+        }
+    </style>
+<link crossorigin="" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" rel="stylesheet"/><script crossorigin="" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script><script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
+</head>
+<body class="h-screen flex flex-col overflow-hidden">
+<div class="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#0A0A0A] transition-opacity duration-700" id="splash-screen">
+<div class="flex flex-col items-center">
+<!-- Animated Loading Ring -->
+<div class="relative w-24 h-24 mb-8">
+<div class="absolute inset-0 border-4 border-[#262626] rounded-full"></div>
+<div class="absolute inset-0 border-4 border-white rounded-full border-t-transparent animate-spin"></div>
+</div>
+<div class="flex flex-col items-center mb-6">
+                <div class="relative flex items-center justify-center w-16 h-16 mb-4 rounded-2xl bg-gradient-to-br from-zinc-800 to-black border border-zinc-700/50 shadow-[0_0_30px_rgba(255,255,255,0.05)]">
+                    <svg class="w-12 h-12 text-blue-400 drop-shadow-[0_0_12px_rgba(59,130,246,0.6)]" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 22s8-6 8-12.5a8 8 0 0 0-16 0C4 16 12 22 12 22z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M8 12v-3h2V6h4v4h2v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </div>
+                <h1 class="text-5xl font-bold tracking-tighter text-transparent bg-clip-text bg-gradient-to-b from-white via-zinc-100 to-zinc-500">Urban<span class="text-zinc-200">OS</span><span class="text-blue-500">.</span></h1>
+            </div>
+<p class="text-zinc-400 font-mono text-sm tracking-wider uppercase animate-pulse" id="splash-text">Initializing System...</p>
+<!-- Progress Bar -->
+<div class="w-64 h-1 bg-[#161616] mt-8 rounded-full overflow-hidden">
+<div class="h-full bg-white w-0 transition-all duration-300 ease-out" id="splash-progress"></div>
+</div>
+</div>
+</div>
+
+<!-- Header -->
+<header class="flex items-center justify-between px-8 py-5 border-b border-[#262626]">
+<div class="flex items-center gap-3">
+<div class="flex items-center gap-3 group cursor-pointer">
+                <div class="relative flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-zinc-800 to-[#0A0A0A] border border-zinc-800 shadow-[0_0_15px_rgba(255,255,255,0.03)] group-hover:shadow-[0_0_20px_rgba(59,130,246,0.15)] transition-all duration-300">
+                    <svg class="w-7 h-7 text-blue-400 group-hover:text-blue-300 transition-colors duration-300 drop-shadow-[0_0_8px_rgba(59,130,246,0.4)]" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 22s8-6 8-12.5a8 8 0 0 0-16 0C4 16 12 22 12 22z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M8 12v-3h2V6h4v4h2v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </div>
+                <span class="text-3xl font-bold tracking-tighter text-transparent bg-clip-text bg-gradient-to-b from-white to-zinc-400">Urban<span class="text-zinc-100">OS</span><span class="text-blue-500">.</span></span>
+            </div>
+</div>
+<nav class="flex gap-8"><a class="text-sm hover:text-white transition nav-link active text-white" href="javascript:void(0)" id="nav-live" onclick="switchView('live')">LIVE FEED</a><a class="text-sm text-zinc-500 hover:text-white transition nav-link" href="javascript:void(0)" id="nav-analysis" onclick="switchView('analysis')">ANALYSIS</a><a class="text-sm text-zinc-500 hover:text-white transition nav-link" href="javascript:void(0)" id="nav-priority" onclick="switchView('priority')">PLANNING</a><a class="text-sm text-zinc-500 hover:text-white transition nav-link" href="javascript:void(0)" id="nav-insights" onclick="switchView('insights')">INSIGHTS</a><a class="text-sm text-zinc-500 hover:text-white transition nav-link" href="javascript:void(0)" id="nav-coordination" onclick="switchView('coordination')">COORDINATION</a></nav>
+<div class="flex items-center gap-5">
+<button onclick="document.getElementById('survey-modal').classList.remove('hidden')" class="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold tracking-wide rounded-full transition shadow-[0_0_15px_rgba(37,99,235,0.4)] flex items-center gap-1.5 mr-2">
+<span class="material-symbols-outlined" style="font-size: 16px;">poll</span> Launch Surveys
+</button>
+
+<div class="flex items-center gap-3 pl-5 border-l border-zinc-800 cursor-pointer">
+<img class="w-9 h-9 rounded-full object-cover" src="https://i.pravatar.cc/150?img=33"/>
+<div class="text-xs">
+<div class="text-white font-medium">Admin User</div>
+<div class="text-zinc-500 mt-0.5">Dispatch Officer</div>
+</div>
+<span class="material-symbols-outlined text-zinc-500 text-[18px]">expand_more</span>
+</div>
+</div>
+</header>
+<!-- Main Content -->
+<main class="flex-1 flex gap-5 p-5 overflow-hidden"><div class="view-content w-full h-full gap-5 flex-col overflow-y-auto custom-scrollbar" id="view-priority">
+<!-- Budget KPI Bar (Moved from Insights) -->
+<div class="flex gap-5 shrink-0">
+    <div class="card p-5 flex-1 flex flex-col justify-center border-l-4 border-l-blue-500">
+        <div class="text-sm text-zinc-500">Annual Allocation</div>
+        <div class="text-2xl text-white font-medium">₹5.00 Cr</div>
+    </div>
+    <div class="card p-5 flex-1 flex flex-col justify-center border-l-4 border-l-amber-500">
+        <div class="text-sm text-zinc-500">Est. Funds Requested</div>
+        <div class="text-2xl text-white font-medium" id="kpi-funds-requested">₹0</div>
+    </div>
+    <div class="card p-5 flex-1 flex flex-col justify-center border-l-4 border-l-green-500">
+        <div class="text-sm text-zinc-500">Est. Unspent Balance</div>
+        <div class="text-2xl text-white font-medium" id="kpi-funds-balance">₹5.00 Cr</div>
+    </div>
+    <div class="card p-5 flex-1 flex flex-col justify-center border-l-4 border-l-purple-500">
+        <div class="text-sm text-zinc-500">Projects Sanctioned</div>
+        <div class="text-2xl text-white font-medium" id="kpi-sanctioned-count">0</div>
+    </div>
+</div>
+
+<div class="flex gap-5 flex-1 shrink-0 h-[400px]">
+    <!-- Sectoral Fund Demand -->
+    <div class="card p-6 flex-1 flex flex-col gap-4">
+        <h3 class="text-lg text-white font-medium">Sectoral Fund Demand</h3>
+        <div class="relative w-full h-full flex items-center justify-center">
+            <canvas id="sectorChart"></canvas>
+        </div>
+    </div>
+    
+    <!-- Timeline View -->
+    <div class="card flex-[2] flex flex-col overflow-hidden bg-[#161616]">
+        <div class="p-6 border-b border-[#262626] flex justify-between items-center shrink-0">
+            <h3 class="serif text-xl text-white">Project Timeline Overview</h3>
+            <span class="text-xs text-zinc-500">Active Phases</span>
+        </div>
+        <div class="flex-1 p-6 overflow-x-auto overflow-y-hidden custom-scrollbar">
+            <!-- Simple Gantt/Timeline Layout -->
+            <div class="min-w-[600px] h-full flex flex-col justify-around">
+                <!-- Timeline Headers -->
+                <div class="flex border-b border-[#262626] pb-2 text-xs text-zinc-500 uppercase tracking-wider">
+                    <div class="w-1/4">Q1 2024</div>
+                    <div class="w-1/4">Q2 2024</div>
+                    <div class="w-1/4">Q3 2024</div>
+                    <div class="w-1/4">Q4 2024</div>
+                </div>
+                <!-- Timeline Bars -->
+                <div class="flex items-center w-full group">
+                    <div class="w-48 text-sm text-zinc-300 truncate pr-4">Central Hub Paving</div>
+                    <div class="flex-1 h-8 relative">
+                        <div class="absolute left-[10%] w-[30%] h-full bg-blue-600/20 border border-blue-500 rounded flex items-center px-2 text-xs text-blue-300">Execution</div>
+                    </div>
+                </div>
+                <div class="flex items-center w-full group">
+                    <div class="w-48 text-sm text-zinc-300 truncate pr-4">Ward 4 School Rehab</div>
+                    <div class="flex-1 h-8 relative">
+                        <div class="absolute left-0 w-[20%] h-full bg-amber-600/20 border border-amber-500 rounded flex items-center px-2 text-xs text-amber-300">Tendering</div>
+                    </div>
+                </div>
+                <div class="flex items-center w-full group">
+                    <div class="w-48 text-sm text-zinc-300 truncate pr-4">South Zone Drainage</div>
+                    <div class="flex-1 h-8 relative">
+                        <div class="absolute left-[40%] w-[50%] h-full bg-green-600/20 border border-green-500 rounded flex items-center px-2 text-xs text-green-300">Planning</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Active Projects Section (Opens Modal) -->
+<div class="flex gap-5 shrink-0 pb-10">
+    <div class="card flex-1 bg-[#161616] p-6 cursor-pointer hover:border-blue-500/50 transition-colors group" onclick="document.getElementById('projects-modal').classList.remove('hidden')">
+        <div class="flex justify-between items-center">
+            <div>
+                <h3 class="serif text-2xl text-white group-hover:text-blue-400 transition-colors">Active Projects Directory</h3>
+                <p class="text-sm text-zinc-400 mt-1">Click to view and manage all active, pipeline, and completed projects.</p>
+            </div>
+            <div class="w-12 h-12 rounded-full bg-zinc-800 flex items-center justify-center group-hover:bg-blue-600 transition-colors">
+                <span class="material-symbols-outlined text-white">open_in_new</span>
+            </div>
+        </div>
+    </div>
+</div>
+</div>
+<div class="view-content w-full h-full flex-col gap-5 overflow-y-auto" id="view-analysis">
+
+  <!-- KPI Row -->
+  <div class="grid grid-cols-4 gap-4 shrink-0">
+    <div class="card p-5 border-l-4 border-l-blue-500 flex flex-col gap-1">
+      <div class="text-xs text-zinc-500 uppercase tracking-wider">Total Proposals</div>
+      <div class="text-3xl text-white font-bold" id="ana-total">0</div>
+      <div class="text-xs text-zinc-500">All time</div>
+    </div>
+    <div class="card p-5 border-l-4 border-l-red-500 flex flex-col gap-1">
+      <div class="text-xs text-zinc-500 uppercase tracking-wider">Critical Priority</div>
+      <div class="text-3xl text-white font-bold" id="ana-critical">0</div>
+      <div class="text-xs text-red-400">Needs immediate attention</div>
+    </div>
+    <div class="card p-5 border-l-4 border-l-amber-500 flex flex-col gap-1">
+      <div class="text-xs text-zinc-500 uppercase tracking-wider">This Week</div>
+      <div class="text-3xl text-white font-bold" id="ana-week">0</div>
+      <div class="text-xs text-zinc-500">New proposals (7d)</div>
+    </div>
+    <div class="card p-5 border-l-4 border-l-green-500 flex flex-col gap-1">
+      <div class="text-xs text-zinc-500 uppercase tracking-wider">Sanctioned</div>
+      <div class="text-3xl text-white font-bold" id="ana-sanctioned">0</div>
+      <div class="text-xs text-green-400">Approved for action</div>
+    </div>
+  </div>
+
+  <!-- Charts Row -->
+  <div class="grid grid-cols-3 gap-4 shrink-0" style="height:260px">
+    <!-- Priority Donut -->
+    <div class="card p-5 flex flex-col gap-3">
+      <div class="text-sm font-semibold text-white">Priority Breakdown</div>
+      <div class="flex-1 flex items-center justify-center relative">
+        <canvas id="priorityDonut" style="max-height:180px"></canvas>
+      </div>
+    </div>
+
+    <!-- Zone Bar Chart -->
+    <div class="card p-5 flex flex-col gap-3">
+      <div class="text-sm font-semibold text-white">Proposals by Zone</div>
+      <div class="flex-1 flex items-center">
+        <canvas id="zoneBarChart" style="max-height:190px;width:100%"></canvas>
+      </div>
+    </div>
+
+    <!-- Language Distribution -->
+    <div class="card p-5 flex flex-col gap-3">
+      <div class="text-sm font-semibold text-white">Language Distribution</div>
+      <div class="flex-1 flex flex-col gap-2 justify-center" id="lang-dist-bars">
+        <div class="text-xs text-zinc-600 italic">Loading...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Status Pipeline + Category Table -->
+  <div class="grid grid-cols-3 gap-4 shrink-0 pb-6">
+    <!-- Status Pipeline -->
+    <div class="card p-5 flex flex-col gap-4">
+      <div class="text-sm font-semibold text-white">Proposal Status Pipeline</div>
+      <div class="flex flex-col gap-3">
+        <div class="flex items-center gap-3">
+          <div class="w-2.5 h-2.5 rounded-full bg-zinc-400 shrink-0"></div>
+          <div class="flex-1 text-xs text-zinc-300">Open</div>
+          <div class="font-bold text-white text-sm" id="pipe-open">0</div>
+          <div class="w-24 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+            <div class="h-full bg-zinc-400 rounded-full transition-all" id="pipe-open-bar" style="width:0%"></div>
+          </div>
+        </div>
+        <div class="flex items-center gap-3">
+          <div class="w-2.5 h-2.5 rounded-full bg-amber-400 shrink-0"></div>
+          <div class="flex-1 text-xs text-zinc-300">In Review</div>
+          <div class="font-bold text-white text-sm" id="pipe-review">0</div>
+          <div class="w-24 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+            <div class="h-full bg-amber-400 rounded-full transition-all" id="pipe-review-bar" style="width:0%"></div>
+          </div>
+        </div>
+        <div class="flex items-center gap-3">
+          <div class="w-2.5 h-2.5 rounded-full bg-green-400 shrink-0"></div>
+          <div class="flex-1 text-xs text-zinc-300">Sanctioned</div>
+          <div class="font-bold text-white text-sm" id="pipe-sanc">0</div>
+          <div class="w-24 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+            <div class="h-full bg-green-400 rounded-full transition-all" id="pipe-sanc-bar" style="width:0%"></div>
+          </div>
+        </div>
+        <div class="flex items-center gap-3">
+          <div class="w-2.5 h-2.5 rounded-full bg-blue-400 shrink-0"></div>
+          <div class="flex-1 text-xs text-zinc-300">Completed</div>
+          <div class="font-bold text-white text-sm" id="pipe-done">0</div>
+          <div class="w-24 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+            <div class="h-full bg-blue-400 rounded-full transition-all" id="pipe-done-bar" style="width:0%"></div>
+          </div>
+        </div>
+      </div>
+      <div class="mt-2 pt-3 border-t border-zinc-800">
+        <div class="text-xs text-zinc-500">Resolution rate</div>
+        <div class="text-lg font-bold text-green-400" id="pipe-rate">0%</div>
+      </div>
+    </div>
+
+    <!-- Category Table -->
+    <div class="card col-span-2 flex flex-col overflow-hidden">
+      <div class="p-4 border-b border-zinc-800 text-sm font-semibold text-white">Category Breakdown</div>
+      <div class="flex-1 overflow-y-auto">
+        <table class="w-full text-xs">
+          <thead>
+            <tr class="border-b border-zinc-800 text-zinc-500 uppercase">
+              <th class="px-4 py-2 text-left">Category</th>
+              <th class="px-4 py-2 text-center">Count</th>
+              <th class="px-4 py-2 text-center">Critical</th>
+              <th class="px-4 py-2 text-right">Est. Budget</th>
+              <th class="px-4 py-2 text-left">Share</th>
+            </tr>
+          </thead>
+          <tbody id="cat-table-body">
+            <tr><td colspan="5" class="px-4 py-6 text-center text-zinc-600 italic">Loading proposals...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="view-content w-full h-full gap-5" id="view-insights">
+
+  <!-- Left: Survey List -->
+  <div class="flex-1 flex flex-col gap-4 overflow-y-auto pr-1">
+    <div class="flex justify-between items-center shrink-0">
+      <div>
+        <h2 class="text-xl font-bold text-white">Citizen Surveys</h2>
+        <p class="text-xs text-zinc-500 mt-0.5">Live feedback from WhatsApp-based constituency surveys</p>
+      </div>
+      <div class="flex gap-2">
+        <div class="card px-4 py-2 text-center">
+          <div class="text-lg font-bold text-green-400" id="survey-active-count">1</div>
+          <div class="text-[10px] text-zinc-500">Active</div>
+        </div>
+        <div class="card px-4 py-2 text-center">
+          <div class="text-lg font-bold text-white" id="survey-total-resp">1,658</div>
+          <div class="text-[10px] text-zinc-500">Total Responses</div>
+        </div>
+        <div class="card px-4 py-2 text-center">
+          <div class="text-lg font-bold text-amber-400">81%</div>
+          <div class="text-[10px] text-zinc-500">Avg Completion</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Survey Card 1: Active -->
+    <div class="card border border-green-500/20 bg-[#161616] flex flex-col gap-0 overflow-hidden">
+      <div class="p-5 flex justify-between items-start">
+        <div>
+          <div class="flex items-center gap-2 mb-2">
+            <span class="bg-green-500/20 text-green-400 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border border-green-500/30">Active</span>
+            <span class="text-xs text-zinc-500">Expires in 12 days · Sent to 662 citizens</span>
+          </div>
+          <h4 class="text-lg text-white font-semibold">Ward 4 School Infrastructure Feedback</h4>
+          <p class="text-xs text-zinc-500 mt-1">Asking citizens to rate current school quality and vote on a new building proposal</p>
+        </div>
+        <div class="flex gap-2 shrink-0 ml-4">
+          <button class="px-3 py-1.5 text-xs border border-zinc-700 text-zinc-300 rounded-lg hover:border-zinc-500 transition">Extend</button>
+          <button class="px-3 py-1.5 text-xs border border-zinc-700 text-zinc-300 rounded-lg hover:border-zinc-500 transition">Export CSV</button>
+          <button class="px-3 py-1.5 text-xs bg-red-900/30 border border-red-700/50 text-red-400 rounded-lg hover:bg-red-900/50 transition">Close</button>
+        </div>
+      </div>
+      <div class="px-5 pb-2 grid grid-cols-3 gap-3 border-t border-zinc-800 pt-4">
+        <div class="text-center">
+          <div class="text-2xl font-bold text-white">450</div>
+          <div class="text-[10px] text-zinc-500 uppercase tracking-wider">Responses</div>
+        </div>
+        <div class="text-center">
+          <div class="text-2xl font-bold text-amber-400">68%</div>
+          <div class="text-[10px] text-zinc-500 uppercase tracking-wider">Completion</div>
+        </div>
+        <div class="text-center">
+          <div class="text-2xl font-bold text-red-400">2.1/5</div>
+          <div class="text-[10px] text-zinc-500 uppercase tracking-wider">Avg Rating</div>
+        </div>
+      </div>
+      <!-- Question Breakdown -->
+      <div class="px-5 pb-5 pt-3 flex flex-col gap-3 border-t border-zinc-800 mt-2">
+        <div class="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Question Results</div>
+        <div class="flex flex-col gap-2">
+          <div class="text-xs text-zinc-300 mb-1">"Rate the quality of the current school building"</div>
+          <div class="flex items-center gap-2">
+            <span class="text-[10px] text-zinc-500 w-16">Poor (48%)</span>
+            <div class="flex-1 h-2 bg-zinc-800 rounded-full"><div class="h-full bg-red-500 rounded-full" style="width:48%"></div></div>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-[10px] text-zinc-500 w-16">Fair (22%)</span>
+            <div class="flex-1 h-2 bg-zinc-800 rounded-full"><div class="h-full bg-amber-500 rounded-full" style="width:22%"></div></div>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-[10px] text-zinc-500 w-16">Good (15%)</span>
+            <div class="flex-1 h-2 bg-zinc-800 rounded-full"><div class="h-full bg-green-500 rounded-full" style="width:15%"></div></div>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-[10px] text-zinc-500 w-16">No Opin (15%)</span>
+            <div class="flex-1 h-2 bg-zinc-800 rounded-full"><div class="h-full bg-zinc-600 rounded-full" style="width:15%"></div></div>
+          </div>
+        </div>
+        <div class="mt-1 p-3 bg-amber-950/30 border border-amber-700/30 rounded-lg">
+          <div class="text-xs font-bold text-amber-400 mb-1">Key Insight</div>
+          <div class="text-xs text-zinc-300">78% of respondents rate the building as Poor or Fair. 91% voted <strong class="text-white">Yes</strong> to constructing a new school. This directly supports the AI-ranked North Zone school project.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Survey Card 2: Completed -->
+    <div class="card border border-zinc-800 bg-[#161616]/60 flex flex-col gap-0 overflow-hidden opacity-80">
+      <div class="p-5 flex justify-between items-start">
+        <div>
+          <div class="flex items-center gap-2 mb-2">
+            <span class="bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border border-zinc-700">Completed</span>
+            <span class="text-xs text-zinc-500">Ended Oct 14, 2024 · 1,208 responses</span>
+          </div>
+          <h4 class="text-lg text-white font-semibold">Central Hub Paving Quality</h4>
+          <p class="text-xs text-zinc-500 mt-1">Post-construction satisfaction survey for Aliganj road paving project</p>
+        </div>
+        <div class="flex gap-2 shrink-0 ml-4">
+          <button class="px-3 py-1.5 text-xs border border-zinc-700 text-zinc-300 rounded-lg hover:border-zinc-500 transition">View Report</button>
+          <button class="px-3 py-1.5 text-xs border border-zinc-700 text-zinc-300 rounded-lg hover:border-zinc-500 transition">Export CSV</button>
+        </div>
+      </div>
+      <div class="px-5 pb-5 grid grid-cols-3 gap-3 border-t border-zinc-800 pt-4">
+        <div class="text-center">
+          <div class="text-2xl font-bold text-white">1,208</div>
+          <div class="text-[10px] text-zinc-500 uppercase tracking-wider">Responses</div>
+        </div>
+        <div class="text-center">
+          <div class="text-2xl font-bold text-green-400">94%</div>
+          <div class="text-[10px] text-zinc-500 uppercase tracking-wider">Completion</div>
+        </div>
+        <div class="text-center">
+          <div class="text-2xl font-bold text-green-400">4.2/5</div>
+          <div class="text-[10px] text-zinc-500 uppercase tracking-wider">Avg Rating</div>
+        </div>
+      </div>
+      <div class="px-5 pb-4">
+        <div class="p-3 bg-green-950/20 border border-green-700/20 rounded-lg">
+          <div class="text-xs font-bold text-green-400 mb-1">Outcome</div>
+          <div class="text-xs text-zinc-300">87% of residents satisfied with paving quality. Project marked successful. Recommend similar approach for Gomtinagar road project.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: Survey Creator -->
+  <div class="w-[320px] flex flex-col gap-4 shrink-0">
+    <div class="card p-5 flex flex-col gap-4">
+      <div class="text-sm font-bold text-white">Launch New Survey</div>
+      <div class="flex flex-col gap-3">
+        <div>
+          <label class="text-[10px] uppercase tracking-wider text-zinc-500 mb-1 block">Survey Title</label>
+          <input id="new-survey-title" type="text" placeholder="e.g. Gomti Bridge Repair Feedback" class="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-blue-500 transition" />
+        </div>
+        <div>
+          <label class="text-[10px] uppercase tracking-wider text-zinc-500 mb-1 block">Target Zone</label>
+          <select id="new-survey-zone" class="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-300 focus:outline-none focus:border-blue-500 transition">
+            <option value="all">All Zones</option>
+            <option value="North">North</option>
+            <option value="South">South</option>
+            <option value="East">East</option>
+            <option value="West">West</option>
+            <option value="Central">Central</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-[10px] uppercase tracking-wider text-zinc-500 mb-1 block">Survey Question</label>
+          <textarea id="new-survey-question" placeholder="What is your main question for citizens?" rows="3" class="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-blue-500 transition resize-none"></textarea>
+        </div>
+        <button onclick="launchSurveyFromUI()" class="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold rounded-lg transition shadow-[0_0_15px_rgba(37,99,235,0.3)] hover:shadow-[0_0_20px_rgba(37,99,235,0.5)]">Launch Survey via WhatsApp</button>
+      </div>
+    </div>
+
+    <!-- Survey tips -->
+    <div class="card p-5 flex flex-col gap-3">
+      <div class="text-xs font-bold text-zinc-400 uppercase tracking-wider">Tips for High Response Rate</div>
+      <div class="flex flex-col gap-2 text-xs text-zinc-500">
+        <div class="flex gap-2"><span class="text-green-400">✓</span> Keep questions under 15 words</div>
+        <div class="flex gap-2"><span class="text-green-400">✓</span> Send in the citizen's preferred language</div>
+        <div class="flex gap-2"><span class="text-green-400">✓</span> Surveys under 3 questions complete 3x more</div>
+        <div class="flex gap-2"><span class="text-amber-400">!</span> Best sent between 8–11 AM local time</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+<div class="view-content w-full h-full flex-col gap-5" id="view-coordination">
+
+  <!-- Top Stats Bar -->
+  <div class="grid grid-cols-4 gap-4 shrink-0">
+    <div class="card p-4 flex items-center gap-3">
+      <div class="w-9 h-9 rounded-full bg-green-500/20 flex items-center justify-center shrink-0">
+        <span class="material-symbols-outlined text-green-400 text-[18px]">person_pin_circle</span>
+      </div>
+      <div>
+        <div class="text-xl font-bold text-white" id="coord-units">2</div>
+        <div class="text-[10px] text-zinc-500">Active Units</div>
+      </div>
+    </div>
+    <div class="card p-4 flex items-center gap-3">
+      <div class="w-9 h-9 rounded-full bg-red-500/20 flex items-center justify-center shrink-0">
+        <span class="material-symbols-outlined text-red-400 text-[18px]">warning</span>
+      </div>
+      <div>
+        <div class="text-xl font-bold text-white" id="coord-critical">0</div>
+        <div class="text-[10px] text-zinc-500">Critical Alerts</div>
+      </div>
+    </div>
+    <div class="card p-4 flex items-center gap-3">
+      <div class="w-9 h-9 rounded-full bg-blue-500/20 flex items-center justify-center shrink-0">
+        <span class="material-symbols-outlined text-blue-400 text-[18px]">schedule</span>
+      </div>
+      <div>
+        <div class="text-xl font-bold text-white">12 min</div>
+        <div class="text-[10px] text-zinc-500">Avg ETA</div>
+      </div>
+    </div>
+    <div class="card p-4 flex items-center gap-3">
+      <div class="w-9 h-9 rounded-full bg-amber-500/20 flex items-center justify-center shrink-0">
+        <span class="material-symbols-outlined text-amber-400 text-[18px]">pending_actions</span>
+      </div>
+      <div>
+        <div class="text-xl font-bold text-white" id="coord-pending">0</div>
+        <div class="text-[10px] text-zinc-500">Pending Dispatch</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Map + Sidebar -->
+  <div class="flex flex-1 gap-4 overflow-hidden">
+    <!-- Dark Map -->
+    <div class="flex-1 relative rounded-2xl overflow-hidden border border-zinc-800">
+      <div class="absolute inset-0 z-0" id="coordination-map"></div>
+      <div class="absolute top-4 left-4 bg-black/70 backdrop-blur-sm text-white px-3 py-1.5 rounded-full text-xs font-medium border border-zinc-700 z-10 flex items-center gap-2">
+        <div class="pulse-dot"></div>
+        Live Field View — Lucknow
+      </div>
+    </div>
+
+    <!-- Right Panel -->
+    <div class="w-[340px] flex flex-col gap-4 overflow-y-auto shrink-0">
+
+      <!-- Unit Status Board -->
+      <div class="card p-4 flex flex-col gap-3">
+        <div class="text-xs font-bold text-zinc-400 uppercase tracking-wider">Field Units</div>
+        <div class="flex flex-col gap-2">
+          <div class="p-3 bg-zinc-900 border border-zinc-800 rounded-xl">
+            <div class="flex justify-between items-center mb-1">
+              <div class="font-semibold text-white text-sm">Unit Alpha-1</div>
+              <div class="text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded-full">En Route</div>
+            </div>
+            <div class="text-[10px] text-zinc-500">Sanitation Dept · ETA 12 mins</div>
+            <div class="text-xs text-zinc-400 mt-1">→ Market Square priority clean-up</div>
+            <div class="mt-2 h-1 bg-zinc-800 rounded-full"><div class="h-full bg-amber-400 rounded-full" style="width:60%"></div></div>
+          </div>
+          <div class="p-3 bg-zinc-900 border border-zinc-800 rounded-xl">
+            <div class="flex justify-between items-center mb-1">
+              <div class="font-semibold text-white text-sm">Unit Med-4</div>
+              <div class="text-[10px] font-bold bg-green-500/20 text-green-400 border border-green-500/30 px-2 py-0.5 rounded-full">On Site</div>
+            </div>
+            <div class="text-[10px] text-zinc-500">Health Dept · Active 45 mins</div>
+            <div class="text-xs text-zinc-400 mt-1">→ South Zone medical camp</div>
+            <div class="mt-2 h-1 bg-zinc-800 rounded-full"><div class="h-full bg-green-400 rounded-full" style="width:100%"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Priority Alerts needing dispatch -->
+      <div class="card p-4 flex flex-col gap-3 flex-1">
+        <div class="flex justify-between items-center">
+          <div class="text-xs font-bold text-zinc-400 uppercase tracking-wider">Priority Alerts</div>
+          <div class="text-[10px] text-zinc-600">Needs field response</div>
+        </div>
+        <div class="flex flex-col gap-2" id="coord-alerts">
+          <div class="text-xs text-zinc-600 italic">Loading critical proposals...</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+<div class="view-content w-full h-full flex-col gap-5 active" id="view-live">
+<!-- Top Section: Lucknow Heatmap & Live Feed -->
+<div class="flex flex-1 gap-5 overflow-hidden">
+<div class="card map-bg flex-1 relative overflow-hidden border-none shadow-inner min-h-[400px]">
+<div class="absolute inset-0 z-0" id="live-heatmap"></div>
+<div class="absolute top-5 left-5 bg-white text-black px-4 py-2.5 rounded-full text-sm font-medium shadow-[0_8px_30px_rgb(0,0,0,0.12)] z-10 flex items-center gap-2">
+<span class="material-symbols-outlined text-red-500 text-[18px]">local_fire_department</span>
+                Lucknow Live Hotspots
+            </div>
+<!-- Map controls -->
+<div class="absolute top-5 right-5 flex flex-col gap-3 z-10">
+<button class="w-11 h-11 bg-white text-black rounded-full shadow-[0_8px_30px_rgb(0,0,0,0.12)] flex items-center justify-center hover:bg-gray-50 transition">
+<span class="material-symbols-outlined text-[20px]">fullscreen</span>
+</button>
+</div>
+</div>
+<aside class="w-[400px] flex flex-col gap-0 card overflow-hidden bg-[#161616] border-[#262626]">
+<div class="p-4 border-b border-[#262626] flex items-center justify-between bg-[#111]">
+<span class="text-sm font-medium text-white flex items-center gap-2">
+<span class="pulse-dot"></span> Live Webhook Payload
+                    </span>
+<span class="text-[10px] text-zinc-500 font-mono">application/json</span>
+</div>
+<div class="flex-1 overflow-y-auto p-4 flex flex-col gap-3 font-mono text-[11px] text-zinc-400 leading-relaxed" id="raw-feed-container">
+<div class="text-center text-zinc-600 my-10 italic">Listening for incoming webhooks...</div>
+</div>
+</aside>
+</div>
+<!-- Middle Section: Telemetry Bar -->
+<div class="flex gap-5">
+<div class="card flex-1 p-5 flex items-center gap-4 bg-[#161616]">
+<div class="w-12 h-12 rounded-full bg-[#0A0A0A] border border-[#262626] flex items-center justify-center">
+<div class="pulse-dot"></div>
+</div>
+<div>
+<div class="text-xs text-zinc-500 mb-1">System Health</div>
+<div class="text-lg text-white font-medium">Status: <span class="text-sm text-green-400 ml-1" id="sys-health">Awaiting Data</span></div>
+</div>
+</div>
+<div class="card flex-1 p-5 flex items-center gap-4 bg-[#161616]">
+<div class="w-12 h-12 rounded-full bg-[#0A0A0A] border border-[#262626] flex items-center justify-center">
+<span class="material-symbols-outlined text-zinc-400">speed</span>
+</div>
+<div>
+<div class="text-xs text-zinc-500 mb-1">Ingestion Latency</div>
+<div class="text-lg text-white font-medium"><span id="sys-latency">0 ms </span><span class="text-sm text-zinc-400 ml-1">(Live)</span></div>
+</div>
+</div>
+<div class="card flex-1 p-5 flex items-center gap-4 bg-[#161616]">
+<div class="w-12 h-12 rounded-full bg-[#0A0A0A] border border-[#262626] flex items-center justify-center">
+<span class="material-symbols-outlined text-blue-400">sync</span>
+</div>
+<div>
+<div class="text-xs text-zinc-500 mb-1">Messages Processed</div>
+<div class="text-lg text-white font-medium" id="msg-counter">0</div>
+</div>
+</div>
+</div>
+<!-- Bottom Section: Animation -->
+<div class="card p-8 h-40 relative flex items-center justify-between overflow-hidden bg-[#0A0A0A] border-[#262626]" id="animation-canvas">
+<!-- Grid Background for tech feel -->
+<div class="absolute inset-0 opacity-10" style="background-image: linear-gradient(#333 1px, transparent 1px), linear-gradient(90deg, #333 1px, transparent 1px); background-size: 20px 20px;"></div>
+<!-- WhatsApp Node -->
+<div class="z-10 flex flex-col items-center gap-2 ml-8">
+<div class="w-16 h-16 rounded-2xl bg-[#25D366] flex items-center justify-center shadow-[0_0_20px_rgba(37,211,102,0.3)]">
+<span class="material-symbols-outlined text-white text-[32px]">forum</span>
+</div>
+<span class="text-xs text-zinc-400 font-medium tracking-widest uppercase">WhatsApp API</span>
+</div>
+<!-- Dashed Path -->
+<div class="absolute left-32 right-32 top-1/2 border-t-2 border-dashed border-zinc-700 -mt-px z-0"></div>
+<!-- The flying packets -->
+<!-- UrbanOS Node -->
+<div class="z-10 flex flex-col items-center gap-2 mr-8">
+<div class="w-16 h-16 rounded-2xl bg-[#161616] border border-[#333] flex items-center justify-center shadow-xl">
+<svg class="w-8 h-8 text-blue-400 drop-shadow-[0_0_8px_rgba(59,130,246,0.8)]" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 22s8-6 8-12.5a8 8 0 0 0-16 0C4 16 12 22 12 22z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 12v-3h2V6h4v4h2v2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+</div>
+<span class="text-xs text-white font-medium tracking-widest uppercase">UrbanOS Engine</span>
+</div>
+</div>
+</div>
+</main>
+<script>let lastMessageCount = -1;
+
+        function switchView(viewId) {
+            document.querySelectorAll('.view-content').forEach(el => {
+                el.classList.remove('active');
+            });
+            document.getElementById('view-' + viewId).classList.add('active');
+        setTimeout(() => { window.dispatchEvent(new Event('resize')); }, 100);
+            setTimeout(() => {
+                if(window.priorityMap) window.priorityMap.invalidateSize();
+                if(window.coordMap) window.coordMap.invalidateSize();
+                if(window.liveMap) window.liveMap.invalidateSize();
+            }, 50);
+            setTimeout(() => {
+                if(window.priorityMap) window.priorityMap.invalidateSize();
+                if(window.coordMap) window.coordMap.invalidateSize();
+                if(window.liveMap) window.liveMap.invalidateSize();
+            }, 300);
+            
+            
+            document.querySelectorAll('.nav-link').forEach(el => {
+                el.classList.remove('active');
+                el.classList.remove('text-white');
+                el.classList.add('text-zinc-500');
+            });
+            
+            const activeLink = document.getElementById('nav-' + viewId);
+            if(activeLink) {
+                activeLink.classList.add('active');
+                activeLink.classList.add('text-white');
+                activeLink.classList.remove('text-zinc-500');
+            }
+        }
+
+        // Initialize Analysis segments
+        setTimeout(() => {
+            if(typeof drawSegments === 'function') {
+                
+                
+                
+            }
+        }, 500);
+    
+        // Generate Segmented Bars exactly like the reference image
+        function updateSegmentedBar(id, percentage) {
+            const container = document.getElementById(id);
+            const totalSegments = 30; // More segments for fidelity
+            const activeSegments = Math.round((percentage / 100) * totalSegments);
+            let html = '';
+            for(let i=0; i<totalSegments; i++) {
+                html += `<div class="segment ${i < activeSegments ? 'active' : ''}"></div>`;
+            }
+            if(container) container.innerHTML = html;
+        }
+        
+        
+        
+        
+
+        // Lucknow Smart Grid constraints
+
+        let hexLayerGroup = null;
+        function drawLucknowHexGrid(mapObj, msgData) {
+            if (typeof turf === 'undefined' || !mapObj) return;
+            if (hexLayerGroup) { mapObj.removeLayer(hexLayerGroup); }
+            
+            // Bounding box for Lucknow
+            const bbox = [80.85, 26.75, 81.05, 26.95];
+            const cellSide = 2.5; // kilometers
+            const options = {units: 'kilometers'};
+            let hexGrid = turf.hexGrid(bbox, cellSide, options);
+            
+            // Name the hexes and count data
+            let zones = ["Gomti Nagar", "Hazratganj", "Alambagh", "Indira Nagar", "Chowk", "Aminabad", "Aashiana", "Kapurthala", "Vikas Nagar", "Mahanagar", "Rajajipuram"];
+            
+            // Assign random names to hexes
+            hexGrid.features.forEach((f, i) => {
+                f.properties = f.properties || {};
+                f.properties.name = zones[i % zones.length];
+                f.properties.count = 0;
+            });
+            
+            // Count messages in hexes
+            msgData.forEach(msg => {
+                if (msg.latitude && msg.longitude) {
+                    let pt = turf.point([msg.longitude, msg.latitude]);
+                    for(let i=0; i<hexGrid.features.length; i++) {
+                        if(turf.booleanPointInPolygon(pt, hexGrid.features[i])) {
+                            hexGrid.features[i].properties.count++;
+                            break;
+                        }
+                    }
+                }
+            });
+            
+            // Draw on map
+            hexLayerGroup = L.geoJSON(hexGrid, {
+                style: function(feature) {
+                    let count = feature.properties.count;
+                    let fillColor = count > 5 ? '#ef4444' : (count > 2 ? '#f59e0b' : '#3b82f6');
+                    let fillOpacity = count > 0 ? 0.6 : 0.1;
+                    return {
+                        color: "#ffffff",
+                        weight: 1,
+                        fillColor: fillColor,
+                        fillOpacity: fillOpacity
+                    };
+                },
+                onEachFeature: function(feature, layer) {
+                    let popupContent = `<div class='text-black font-sans'><b>Zone: ${feature.properties.name}</b><br/>Reports: ${feature.properties.count}</div>`;
+                    layer.bindPopup(popupContent);
+                }
+            }).addTo(mapObj);
+        }
+
+        function applyLucknowGridAndLock(mapObj, lock) {
+            const bounds = [[26.75, 80.85], [26.95, 81.05]]; // Approximate bounds of Lucknow
+            L.rectangle(bounds, {color: "#3b82f6", weight: 2, fill: false, opacity: 0.4}).addTo(mapObj);
+            
+            if (lock) {
+                mapObj.dragging.disable();
+                mapObj.touchZoom.disable();
+                mapObj.doubleClickZoom.disable();
+                mapObj.scrollWheelZoom.disable();
+                mapObj.boxZoom.disable();
+                mapObj.keyboard.disable();
+            }
+        }
+
+        // Fetch Live Messages from FastAPI backend
+        async function fetchMessages() {
+            try {
+                const response = await fetch('/messages');
+                const data = await response.json();
+                
+                // Trigger live animation if new messages arrived
+                if (lastMessageCount !== -1 && data.length > lastMessageCount) {
+                    const numNew = data.length - lastMessageCount;
+                    for(let i=0; i<numNew; i++) {
+                        setTimeout(() => {
+                            const canvas = document.getElementById('animation-canvas');
+                            if(canvas) {
+                                const packet = document.createElement('div');
+                                packet.className = 'data-packet fly-once';
+                                canvas.appendChild(packet);
+                                
+                                // Increment counter
+                                const counter = document.getElementById('msg-counter');
+                                if(counter) counter.innerText = parseInt(counter.innerText) + 1;
+                                
+                                setTimeout(() => packet.remove(), 1500);
+                                
+                                // Append raw feed
+                                const rawContainer = document.getElementById('raw-feed-container');
+                                if(rawContainer) {
+                                    // Remove the placeholder if it exists
+                                    if(rawContainer.innerHTML.includes('Listening for')) {
+                                        rawContainer.innerHTML = '';
+                                    }
+                                    const rawMsg = data[lastMessageCount + i];
+                                    const div = document.createElement('div');
+                                    div.className = 'p-3 bg-[#0A0A0A] border border-[#262626] rounded-md shadow-sm break-words';
+                                    const cat = rawMsg.category || 'Uncategorized';
+                                    const loc = rawMsg.location || rawMsg.extracted_location || 'Unknown Location';
+                                    const lang = rawMsg.original_language || '';
+                                    const ts = rawMsg.timestamp ? new Date(rawMsg.timestamp).toLocaleTimeString() : '';
+                                    div.innerHTML = `
+                                       <div class="flex items-center justify-between mb-2">
+                                         <div class="text-green-400 text-xs font-mono">▼ NEW PROPOSAL · ${ts}</div>
+                                         ${langFlag(lang)}
+                                       </div>
+                                       <div class="text-white font-medium text-sm mb-1">${rawMsg.summary || cat}</div>
+                                       <div class="text-zinc-400 text-xs mb-1 truncate">${rawMsg.raw_body || rawMsg.body || ''}</div>
+                                       <div class="flex gap-2 flex-wrap mt-1">
+                                         <span class="text-[10px] bg-zinc-800 px-2 py-0.5 rounded text-zinc-400">${cat}</span>
+                                         <span class="text-[10px] bg-zinc-800 px-2 py-0.5 rounded text-zinc-400">📍 ${loc}</span>
+                                         <span class="text-[10px] font-bold ${rawMsg.priority === 'Critical' ? 'text-red-400' : rawMsg.priority === 'High' ? 'text-amber-400' : 'text-zinc-400'}">${rawMsg.priority || ''}</span>
+                                       </div>`;
+                                    rawContainer.prepend(div);
+                                    
+                                    // Map Blink Effect
+                                    if (window.liveMap && rawMsg.latitude && rawMsg.longitude) {
+                                        const pulseIcon = L.divIcon({
+                                            className: 'custom-div-icon',
+                                            html: `<div class="relative flex items-center justify-center w-6 h-6"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75"></span><span class="relative inline-flex rounded-full h-4 w-4 bg-red-500 border-2 border-white shadow-[0_0_10px_rgba(239,68,68,0.8)]"></span></div>`,
+                                            iconSize: [24, 24],
+                                            iconAnchor: [12, 12]
+                                        });
+                                        const marker = L.marker([rawMsg.latitude, rawMsg.longitude], {icon: pulseIcon}).addTo(window.liveMap);
+                                        setTimeout(() => {
+                                            if(window.liveMap.hasLayer(marker)) window.liveMap.removeLayer(marker);
+                                        }, 4000);
+                                        window.liveMap.setView([rawMsg.latitude, rawMsg.longitude], 14, {animate: true});
+                                    }
+                                }
+                            }
+                        }, i * 300);
+                    }
+                }
+                
+                if (lastMessageCount === -1) {
+                    // First load, just set the counter
+                    const counter = document.getElementById('msg-counter');
+                    if(counter) counter.innerText = data.length;
+                    
+                    // Populate raw feed with existing messages on first load
+                    const rawContainer = document.getElementById('raw-feed-container');
+                    if(rawContainer && data.length > 0) {
+                        rawContainer.innerHTML = ''; // clear placeholder
+                        data.forEach(m => {
+                            const div = document.createElement('div');
+                            div.className = 'p-3 bg-[#0A0A0A] border border-[#262626] rounded-md shadow-sm break-words';
+                            const cat = m.category || 'Uncategorized';
+                            const loc = m.location || m.extracted_location || 'Unknown';
+                            const lang = m.original_language || '';
+                            const ts = m.timestamp ? new Date(m.timestamp).toLocaleTimeString() : '';
+                            div.innerHTML = `
+                               <div class="flex items-center justify-between mb-2">
+                                 <div class="text-zinc-500 text-xs font-mono">▼ PROPOSAL · ${ts}</div>
+                                 ${langFlag(lang)}
+                               </div>
+                               <div class="text-white font-medium text-sm mb-1">${m.summary || cat}</div>
+                               <div class="text-zinc-400 text-xs mb-1 truncate">${m.raw_body || m.body || ''}</div>
+                               <div class="flex gap-2 flex-wrap mt-1">
+                                 <span class="text-[10px] bg-zinc-800 px-2 py-0.5 rounded text-zinc-400">${cat}</span>
+                                 <span class="text-[10px] bg-zinc-800 px-2 py-0.5 rounded text-zinc-400">📍 ${loc}</span>
+                                 <span class="text-[10px] font-bold ${m.priority === 'Critical' ? 'text-red-400' : m.priority === 'High' ? 'text-amber-400' : 'text-zinc-400'}">${m.priority || ''}</span>
+                                 <span class="text-[10px] ${m.status === 'Sanctioned' ? 'text-green-400' : m.status === 'In Review' ? 'text-amber-400' : 'text-zinc-500'}">${m.status || 'Open'}</span>
+                               </div>`;
+                            rawContainer.prepend(div);
+                        });
+                    }
+                }
+                
+                lastMessageCount = data.length;
+                // --- MPLADS INSIGHTS LOGIC ---
+                let totalRequested = 0;
+                let projectsSanctioned = 0;
+                let sectorBudgets = { constr: 0, land: 0, infra: 0, util: 0 };
+                let lifecycle = { requested: 0, review: 0, sanctioned: 0, completed: 0 };
+                let pipelineProjects = [];
+                
+                data.forEach(msg => {
+                    let cat = (msg.category || "").toLowerCase();
+                    let feasi = (msg.sentiment || "").toLowerCase();
+                    let prio = (msg.priority || "").toLowerCase();
+                    
+                    // Estimate Budget (Native)
+                    let estBudget = msg.estimated_budget || 0; // 0 for legacy messages without budget
+                    
+                    totalRequested += estBudget;
+                    
+                    if (cat.includes("construction")) sectorBudgets.constr += estBudget;
+                    else if (cat.includes("land")) sectorBudgets.land += estBudget;
+                    else if (cat.includes("infrastruct") || cat.includes("upgrade")) sectorBudgets.infra += estBudget;
+                    else sectorBudgets.util += estBudget;
+                    
+                    let status = "Requested";
+                    if (feasi === "high" || msg.status === "Closed") { status = "Sanctioned"; lifecycle.sanctioned++; projectsSanctioned++; }
+                    else if (feasi === "moderate") { status = "Under Review"; lifecycle.review++; }
+                    else if (feasi === "complex") { status = "Feasibility Check"; lifecycle.requested++; }
+                    else { lifecycle.requested++; }
+                    
+                    pipelineProjects.push({
+                        title: msg.summary || "New " + (msg.category || "Project"),
+                        sector: msg.category || "General",
+                        status: status,
+                        budget: estBudget,
+                        loc: msg.extracted_location || "Unknown"
+                    });
+                });
+                
+                // Update KPIs
+                const fmtMoney = val => '₹' + (val / 100000).toFixed(2) + ' L';
+                const fmtCr = val => '₹' + (val / 10000000).toFixed(2) + ' Cr';
+                
+                const elFundsReq = document.getElementById('kpi-funds-requested');
+                if(elFundsReq) elFundsReq.innerText = fmtCr(totalRequested);
+                
+                const elFundsBal = document.getElementById('kpi-funds-balance');
+                if(elFundsBal) elFundsBal.innerText = fmtCr(50000000 - totalRequested);
+                
+                const elSanc = document.getElementById('kpi-sanctioned-count');
+                if(elSanc) elSanc.innerText = projectsSanctioned;
+
+                // =============================================
+                // NEW: ANALYSIS TAB DATA BINDINGS
+                // =============================================
+                const allMsgs = data; // use full unfiltered data for analysis
+                const now7d = Date.now() - (7 * 24 * 60 * 60 * 1000);
+
+                let anaCrit = 0, anaWeek = 0, anaSanc = 0;
+                const zoneMap = {}, langMap = {}, catMap = {};
+                const statusPipe = { open: 0, review: 0, sanctioned: 0, completed: 0 };
+
+                allMsgs.forEach(m => {
+                    if (m.priority === 'Critical') anaCrit++;
+                    if (m.timestamp && new Date(m.timestamp).getTime() > now7d) anaWeek++;
+                    const st = (m.status || 'Open').toLowerCase();
+                    if (st === 'sanctioned') { anaSanc++; statusPipe.sanctioned++; }
+                    else if (st === 'in review') statusPipe.review++;
+                    else if (st === 'completed') statusPipe.completed++;
+                    else statusPipe.open++;
+
+                    const z = m.constituency_zone || 'Unknown';
+                    zoneMap[z] = (zoneMap[z] || 0) + 1;
+
+                    const l = m.original_language || 'English';
+                    langMap[l] = (langMap[l] || 0) + 1;
+
+                    const c = m.category || 'General';
+                    if (!catMap[c]) catMap[c] = { count: 0, critical: 0, budget: 0 };
+                    catMap[c].count++;
+                    if (m.priority === 'Critical') catMap[c].critical++;
+                    catMap[c].budget += (m.estimated_budget || 0);
+                });
+
+                const anaTotal = allMsgs.length || 1;
+
+                // KPIs
+                const setEl = (id, v) => { const e = document.getElementById(id); if(e) e.innerText = v; };
+                setEl('ana-total', anaTotal - 1 < 0 ? 0 : anaTotal);
+                setEl('ana-critical', anaCrit);
+                setEl('ana-week', anaWeek);
+                setEl('ana-sanctioned', anaSanc);
+
+                // Status Pipeline bars
+                const pTotal = Object.values(statusPipe).reduce((a,b) => a+b, 1);
+                setEl('pipe-open', statusPipe.open);
+                setEl('pipe-review', statusPipe.review);
+                setEl('pipe-sanc', statusPipe.sanctioned);
+                setEl('pipe-done', statusPipe.completed);
+                ['open','review','sanc','done'].forEach((k,i) => {
+                    const vals = [statusPipe.open, statusPipe.review, statusPipe.sanctioned, statusPipe.completed];
+                    const bar = document.getElementById('pipe-' + k + '-bar');
+                    if(bar) bar.style.width = Math.round((vals[i] / pTotal) * 100) + '%';
+                });
+                const resolRate = Math.round(((statusPipe.sanctioned + statusPipe.completed) / pTotal) * 100);
+                setEl('pipe-rate', resolRate + '%');
+
+                // Priority Donut Chart
+                const prio = { Critical: 0, High: 0, Medium: 0, Low: 0 };
+                allMsgs.forEach(m => { const p = m.priority || 'Low'; prio[p] = (prio[p]||0)+1; });
+                if (window.priorityDonutChart) {
+                    window.priorityDonutChart.data.datasets[0].data = [prio.Critical, prio.High, prio.Medium, prio.Low];
+                    window.priorityDonutChart.update();
+                } else if (document.getElementById('priorityDonut')) {
+                    window.priorityDonutChart = new Chart(document.getElementById('priorityDonut'), {
+                        type: 'doughnut',
+                        data: {
+                            labels: ['Critical', 'High', 'Medium', 'Low'],
+                            datasets: [{ data: [prio.Critical, prio.High, prio.Medium, prio.Low],
+                                backgroundColor: ['#ef4444','#f59e0b','#3b82f6','#71717a'],
+                                borderWidth: 0, hoverOffset: 4 }]
+                        },
+                        options: { responsive: true, maintainAspectRatio: true, cutout: '65%',
+                            plugins: { legend: { position: 'bottom', labels: { color: '#a1a1aa', font: { size: 10 }, padding: 8, boxWidth: 10 } } } }
+                    });
+                }
+
+                // Zone Bar Chart
+                const zones = ['North','South','East','West','Central'];
+                const zoneCounts = zones.map(z => zoneMap[z] || 0);
+                const zoneColors = ['#3b82f6','#10b981','#f59e0b','#a855f7','#f43f5e'];
+                if (window.zoneBarChartInst) {
+                    window.zoneBarChartInst.data.datasets[0].data = zoneCounts;
+                    window.zoneBarChartInst.update();
+                } else if (document.getElementById('zoneBarChart')) {
+                    window.zoneBarChartInst = new Chart(document.getElementById('zoneBarChart'), {
+                        type: 'bar',
+                        data: {
+                            labels: zones,
+                            datasets: [{ data: zoneCounts, backgroundColor: zoneColors, borderRadius: 6, borderSkipped: false }]
+                        },
+                        options: { responsive: true, maintainAspectRatio: false,
+                            plugins: { legend: { display: false } },
+                            scales: {
+                                x: { grid: { color: '#27272a' }, ticks: { color: '#71717a', font: { size: 10 } } },
+                                y: { grid: { color: '#27272a' }, ticks: { color: '#71717a', font: { size: 10 } }, beginAtZero: true }
+                            }
+                        }
+                    });
+                }
+
+                // Language Distribution bars
+                const langEl = document.getElementById('lang-dist-bars');
+                if (langEl) {
+                    const langs = Object.entries(langMap).sort((a,b) => b[1]-a[1]).slice(0,6);
+                    const maxL = Math.max(...langs.map(l=>l[1]), 1);
+                    const langColors = { Hindi:'bg-amber-500', English:'bg-blue-500', Urdu:'bg-purple-500', Tamil:'bg-rose-500', Telugu:'bg-green-500' };
+                    langEl.innerHTML = langs.map(([l,c]) => `
+                        <div class="flex items-center gap-2">
+                            <div class="text-[10px] text-zinc-400 w-14 truncate">${l}</div>
+                            <div class="flex-1 h-2 bg-zinc-800 rounded-full overflow-hidden">
+                                <div class="h-full ${langColors[l]||'bg-zinc-500'} rounded-full transition-all" style="width:${Math.round((c/maxL)*100)}%"></div>
+                            </div>
+                            <div class="text-[10px] text-zinc-400 w-5 text-right">${c}</div>
+                        </div>`).join('');
+                }
+
+                // Category Table
+                const catTableEl = document.getElementById('cat-table-body');
+                if (catTableEl) {
+                    const cats = Object.entries(catMap).sort((a,b) => b[1].count - a[1].count);
+                    const maxCat = Math.max(...cats.map(([,v])=>v.count), 1);
+                    catTableEl.innerHTML = cats.map(([cat, v]) => {
+                        const shareW = Math.round((v.count/maxCat)*100);
+                        const budStr = v.budget >= 10000000 ? '₹' + (v.budget/10000000).toFixed(1)+'Cr' : '₹' + (v.budget/100000).toFixed(1)+'L';
+                        return `<tr class="border-b border-zinc-900 hover:bg-zinc-900/50 transition">
+                            <td class="px-4 py-2.5 text-zinc-200 font-medium">${cat}</td>
+                            <td class="px-4 py-2.5 text-center text-white font-bold">${v.count}</td>
+                            <td class="px-4 py-2.5 text-center ${v.critical > 0 ? 'text-red-400 font-bold' : 'text-zinc-600'}">${v.critical || '-'}</td>
+                            <td class="px-4 py-2.5 text-right font-mono text-zinc-300">${budStr}</td>
+                            <td class="px-4 py-2.5"><div class="h-1.5 bg-zinc-800 rounded-full w-full"><div class="h-full bg-blue-500 rounded-full" style="width:${shareW}%"></div></div></td>
+                        </tr>`;
+                    }).join('');
+                }
+
+                // Coordination: critical alerts
+                const coordAlerts = document.getElementById('coord-alerts');
+                const critMsgs = allMsgs.filter(m => m.priority === 'Critical' || m.priority === 'High').slice(0, 5);
+                setEl('coord-critical', critMsgs.filter(m => m.priority === 'Critical').length);
+                setEl('coord-pending', critMsgs.length);
+                if (coordAlerts && critMsgs.length > 0) {
+                    coordAlerts.innerHTML = critMsgs.map(m => `
+                        <div class="p-3 bg-zinc-900 border ${m.priority==='Critical'?'border-red-800/50':'border-amber-800/30'} rounded-xl">
+                            <div class="flex justify-between items-center mb-1">
+                                <div class="text-[10px] font-bold ${m.priority==='Critical'?'text-red-400':'text-amber-400'}">${m.priority}</div>
+                                <div class="text-[10px] text-zinc-600">${m.constituency_zone || 'Unknown'} Zone</div>
+                            </div>
+                            <div class="text-xs text-white font-medium">${m.summary || m.category || 'Proposal'}</div>
+                            <div class="text-[10px] text-zinc-500 mt-0.5">📍 ${m.extracted_location || 'Unknown'}</div>
+                            <button class="mt-2 w-full py-1 text-[10px] font-bold border border-zinc-700 text-zinc-300 rounded hover:border-zinc-500 hover:text-white transition">Dispatch Unit</button>
+                        </div>`).join('');
+                } else if (coordAlerts) {
+                    coordAlerts.innerHTML = '<div class="text-xs text-zinc-600 italic">No critical proposals at this time.</div>';
+                }
+
+                // =============================================
+                // END NEW ANALYSIS + COORDINATION BINDINGS
+                // =============================================
+
+                // Update Legacy Charts (for Planning tab sector chart)
+                if (window.sectorChart) {
+                    window.sectorChart.data.datasets[0].data = [sectorBudgets.constr, sectorBudgets.land, sectorBudgets.infra, sectorBudgets.util];
+                    window.sectorChart.update();
+                }
+                if (window.lifecycleChart) {
+                    window.lifecycleChart.data.datasets[0].data = [lifecycle.requested, lifecycle.review, lifecycle.sanctioned, lifecycle.completed];
+                    window.lifecycleChart.update();
+                }
+                // --- END MPLADS INSIGHTS LOGIC ---
+
+
+
+                const tbody = document.getElementById('queue-body');
+                
+                if(tbody && data && data.length > 0) {
+                    // --- APPLY FILTERS ---
+                    const typeFilter = document.getElementById('filter-type')?.value || 'all';
+                    const mediumFilter = document.getElementById('filter-medium')?.value || 'all';
+                    const locFilter = document.getElementById('filter-location')?.value || 'all';
+                    
+                    data = data.filter(msg => {
+                        // 1. Filter Type
+                        let cat = (msg.category || "").toLowerCase();
+                        if (typeFilter === 'construction' && !cat.includes('construction')) return false;
+                        if (typeFilter === 'land' && !cat.includes('land')) return false;
+                        if (typeFilter === 'infra' && !cat.includes('infrastruct') && !cat.includes('upgrade')) return false;
+                        if (typeFilter === 'utility' && !cat.includes('utility')) return false;
+                        
+                        // 2. Filter Medium
+                        let mediaType = (msg.media_content_type || "").toLowerCase();
+                        let isVoice = mediaType.includes("audio");
+                        let isPhoto = mediaType.includes("image");
+                        if (mediumFilter === 'text' && (isVoice || isPhoto)) return false;
+                        if (mediumFilter === 'image' && !isPhoto) return false;
+                        if (mediumFilter === 'audio' && !isVoice) return false;
+                        
+                        // 3. Filter Location (Native)
+                        if (locFilter !== 'all') {
+                            let assignedZone = (msg.constituency_zone || 'central').toLowerCase();
+                            if (locFilter !== assignedZone) return false;
+                        }
+                        
+                        return true;
+                    });
+                    
+                    // Update main count display so user knows filtering happened
+                    if (window.priorityMap) drawLucknowHexGrid(window.priorityMap, data);
+                    const headerCount = document.getElementById('total-reports');
+                    if (headerCount) headerCount.innerText = data.length;
+
+                    
+                    // -- DYNAMIC UI BINDINGS --
+                    
+                    // -- REALTIME NLP CATEGORIZATION ENGINE --
+                    const counts = { constr: 0, land: 0, infra: 0, util: 0 };
+                    const sCounts = { angry: 0, frust: 0, urgent: 0, neutral: 0 };
+                    const now = Date.now();
+                    let latestTs = 0;
+                    
+                    data.forEach(msg => {
+                        const body = (msg.body || "").toLowerCase();
+                        if (msg.timestamp) {
+                            const ts = new Date(msg.timestamp).getTime();
+                            if(ts > latestTs) latestTs = ts;
+                        }
+                        
+                        const cat = (msg.category || "").toLowerCase();
+                        if (cat.includes("construction")) counts.constr++;
+                        else if (cat.includes("land")) counts.land++;
+                        else if (cat.includes("infrastruct") || cat.includes("upgrade")) counts.infra++;
+                        else counts.util++; // Public Utility or Other
+                        
+                        const sent = (msg.sentiment || "").toLowerCase(); // Now contains feasibility
+                        if (sent.includes("complex")) sCounts.angry++;
+                        else if (sent.includes("unknown")) sCounts.frust++;
+                        else if (sent.includes("moderate")) sCounts.urgent++;
+                        else sCounts.neutral++; // High or other
+                    });
+                    
+                    const total = data.length || 1;
+
+                    updateSegmentedBar('seg-1', (counts.constr/total)*100);
+                    updateSegmentedBar('seg-2', (counts.land/total)*100);
+                    updateSegmentedBar('seg-3', (counts.infra/total)*100);
+                    updateSegmentedBar('seg-4', (counts.util/total)*100);
+                    
+                    document.getElementById('pct-constr').innerText = Math.round((counts.constr/total)*100) + '%';
+                    document.getElementById('pct-land').innerText = Math.round((counts.land/total)*100) + '%';
+                    document.getElementById('pct-infra').innerText = Math.round((counts.infra/total)*100) + '%';
+                    document.getElementById('pct-util').innerText = Math.round((counts.util/total)*100) + '%';
+                    
+                    // Update Sidebar Graphs dynamically (Feasibility Assessment)
+                    updateSegmentedBar('ana-seg-angry', (sCounts.angry/total)*100);
+                    updateSegmentedBar('ana-seg-frust', (sCounts.frust/total)*100);
+                    updateSegmentedBar('ana-seg-urgent', (sCounts.urgent/total)*100);
+                    updateSegmentedBar('ana-seg-neutral', (sCounts.neutral/total)*100);
+                    
+                    const elAngry = document.getElementById('ana-pct-angry'); if(elAngry) elAngry.innerText = Math.round((sCounts.angry/total)*100) + '%';
+                    const elFrust = document.getElementById('ana-pct-frust'); if(elFrust) elFrust.innerText = Math.round((sCounts.frust/total)*100) + '%';
+                    const elUrgent = document.getElementById('ana-pct-urgent'); if(elUrgent) elUrgent.innerText = Math.round((sCounts.urgent/total)*100) + '%';
+                    const elNeutral = document.getElementById('ana-pct-neutral'); if(elNeutral) elNeutral.innerText = Math.round((sCounts.neutral/total)*100) + '%';
+
+                    // -- DYNAMIC REPORTS ANALYSIS --
+                    let typeText = 0, typePhoto = 0, typePhotoText = 0, typeVoiceText = 0, typeVoice = 0, typeAll = 0;
+                    let hasLoc = 0, hasPhoto = 0;
+                    
+                    data.forEach(msg => {
+                        let mediaType = (msg.media_content_type || "").toLowerCase();
+                        let isVoice = mediaType.includes("audio");
+                        let isPhoto = mediaType.includes("image");
+                        let isText = msg.body && msg.body.trim().length > 0;
+                        
+                        if (isVoice && isPhoto && isText) typeAll++;
+                        else if (isVoice && isText) typeVoiceText++;
+                        else if (isPhoto && isText) typePhotoText++;
+                        else if (isVoice) typeVoice++;
+                        else if (isPhoto) typePhoto++; 
+                        else typeText++;
+                        
+                        if (msg.latitude || msg.extracted_location) hasLoc++;
+                        if (isPhoto) hasPhoto++;
+                    });
+                    
+                    if(document.getElementById('type-text')) document.getElementById('type-text').innerText = typeText;
+                    if(document.getElementById('type-photo')) document.getElementById('type-photo').innerText = typePhoto;
+                    if(document.getElementById('type-photo-text')) document.getElementById('type-photo-text').innerText = typePhotoText;
+                    if(document.getElementById('type-voice-text')) document.getElementById('type-voice-text').innerText = typeVoiceText;
+                    if(document.getElementById('type-voice')) document.getElementById('type-voice').innerText = typeVoice;
+                    if(document.getElementById('type-all')) document.getElementById('type-all').innerText = typeAll;
+                    
+                    if(document.getElementById('track-loc')) document.getElementById('track-loc').innerText = total > 0 ? Math.round((hasLoc/total)*100) + '%' : '0%';
+                    if(document.getElementById('track-photo')) document.getElementById('track-photo').innerText = total > 0 ? Math.round((hasPhoto/total)*100) + '%' : '0%';
+
+
+                    // -- DYNAMIC CITIZEN SATISFACTION --
+                    const cRating = document.getElementById('citizen-rating');
+                    const cResp = document.getElementById('citizen-responses');
+                    if (cRating) {
+                        let totalScore = data.reduce((acc, msg) => acc + (msg.body && msg.body.length > 30 ? 5 : 2), 0);
+                        let avg = data.length > 0 ? (totalScore / data.length) : 0;
+                        cRating.innerText = avg.toFixed(1);
+                    }
+                    if (cResp) cResp.innerText = `Based on ${data.length} responses`;
+            
+                    
+                    // Update Telemetry
+                    const elHealth = document.getElementById('sys-health');
+                    if(elHealth) elHealth.innerText = data.length > 0 ? "Tracking " + data.length + " Events" : "Awaiting Data";
+                    
+                    const elLat = document.getElementById('sys-latency');
+                    if(elLat && latestTs > 0) {
+                        let diff = now - latestTs;
+                        // For static demo data that is old, cap the latency look to a simulated live number, or just show real
+                        if (diff > 60000) diff = Math.floor(Math.random() * 40) + 10; 
+                        elLat.innerText = diff + " ms ";
+                    }
+                    
+                    // Coordination Map: Render Dispatch Pins
+                    // If window.coordMap exists (we need to expose it), plot unit responses
+                    if(window.coordMap) {
+                        // clear existing markers
+                        if(!window.coordMarkers) window.coordMarkers = L.layerGroup().addTo(window.coordMap);
+                        window.coordMarkers.clearLayers();
+                        
+                        data.forEach(msg => {
+                            if (msg.latitude && msg.longitude) {
+                                // Draw a blue dispatch pin representing a response unit sent to the coordinate
+                                const icon = L.divIcon({
+                                    className: 'custom-div-icon',
+                                    html: `<div style="background-color:#3b82f6; width:12px; height:12px; border-radius:50%; border:2px solid white; box-shadow: 0 0 10px rgba(59,130,246,0.8);"></div>`,
+                                    iconSize: [12, 12],
+                                    iconAnchor: [6, 6]
+                                });
+                                L.marker([msg.latitude, msg.longitude], {icon: icon}).addTo(window.coordMarkers);
+                            }
+                        });
+                    }
+
+                    
+                    // -- LIVE AI-RANKED PROJECTS (from /projects/ranked) --
+                    const qBody = document.getElementById('queue-body');
+                    if (qBody) {
+                        fetch('/projects/ranked').then(r => r.json()).then(ranked => {
+                            const fmtCr = val => val >= 10000000 ? '₹' + (val/10000000).toFixed(1) + ' Cr' : '₹' + (val/100000).toFixed(1) + ' L';
+                            const zoneColors = {North:'text-blue-400', South:'text-emerald-400', East:'text-amber-400', West:'text-purple-400', Central:'text-rose-400'};
+                            qBody.innerHTML = ranked.map((p, i) => {
+                                const impactColor = p.impact_score > 100 ? 'text-red-400' : (p.impact_score > 50 ? 'text-amber-400' : 'text-green-400');
+                                const zoneColor = zoneColors[p.zone] || 'text-zinc-400';
+                                const isAlreadySanctioned = (p.status === 'Sanctioned');
+                                const sanctionBtn = isAlreadySanctioned
+                                    ? `<span class="px-3 py-1.5 bg-green-900/40 border border-green-700 text-green-400 text-xs font-bold rounded-lg">✓ Sanctioned</span>`
+                                    : `<button onclick="sanctionProject('${p.id}','${p.title.replace(/'/g,"\\'").replace(/"/g,"&quot;")}','${p.zone}','${p.category}',${JSON.stringify(p.senders)})" class="px-3 py-1.5 bg-white hover:bg-zinc-200 text-black text-xs font-bold rounded-lg transition-all shadow-[0_0_10px_rgba(255,255,255,0.1)] hover:shadow-[0_0_15px_rgba(255,255,255,0.3)]">⚡ Sanction</button>`;
+                                return `<tr class="hover:bg-[#1C1C1C] transition cursor-pointer border-b border-[#262626]">
+                                    <td class="px-6 py-4 whitespace-normal min-w-[340px]">
+                                        <div class="text-white font-semibold flex items-center gap-2 mb-1">
+                                            <span class="text-[11px] font-bold ${zoneColor} bg-zinc-800 px-2 py-0.5 rounded">${p.zone.toUpperCase()}</span>
+                                            ${p.title}
+                                        </div>
+                                        <div class="text-[11px] text-amber-400/90 italic whitespace-normal max-w-md mb-1 leading-relaxed">
+                                            🤖 ${p.justification || 'AI analysis pending...'}
+                                        </div>
+                                        <div class="text-xs text-zinc-500">${p.demand_count} citizen proposals · ${p.unique_senders} unique voices</div>
+                                    </td>
+                                    <td class="px-4 py-4 text-zinc-300">${p.category}</td>
+                                    <td class="px-4 py-4 text-center">
+                                        <div class="text-white font-bold text-lg">${p.demand_count}</div>
+                                        <div class="text-[10px] text-zinc-500">Proposals</div>
+                                    </td>
+                                    <td class="px-4 py-4 text-center">
+                                        <div class="font-bold text-lg ${impactColor}">${p.impact_score}</div>
+                                        <div class="text-[10px] text-zinc-500">Impact Score</div>
+                                    </td>
+                                    <td class="px-6 py-4 text-right space-y-2">
+                                        <div class="font-mono text-white text-sm">${fmtCr(p.estimated_budget)}</div>
+                                        ${sanctionBtn}
+                                    </td>
+                                </tr>`;
+                            }).join('');
+                        }).catch(err => console.error('Ranked projects error:', err));
+                    }
+
+                    const dCount = document.getElementById('daily-count');
+                    const dPct = document.getElementById('daily-pct');
+                    const dBar = document.getElementById('daily-bar');
+                    if (dCount) {
+                        dCount.innerText = data.length;
+                        let pct = Math.min(100, Math.round((data.length / 100) * 100));
+                        if(dPct) dPct.innerText = pct + '%';
+                        if(dBar) dBar.style.width = pct + '%';
+                    }
+
+                    const tCases = document.getElementById('tot-cases');
+                    if(tCases) tCases.innerText = data.length.toLocaleString();
+
+                    const rTime = document.getElementById('resp-time');
+                    if(rTime) rTime.innerText = (Math.max(0.1, 7.4 - (data.length * 0.1))).toFixed(1) + ' H';
+
+                    // -- DYNAMIC DISPATCHES --
+                    const dispList = document.getElementById('dispatch-list');
+                    if (dispList) {
+                        if (data.length === 0) {
+                            dispList.innerHTML = '<div class="text-zinc-500 text-sm">No active dispatches.</div>';
+                        } else {
+                            dispList.innerHTML = data.slice(-3).reverse().map((msg, i) => {
+                                let colors = ['bg-[#EDE8DC] text-black', 'border border-green-500 text-green-500', 'border border-blue-500 text-blue-500'];
+                                let statuses = ['En Route', 'On Site', 'Assigned'];
+                                let status = statuses[i % statuses.length];
+                                let color = colors[i % colors.length];
+                                const senderShort = (msg.sender || msg.from || '0000').slice(-4);
+                                return `<div class="p-4 bg-[#0A0A0A] border border-[#262626] rounded-xl">
+                                    <div class="flex justify-between items-start mb-2">
+                                        <div class="font-medium text-white">Unit ${senderShort}</div>
+                                        <div class="text-xs px-2 py-0.5 rounded-full ${color}">${status}</div>
+                                    </div>
+                                    <div class="text-xs text-zinc-500 mb-2">Response Team</div>
+                                    <div class="text-xs text-zinc-400 truncate">Responding to: ${msg.raw_body || msg.body || 'Location pin'}</div>
+                                </div>`;
+                            }).join('');
+                        }
+                    }
+
+                    // -- DYNAMIC PRIORITY MAP PINS --
+                    if (window.priorityMap) {
+                        if (!window.priorityMarkers) window.priorityMarkers = L.layerGroup().addTo(window.priorityMap);
+                        window.priorityMarkers.clearLayers();
+                        data.forEach(msg => {
+                            if (msg.latitude && msg.longitude) {
+                                const icon = L.divIcon({
+                                    className: 'custom-div-icon',
+                                    html: `<div style="background-color:#ef4444; width:14px; height:14px; border-radius:50%; border:2px solid white; box-shadow: 0 0 10px rgba(239,68,68,0.8);"></div>`,
+                                    iconSize: [14, 14],
+                                    iconAnchor: [7, 7]
+                                });
+                                L.marker([msg.latitude, msg.longitude], {icon: icon})
+                                 .bindPopup(`<b>New Request</b><br/>${msg.body || 'Location only'}`)
+                                 .addTo(window.priorityMarkers);
+                            }
+                        });
+                    }
+            
+// 1. Update Monthly Volume
+                    const vol = document.getElementById('dynamic-volume');
+                    if(vol) vol.innerText = data.length.toLocaleString();
+                    
+                    // 2. Update Sentiment Score
+                    const sent = document.getElementById('dynamic-sentiment');
+                    if(sent) {
+                        let totalScore = data.reduce((acc, msg) => acc + (msg.body && msg.body.length > 30 ? 85 : 45), 0);
+                        let avg = data.length > 0 ? (totalScore / data.length) : 0;
+                        sent.innerText = avg.toFixed(1) + " (Live)";
+                    }
+                    
+                    // 3. Update Insights Table
+                    const survBody = document.getElementById('survey-queue-body');
+                    if(survBody) {
+                        survBody.innerHTML = data.slice(-5).reverse().map(msg => {
+                            let score = msg.body && msg.body.length > 30 ? 85 : 45;
+                            let rating = score > 80 ? '⭐⭐⭐' : '⭐⭐';
+                            return `<tr class="border-b border-[#262626]">
+                                <td class="px-6 py-4 text-white font-medium">${msg.from}</td>
+                                <td class="px-4 py-4 text-zinc-400">${msg.body || 'Media'}</td>
+                                <td class="px-4 py-4 text-right">${rating}</td>
+                            </tr>`;
+                        }).join('');
+                    }
+                    
+                    // 4. Update Live Map Pins / Heatmap
+                    if (window.liveHeatLayer) {
+                        // clear existing
+                        window.liveHeatLayer.setLatLngs([]);
+                        data.forEach(msg => {
+                            if (msg.latitude && msg.longitude) {
+                                window.liveHeatLayer.addLatLng([msg.latitude, msg.longitude, 1.0]);
+                            }
+                        });
+                    }
+            
+                    const newRows = data.map((msg, index) => {
+                        const date = new Date(msg.timestamp).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+                        let score = msg.body && msg.body.length > 30 ? 85 : 45;
+                        let status = score > 80 ? 'Critical' : 'Pending';
+                        
+                        let media = '';
+                        if(msg.num_media > 0) media += '<span class="material-symbols-outlined text-[14px] align-middle mr-1">image</span>';
+                        if(msg.latitude) media += '<span class="material-symbols-outlined text-[14px] align-middle mr-1">location_on</span>';
+                        
+                        return `
+                            <tr class="hover:bg-[#1C1C1C] transition cursor-pointer group">
+                                <td class="px-6 py-4 text-white font-medium flex items-center gap-3">
+                                    <span class="material-symbols-outlined text-[20px] text-zinc-500 group-hover:text-white transition">mark_email_unread</span>
+                                    #AB${1000 + data.length - index}
+                                </td>
+                                <td class="px-4 py-4">
+                                    <div class="text-zinc-300">${msg.from}</div>
+                                    <div class="text-xs text-zinc-500 mt-1">Citizen</div>
+                                </td>
+                                <td class="px-4 py-4">
+                                    <div class="text-zinc-300 truncate max-w-[280px]">${msg.body || 'Media payload attached'}</div>
+                                    <div class="text-xs text-zinc-500 mt-1 flex items-center">${media} ${date}</div>
+                                </td>
+                                <td class="px-4 py-4 text-right font-medium text-white">${score}</td>
+                                <td class="px-6 py-4 text-right text-zinc-300">${status}</td>
+                            </tr>
+                        `;
+                    }).join('');
+                    
+                    if(newRows) {
+                        tbody.innerHTML = newRows;
+                    }
+                }
+            } catch (error) {
+                console.error('Error fetching messages:', error);
+            }
+        }
+        
+        setInterval(fetchMessages, 3000);
+        fetchMessages();
+    
+        // Initialize Open Source Maps (Leaflet + CartoDB Positron)
+        setTimeout(() => {
+            if(document.getElementById('priority-map')) {
+                window.priorityMap = L.map('priority-map', { zoomControl: false, attributionControl: false }).setView([26.8467, 80.9462], 12);
+                applyLucknowGridAndLock(window.priorityMap, false);
+                L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    maxZoom: 19
+                }).addTo(window.priorityMap);
+            }
+            if(document.getElementById('coordination-map')) {
+                window.coordMap = L.map('coordination-map', { zoomControl: false, attributionControl: false }).setView([26.8467, 80.9462], 12);
+                applyLucknowGridAndLock(window.coordMap, true);
+                L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                    maxZoom: 19, subdomains: 'abcd'
+                }).addTo(window.coordMap);
+            }
+        }, 1000);
+    
+        // Initialize Lucknow Heatmap
+        setTimeout(() => {
+            if(document.getElementById('live-heatmap')) {
+                window.liveMap = L.map('live-heatmap', { zoomControl: false, attributionControl: false }).setView([26.8467, 80.9462], 12);
+                applyLucknowGridAndLock(window.liveMap, true);
+                L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    maxZoom: 19
+                }).addTo(window.liveMap);
+                
+                if(typeof L.heatLayer !== 'undefined') {
+                    window.liveHeatLayer = L.heatLayer([], {
+                        radius: 20,
+                        blur: 15,
+                        maxZoom: 14,
+                        gradient: {0.4: '#3b82f6', 0.6: '#10b981', 0.8: '#f59e0b', 1.0: '#ef4444'}
+                    }).addTo(window.liveMap);
+                }
+            }
+        }, 1000);
+    
+        // --- Splash Screen & Service Worker Logic ---
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js');
+            });
+        }
+
+        // --- Sanction Project ---
+        async function sanctionProject(projectId, title, zone, category, senders) {
+            if (!confirm(`Sanction "${title}"?\n\nThis will:\n✓ Mark all related proposals as Sanctioned\n✓ Notify all ${senders.length} contributing citizens via WhatsApp`)) return;
+            
+            const btn = event.target;
+            btn.disabled = true;
+            btn.textContent = 'Sanctioning...';
+            
+            try {
+                const res = await fetch('/projects/sanction', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ project_id: projectId, title, zone, category, senders })
+                });
+                const data = await res.json();
+                if (data.status === 'sanctioned') {
+                    btn.outerHTML = `<span class="px-3 py-1.5 bg-green-900/40 border border-green-700 text-green-400 text-xs font-bold rounded-lg">✓ Sanctioned · ${data.citizens_notified} notified</span>`;
+                    // Flash success
+                    const toast = document.createElement('div');
+                    toast.className = 'fixed bottom-6 right-6 z-[9999] bg-green-600 text-white px-6 py-3 rounded-xl shadow-lg font-medium text-sm';
+                    toast.textContent = `✓ "${title}" sanctioned! ${data.citizens_notified} citizens notified via WhatsApp.`;
+                    document.body.appendChild(toast);
+                    setTimeout(() => toast.remove(), 4000);
+                }
+            } catch(e) {
+                btn.disabled = false;
+                btn.textContent = '⚡ Sanction';
+                alert('Error: ' + e.message);
+            }
+        }
+
+        // Language flag helper
+        const LANG_FLAGS = {
+            Hindi: '🇮🇳', English: '🇬🇧', Urdu: '🇵🇰', Tamil: '🇮🇳', Telugu: '🇮🇳',
+            Bengali: '🇮🇳', Marathi: '🇮🇳', Gujarati: '🇮🇳', Punjabi: '🇮🇳'
+        };
+        function langFlag(lang) {
+            return lang ? `<span class="text-[10px] font-medium bg-zinc-800 px-1.5 py-0.5 rounded text-zinc-300">${LANG_FLAGS[lang] || '🌐'} ${lang}</span>` : '';
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+
+            const splashText = document.getElementById('splash-text');
+            const splashProgress = document.getElementById('splash-progress');
+            const splashScreen = document.getElementById('splash-screen');
+            
+            const sequence = [
+                { text: "fetching grievances...", progress: "30%", delay: 600 },
+                { text: "loading grievances...", progress: "70%", delay: 1500 },
+                { text: "updating dashboard...", progress: "100%", delay: 2200 }
+            ];
+            
+            let totalDelay = 0;
+            
+            sequence.forEach((step) => {
+                setTimeout(() => {
+                    splashText.textContent = step.text;
+                    splashProgress.style.width = step.progress;
+                }, step.delay);
+                totalDelay = Math.max(totalDelay, step.delay);
+            });
+            
+            // Fade out and remove after sequence completes
+            setTimeout(() => {
+                splashScreen.style.opacity = '0';
+                setTimeout(() => {
+                    splashScreen.style.display = 'none';
+                    // Trigger initial fetch only after splash screen finishes
+                    fetchMessages();
+                    setInterval(fetchMessages, 2000); // Resume polling
+                }, 700); // wait for CSS fade transition
+            }, totalDelay + 800);
+        });
+        
+        // Remove the existing automatic calls to fetchMessages to prevent double fetching
+    
+</script>
+
+<!-- Survey Modal -->
+<!-- Projects Modal -->
+<div id="projects-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] hidden flex items-center justify-center p-4">
+    <div class="bg-[#161616] border border-[#262626] rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl">
+        <div class="p-6 border-b border-[#262626] flex justify-between items-center bg-[#111]">
+            <div>
+                <h2 class="text-xl font-bold text-white serif">Active Projects Directory</h2>
+                <p class="text-xs text-zinc-500 mt-1">Manage and track all municipal projects.</p>
+            </div>
+            <button onclick="document.getElementById('projects-modal').classList.add('hidden')" class="text-zinc-500 hover:text-white transition"><span class="material-symbols-outlined">close</span></button>
+        </div>
+        <div class="p-6 flex-1 overflow-y-auto">
+            <div class="grid grid-cols-1 gap-4">
+                <!-- Example Active Project -->
+                <div class="p-5 border border-blue-500/30 bg-blue-900/10 rounded-xl hover:border-blue-500 transition-colors cursor-pointer group">
+                    <div class="flex justify-between items-start mb-3">
+                        <div>
+                            <span class="px-2 py-0.5 bg-blue-500/20 text-blue-400 border border-blue-500/50 rounded text-[10px] uppercase font-bold tracking-wider">Execution Phase</span>
+                            <h3 class="text-lg text-white font-medium mt-2">Central Hub Paving</h3>
+                            <p class="text-sm text-zinc-400">Road infrastructure upgrade in Ward 1.</p>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-sm text-white font-medium">₹2.4 Cr</div>
+                            <div class="text-xs text-zinc-500">Allocated Budget</div>
+                        </div>
+                    </div>
+                    <div class="w-full bg-[#0A0A0A] rounded-full h-1.5 mb-1 border border-[#262626]">
+                      <div class="bg-blue-500 h-1.5 rounded-full" style="width: 45%"></div>
+                    </div>
+                    <div class="flex justify-between text-xs text-zinc-500">
+                        <span>45% Complete</span>
+                        <span>Est. Completion: Nov 2024</span>
+                    </div>
+                </div>
+                
+                <!-- Example Active Project 2 -->
+                <div class="p-5 border border-amber-500/30 bg-amber-900/10 rounded-xl hover:border-amber-500 transition-colors cursor-pointer group">
+                    <div class="flex justify-between items-start mb-3">
+                        <div>
+                            <span class="px-2 py-0.5 bg-amber-500/20 text-amber-400 border border-amber-500/50 rounded text-[10px] uppercase font-bold tracking-wider">Tendering</span>
+                            <h3 class="text-lg text-white font-medium mt-2">Ward 4 School Rehab</h3>
+                            <p class="text-sm text-zinc-400">Rehabilitation of primary school buildings.</p>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-sm text-white font-medium">₹85 L</div>
+                            <div class="text-xs text-zinc-500">Allocated Budget</div>
+                        </div>
+                    </div>
+                    <div class="w-full bg-[#0A0A0A] rounded-full h-1.5 mb-1 border border-[#262626]">
+                      <div class="bg-amber-500 h-1.5 rounded-full" style="width: 15%"></div>
+                    </div>
+                    <div class="flex justify-between text-xs text-zinc-500">
+                        <span>15% Complete</span>
+                        <span>Est. Completion: Mar 2025</span>
+                    </div>
+                </div>
+
+                <!-- Example Active Project 3 -->
+                <div class="p-5 border border-green-500/30 bg-green-900/10 rounded-xl hover:border-green-500 transition-colors cursor-pointer group">
+                    <div class="flex justify-between items-start mb-3">
+                        <div>
+                            <span class="px-2 py-0.5 bg-green-500/20 text-green-400 border border-green-500/50 rounded text-[10px] uppercase font-bold tracking-wider">Planning</span>
+                            <h3 class="text-lg text-white font-medium mt-2">South Zone Drainage</h3>
+                            <p class="text-sm text-zinc-400">Stormwater drainage system overhaul.</p>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-sm text-white font-medium">₹1.2 Cr</div>
+                            <div class="text-xs text-zinc-500">Allocated Budget</div>
+                        </div>
+                    </div>
+                    <div class="w-full bg-[#0A0A0A] rounded-full h-1.5 mb-1 border border-[#262626]">
+                      <div class="bg-green-500 h-1.5 rounded-full" style="width: 5%"></div>
+                    </div>
+                    <div class="flex justify-between text-xs text-zinc-500">
+                        <span>5% Complete</span>
+                        <span>Est. Completion: Jun 2025</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="survey-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] hidden flex items-center justify-center p-4">
+    <div class="bg-[#111111] border border-[#262626] rounded-2xl p-6 w-full max-w-2xl flex flex-col gap-5 shadow-2xl relative">
+        <div class="flex justify-between items-center pb-4 border-b border-[#262626]">
+            <h2 class="text-xl text-white font-bold tracking-tight flex items-center gap-2"><span class="material-symbols-outlined text-blue-500">poll</span> Survey Manager</h2>
+            <button onclick="document.getElementById('survey-modal').classList.add('hidden')" class="text-zinc-500 hover:text-white transition"><span class="material-symbols-outlined">close</span></button>
+        </div>
+        
+        <div class="grid grid-cols-2 gap-6">
+            <!-- Create New Survey -->
+            <div class="flex flex-col gap-4 border-r border-[#262626] pr-6">
+                <h3 class="text-sm font-semibold text-zinc-300">Create New Survey</h3>
+                <div class="flex flex-col gap-2">
+                    <label class="text-xs text-zinc-500">Question</label>
+                    <input type="text" id="survey-q" class="bg-[#1C1C1C] border border-[#333] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500" placeholder="e.g. Which sector needs funding?">
+                </div>
+                <div class="flex flex-col gap-2">
+                    <label class="text-xs text-zinc-500">Options (Comma separated)</label>
+                    <input type="text" id="survey-opt" class="bg-[#1C1C1C] border border-[#333] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500" placeholder="Roads, Water, Electricity">
+                </div>
+                <button onclick="createSurvey()" class="mt-2 bg-white text-black py-2 rounded-lg text-sm font-bold hover:bg-gray-200 transition shadow-[0_0_10px_rgba(255,255,255,0.2)]">Create & Launch</button>
+            </div>
+            
+            <!-- Existing Surveys -->
+            <div class="flex flex-col gap-4">
+                <div class="flex justify-between items-center">
+                    <h3 class="text-sm font-semibold text-zinc-300">Active & Past Surveys</h3>
+                    <button onclick="loadSurveys()" class="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"><span class="material-symbols-outlined" style="font-size:14px;">refresh</span></button>
+                </div>
+                <div id="survey-list" class="flex flex-col gap-3 overflow-y-auto max-h-[300px] pr-2">
+                    <!-- Loaded dynamically -->
+                    <div class="text-xs text-zinc-500 text-center py-4">Loading surveys...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    async function loadSurveys() {
+        try {
+            let res = await fetch('/surveys');
+            let data = await res.json();
+            let html = '';
+            data.forEach(s => {
+                let activeBadge = s.is_active ? `<span class="px-2 py-0.5 bg-green-500/20 text-green-400 border border-green-500/50 rounded text-[10px] uppercase font-bold">Active</span>` : '';
+                let actBtn = s.is_active ? `<button onclick="broadcastSurvey(${s.id})" class="px-3 py-1 bg-blue-600 hover:bg-blue-500 rounded text-xs text-white transition font-bold flex items-center justify-center gap-1 w-full mt-2"><span class="material-symbols-outlined" style="font-size:14px;">send</span> Broadcast to All</button>` : `<button onclick="activateSurvey(${s.id})" class="px-3 py-1 bg-[#262626] hover:bg-[#333] rounded text-xs text-white transition border border-zinc-700">Set Active</button>`;
+                
+                let resHtml = '';
+                for(let opt in s.results) {
+                    resHtml += `<div class="flex justify-between text-xs mt-1 text-zinc-400"><span>${opt}</span> <span class="font-bold text-white">${s.results[opt]}</span></div>`;
+                }
+                
+                html += `
+                <div class="p-3 bg-[#1C1C1C] rounded-lg border ${s.is_active ? 'border-green-500/30' : 'border-[#333]'} flex flex-col gap-2">
+                    <div class="flex justify-between items-start">
+                        <div class="text-sm font-medium text-white pr-2">${s.question}</div>
+                        ${activeBadge}
+                    </div>
+                    <div class="flex flex-wrap gap-1 mt-1 mb-1">
+                        ${s.options.map(o => `<span class="px-1.5 py-0.5 bg-[#262626] rounded text-[10px] text-zinc-400 border border-zinc-800">${o}</span>`).join('')}
+                    </div>
+                    <div class="bg-black/30 rounded p-2 mb-2">
+                        <div class="text-[10px] text-zinc-500 font-bold uppercase mb-1">Responses</div>
+                        ${resHtml || '<div class="text-[10px] text-zinc-600 italic">No responses yet</div>'}
+                    </div>
+                    ${actBtn}
+                </div>`;
+            });
+            document.getElementById('survey-list').innerHTML = html;
+        } catch(e) {
+            console.error(e);
+        }
+    }
+    
+    async function createSurvey() {
+        let q = document.getElementById('survey-q').value;
+        let opt = document.getElementById('survey-opt').value;
+        if(!q || !opt) return alert("Fill fields");
+        await fetch('/surveys', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({question: q, options: opt})
+        });
+        document.getElementById('survey-q').value = '';
+        document.getElementById('survey-opt').value = '';
+        loadSurveys();
+    }
+    
+    
+    async function broadcastSurvey(id) {
+        if(!confirm("Are you sure you want to broadcast this survey to all constituents via WhatsApp Direct Message?")) return;
+        
+        try {
+            let res = await fetch(`/surveys/${id}/broadcast`, {method: 'POST'});
+            let data = await res.json();
+            if(data.status === 'success') {
+                alert(`Broadcast sent successfully to ${data.broadcast_count} citizens!`);
+            } else {
+                alert("Broadcast failed.");
+            }
+        } catch(e) {
+            alert("Error: " + e.message);
+        }
+    }
+    
+    async function activateSurvey(id) {
+        await fetch(`/surveys/${id}/activate`, {method: 'POST'});
+        loadSurveys();
+    }
+    
+    // Load surveys when modal opens
+    document.querySelector('[onclick="document.getElementById(\'survey-modal\').classList.remove(\'hidden\')"]').addEventListener('click', loadSurveys);
+</script>
+
+</body>
+</html>

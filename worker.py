@@ -44,15 +44,13 @@ def notify_status_change(phone_number: str, reference_id: str, new_status: str, 
 async def process_voice_note(media_url: str, phone_number: str):
     # Delayed imports to avoid circular dependency
     from state import update_session
-    from main import SessionLocal
+    from main import firestore_db
     
-    db_session = SessionLocal()
     logger.info(f"[WORKER] Starting transcription for {phone_number}...")
     
     if not gemini_client:
         logger.error(f"[WORKER ERROR] Gemini API key not configured. Cannot transcribe for {phone_number}.")
         send_whatsapp_message(phone_number, "Transcription is currently unavailable. Could you please type your description instead?")
-        db_session.close()
         return
     
     # 1. Download the audio file from Twilio
@@ -84,12 +82,10 @@ async def process_voice_note(media_url: str, phone_number: str):
         gemini_client.files.delete(name=uploaded_file.name)
         
         # 4. Update Session and Reply
-        update_session(db_session, phone_number, "awaiting_location", {"description": transcript, "voice_url": media_url})
+        update_session(firestore_db, phone_number, "awaiting_location", {"description": transcript, "voice_url": media_url})
         reply = f"Description saved from your voice note: \"{transcript}\"\n\nNow share your location — send a location pin, or type your area name."
         send_whatsapp_message(phone_number, reply)
         
     except Exception as e:
         logger.error(f"[WORKER ERROR] Voice note processing failed: {e}", exc_info=True)
         send_whatsapp_message(phone_number, "We had trouble transcribing your voice note. Could you please type your description instead?")
-    finally:
-        db_session.close()
