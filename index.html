@@ -909,13 +909,15 @@
         // Initialize Open Source Maps (Leaflet + CartoDB Positron)
         setTimeout(() => {
             if(document.getElementById('priority-map')) {
-                window.priorityMap = L.map('priority-map', { zoomControl: false, attributionControl: false }).setView([28.6139, 77.2090], 12); // New Delhi
+                window.priorityMap = L.map('priority-map', { zoomControl: false, attributionControl: false }).setView([26.8467, 80.9462], 12);
+                applyLucknowGridAndLock(window.priorityMap, false);
                 L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
                     maxZoom: 19
                 }).addTo(window.priorityMap);
             }
             if(document.getElementById('coordination-map')) {
-                window.coordMap = L.map('coordination-map', { zoomControl: false, attributionControl: false }).setView([28.6139, 77.2090], 13);
+                window.coordMap = L.map('coordination-map', { zoomControl: false, attributionControl: false }).setView([26.8467, 80.9462], 12);
+                applyLucknowGridAndLock(window.coordMap, true);
                 L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
                     maxZoom: 19
                 }).addTo(map2);
@@ -925,7 +927,8 @@
         // Initialize Lucknow Heatmap
         setTimeout(() => {
             if(document.getElementById('live-heatmap')) {
-                window.liveMap = L.map('live-heatmap', { zoomControl: false, attributionControl: false }).setView([26.8467, 80.9462], 13);
+                window.liveMap = L.map('live-heatmap', { zoomControl: false, attributionControl: false }).setView([26.8467, 80.9462], 12);
+                applyLucknowGridAndLock(window.liveMap, true);
                 L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
                     maxZoom: 19
                 }).addTo(window.liveMap);
