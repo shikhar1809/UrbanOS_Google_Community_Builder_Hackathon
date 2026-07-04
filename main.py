@@ -14,8 +14,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from twilio.request_validator import RequestValidator
 
-from sqlalchemy import create_engine, Column, Integer, String, Text, Float, Boolean, ForeignKey, func
-from sqlalchemy.orm import declarative_base, sessionmaker, Session
 
 from google import genai
 from pydantic import BaseModel, Field
@@ -36,46 +34,6 @@ engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
-class Message(Base):
-    __tablename__ = "messages"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    timestamp = Column(String, index=True)
-    sender = Column(String, index=True)
-    body = Column(Text, nullable=True)
-    media_url = Column(String, nullable=True)
-    media_content_type = Column(String, nullable=True)
-    latitude = Column(Float, nullable=True)
-    longitude = Column(Float, nullable=True)
-    location_source = Column(String, nullable=True)
-    
-    # AI Triage Fields
-    category = Column(String, nullable=True)
-    priority = Column(String, nullable=True)
-    sentiment = Column(String, nullable=True)
-    extracted_location = Column(String, nullable=True)
-    summary = Column(String, nullable=True)
-    original_language = Column(String, nullable=True)
-    reference_id = Column(String, nullable=True)
-    status = Column(String, default="Open")
-    constituency_zone = Column(String, nullable=True)
-    estimated_budget = Column(Integer, nullable=True)
-
-
-class Survey(Base):
-    __tablename__ = "surveys"
-    id = Column(Integer, primary_key=True, index=True)
-    question = Column(Text, nullable=False)
-    options = Column(Text, nullable=False)
-    is_active = Column(Boolean, default=False)
-
-class SurveyResponse(Base):
-    __tablename__ = "survey_responses"
-    id = Column(Integer, primary_key=True, index=True)
-    survey_id = Column(Integer, ForeignKey('surveys.id'), nullable=False)
-    sender = Column(String, index=True)
-    selected_option = Column(Text, nullable=False)
-
 class ConversationSession(Base):
     __tablename__ = "sessions"
     
@@ -85,7 +43,7 @@ class ConversationSession(Base):
     collected_data = Column(Text) # JSON string
 
 # Ensure all models are created
-Base.metadata.create_all(bind=engine)
+
 
 def get_db():
     db = SessionLocal()
@@ -170,23 +128,24 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db: Ses
     body_lower = body.lower()
     if body_lower.startswith("status"):
         if body_lower == "status":
-            reports = db.query(Message).filter(Message.sender == sender, Message.reference_id != None).order_by(Message.id.desc()).limit(3).all()
+            reports = [doc.to_dict() for doc in db.collection('messages').where('sender', '==', sender).order_by('id', direction=firestore.Query.DESCENDING).limit(3).stream()]
             if not reports:
                 twiml.message("You have no active reports.")
                 return HTMLResponse(content=str(twiml), media_type="application/xml")
             
             msg = "Your Recent Reports:\\n"
             for r in reports:
-                msg += f"#{r.reference_id} - {r.category or 'General'}\\nStatus: {r.status}\\n\\n"
+                msg += f"#{r.get('reference_id')} - {r.get('category') or 'General'}\\nStatus: {r.get('status')}\\n\\n"
             twiml.message(msg.strip())
             return HTMLResponse(content=str(twiml), media_type="application/xml")
         else:
             parts = body_lower.split()
             if len(parts) > 1:
                 ref_id = parts[1].strip('#')
-                report = db.query(Message).filter(Message.reference_id == ref_id).first()
+                report_docs = list(db.collection('messages').where('reference_id', '==', ref_id).limit(1).stream())
+                report = report_docs[0].to_dict() if report_docs else None
                 if report:
-                    twiml.message(f"Report #{report.reference_id}\\nCategory: {report.category or 'General'}\\nStatus: {report.status}\\nSummary: {report.summary}")
+                    twiml.message(f"Report #{report.get('reference_id')}\\nCategory: {report.get('category') or 'General'}\\nStatus: {report.get('status')}\\nSummary: {report.get('summary')}")
                 else:
                     twiml.message(f"Could not find report #{ref_id}.")
                 return HTMLResponse(content=str(twiml), media_type="application/xml")
@@ -203,14 +162,15 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db: Ses
     
     if current_step is None:
         if body and body.strip().isdigit():
-            active_survey = db.query(Survey).filter(Survey.is_active == True).first()
+            survey_docs = list(db.collection('surveys').where('is_active', '==', True).limit(1).stream())
+            active_survey = survey_docs[0].to_dict() if survey_docs else None
             if active_survey:
-                options = [opt.strip() for opt in active_survey.options.split(',')]
+                options = [opt.strip() for opt in active_survey.get('options').split(',')]
                 try:
                     choice_idx = int(body.strip()) - 1
                     if 0 <= choice_idx < len(options):
                         choice = options[choice_idx]
-                        db.add(SurveyResponse(survey_id=active_survey.id, sender=sender, selected_option=choice))
+                        db.add(SurveyResponse(survey_id=active_survey.get('id'), sender=sender, selected_option=choice))
                         db.commit()
                         twiml.message("Thank you! Your feedback has been recorded.")
                         return HTMLResponse(content=str(twiml), media_type="application/xml")
@@ -357,12 +317,13 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db: Ses
         db.add(new_message)
         db.commit()
         
-        active_survey = db.query(Survey).filter(Survey.is_active == True).first()
+        survey_docs = list(db.collection('surveys').where('is_active', '==', True).limit(1).stream())
+            active_survey = survey_docs[0].to_dict() if survey_docs else None
         if active_survey:
-            update_session(db, sender, "awaiting_survey", {"survey_id": active_survey.id})
-            options = [opt.strip() for opt in active_survey.options.split(',')]
+            update_session(db, sender, "awaiting_survey", {"survey_id": active_survey.get('id')})
+            options = [opt.strip() for opt in active_survey.get('options').split(',')]
             opt_text = "\n".join([f"{i+1}. {opt}" for i, opt in enumerate(options)])
-            twiml.message(f"Proposal submitted successfully! Ref: #{ref_id}.\n\nBy the way, your MP wants to know:\n*{active_survey.question}*\n\nReply with the number of your choice:\n{opt_text}")
+            twiml.message(f"Proposal submitted successfully! Ref: #{ref_id}.\n\nBy the way, your MP wants to know:\n*{active_survey.get('question')}*\n\nReply with the number of your choice:\n{opt_text}")
         else:
             clear_session(db, sender)
             twiml.message(f"Proposal submitted successfully. Reference ID: #{ref_id}. Your MP's office has received this and it will be reviewed shortly.")
@@ -379,39 +340,48 @@ class SurveyCreate(BaseModel):
 
 @app.get("/surveys")
 async def get_surveys(db: Session = Depends(get_db)):
-    surveys = db.query(Survey).all()
+    surveys = [d.to_dict() for d in db.collection('surveys').stream()]
     results = []
     for s in surveys:
-        resp_counts = db.query(SurveyResponse.selected_option, func.count(SurveyResponse.id)).filter(SurveyResponse.survey_id == s.id).group_by(SurveyResponse.selected_option).all()
-        # Convert list of tuples to dict
-        counts_dict = {row[0]: row[1] for row in resp_counts}
+        sid = s.get('id')
+        resp_docs = list(db.collection('survey_responses').where('survey_id', '==', sid).stream())
+        
+        counts_dict = {}
+        for d in resp_docs:
+            opt = d.to_dict().get('selected_option')
+            counts_dict[opt] = counts_dict.get(opt, 0) + 1
+            
         results.append({
-            "id": s.id, 
-            "question": s.question, 
-            "options": [opt.strip() for opt in s.options.split(',')], 
-            "is_active": s.is_active, 
+            "id": sid, 
+            "question": s.get('question'), 
+            "options": [opt.strip() for opt in s.get('options', '').split(',')], 
+            "is_active": s.get('is_active', False), 
             "results": counts_dict
         })
     return results
 
 @app.post("/surveys")
 async def create_survey(survey: SurveyCreate, db: Session = Depends(get_db)):
-    new_survey = Survey(question=survey.question, options=survey.options, is_active=False)
+    new_survey = Survey(question=survey.get('question'), options=survey.get('options'), is_active=False)
     db.add(new_survey)
     db.commit()
     return {"status": "success"}
 
 @app.post("/surveys/{survey_id}/activate")
 async def activate_survey(survey_id: int, db: Session = Depends(get_db)):
-    db.query(Survey).update({Survey.is_active: False})
-    db.query(Survey).filter(Survey.id == survey_id).update({Survey.is_active: True})
-    db.commit()
+    # Deactivate all
+    docs = db.collection('surveys').where('is_active', '==', True).stream()
+    for doc in docs:
+        doc.reference.update({"is_active": False})
+    # Activate one
+    db.collection('surveys').document(str(survey_id)).update({"is_active": True})
     return {"status": "success"}
 
 
 @app.post("/surveys/{survey_id}/broadcast")
 async def broadcast_survey(survey_id: int, db: Session = Depends(get_db)):
-    survey = db.query(Survey).filter(Survey.id == survey_id).first()
+    survey_doc = db.collection('surveys').document(str(survey_id)).get()
+            survey = survey_doc.to_dict() if survey_doc.exists else None
     if not survey:
         raise HTTPException(status_code=404, detail="Survey not found")
         
@@ -421,15 +391,16 @@ async def broadcast_survey(survey_id: int, db: Session = Depends(get_db)):
     client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
     
     # Get all unique senders
-    senders = db.query(Message.sender).distinct().all()
+    docs = db.collection('messages').stream()
+    senders = list(set([doc.to_dict().get('sender') for doc in docs if doc.to_dict().get('sender')]))
     count = 0
     
-    options = [opt.strip() for opt in survey.options.split(',')]
+    options = [opt.strip() for opt in survey.get('options').split(',')]
     opt_text = "\n".join([f"{i+1}. {opt}" for i, opt in enumerate(options)])
-    msg_body = f"Your MP is requesting your feedback:\n*{survey.question}*\n\nReply with the number of your choice:\n{opt_text}"
+    msg_body = f"Your MP is requesting your feedback:\n*{survey.get('question')}*\n\nReply with the number of your choice:\n{opt_text}"
     
     for s in senders:
-        sender_phone = s[0]
+        sender_phone = s
         try:
             client.messages.create(
                 from_=TWILIO_WHATSAPP_NUMBER,
@@ -457,7 +428,7 @@ async def get_messages(db: Session = Depends(get_db)):
             "latitude": r.latitude,
             "longitude": r.longitude,
             "location_source": r.location_source,
-            "category": r.category,
+            "category": r.get('category'),
             "priority": r.priority,
             "sentiment": r.sentiment,
             "extracted_location": r.extracted_location,
