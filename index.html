@@ -608,6 +608,20 @@
                     // First load, just set the counter
                     const counter = document.getElementById('msg-counter');
                     if(counter) counter.innerText = data.messages.length;
+                    
+                    // Populate raw feed with existing messages on first load
+                    const rawContainer = document.getElementById('raw-feed-container');
+                    if(rawContainer && data.messages.length > 0) {
+                        rawContainer.innerHTML = ''; // clear placeholder
+                        data.messages.forEach(m => {
+                            const div = document.createElement('div');
+                            div.className = 'p-3 bg-[#0A0A0A] border border-[#262626] rounded-md shadow-sm break-words';
+                            let formattedStr = JSON.stringify(m, null, 2);
+                            formattedStr = formattedStr.replace(/\\n/g, '<br>').replace(/ /g, '&nbsp;');
+                            div.innerHTML = `<div class="text-zinc-600 mb-2">▼ PREVIOUS POST /whatsapp</div>${formattedStr}`;
+                            rawContainer.prepend(div);
+                        });
+                    }
                 }
                 
                 lastMessageCount = data.messages.length;
