@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from twilio.request_validator import RequestValidator
 
-from sqlalchemy import create_engine, Column, Integer, String, Text, Float
+from sqlalchemy import create_engine, Column, Integer, String, Text, Float, Boolean, ForeignKey, func
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 
 from google import genai
@@ -59,6 +59,21 @@ class Message(Base):
     status = Column(String, default="Open")
     constituency_zone = Column(String, nullable=True)
     estimated_budget = Column(Integer, nullable=True)
+
+
+class Survey(Base):
+    __tablename__ = "surveys"
+    id = Column(Integer, primary_key=True, index=True)
+    question = Column(Text, nullable=False)
+    options = Column(Text, nullable=False)
+    is_active = Column(Boolean, default=False)
+
+class SurveyResponse(Base):
+    __tablename__ = "survey_responses"
+    id = Column(Integer, primary_key=True, index=True)
+    survey_id = Column(Integer, ForeignKey('surveys.id'), nullable=False)
+    sender = Column(String, index=True)
+    selected_option = Column(Text, nullable=False)
 
 class ConversationSession(Base):
     __tablename__ = "sessions"
@@ -323,14 +338,58 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db: Ses
         )
         
         db.add(new_message)
-        clear_session(db, sender)
         db.commit()
         
-        twiml.message(f"Proposal submitted successfully. Reference ID: #{ref_id}. Your MP's office has received this and it will be reviewed shortly.")
+        active_survey = db.query(Survey).filter(Survey.is_active == True).first()
+        if active_survey:
+            update_session(db, sender, "awaiting_survey", {"survey_id": active_survey.id})
+            options = [opt.strip() for opt in active_survey.options.split(',')]
+            opt_text = "\n".join([f"{i+1}. {opt}" for i, opt in enumerate(options)])
+            twiml.message(f"Proposal submitted successfully! Ref: #{ref_id}.\n\nBy the way, your MP wants to know:\n*{active_survey.question}*\n\nReply with the number of your choice:\n{opt_text}")
+        else:
+            clear_session(db, sender)
+            twiml.message(f"Proposal submitted successfully. Reference ID: #{ref_id}. Your MP's office has received this and it will be reviewed shortly.")
+            
         logger.info(f"Proposal {ref_id} successfully created for {sender}.")
         return HTMLResponse(content=str(twiml), media_type="application/xml")
     
     return HTMLResponse(content=str(twiml), media_type="application/xml")
+
+
+class SurveyCreate(BaseModel):
+    question: str
+    options: str
+
+@app.get("/surveys")
+async def get_surveys(db: Session = Depends(get_db)):
+    surveys = db.query(Survey).all()
+    results = []
+    for s in surveys:
+        resp_counts = db.query(SurveyResponse.selected_option, func.count(SurveyResponse.id)).filter(SurveyResponse.survey_id == s.id).group_by(SurveyResponse.selected_option).all()
+        # Convert list of tuples to dict
+        counts_dict = {row[0]: row[1] for row in resp_counts}
+        results.append({
+            "id": s.id, 
+            "question": s.question, 
+            "options": [opt.strip() for opt in s.options.split(',')], 
+            "is_active": s.is_active, 
+            "results": counts_dict
+        })
+    return results
+
+@app.post("/surveys")
+async def create_survey(survey: SurveyCreate, db: Session = Depends(get_db)):
+    new_survey = Survey(question=survey.question, options=survey.options, is_active=False)
+    db.add(new_survey)
+    db.commit()
+    return {"status": "success"}
+
+@app.post("/surveys/{survey_id}/activate")
+async def activate_survey(survey_id: int, db: Session = Depends(get_db)):
+    db.query(Survey).update({Survey.is_active: False})
+    db.query(Survey).filter(Survey.id == survey_id).update({Survey.is_active: True})
+    db.commit()
+    return {"status": "success"}
 
 @app.get("/messages")
 async def get_messages(db: Session = Depends(get_db)):
