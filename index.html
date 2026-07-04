@@ -101,6 +101,7 @@
         }
     </style>
 <link crossorigin="" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" rel="stylesheet"/><script crossorigin="" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script><script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
 </head>
 <body class="h-screen flex flex-col overflow-hidden">
 <div class="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#0A0A0A] transition-opacity duration-700" id="splash-screen">
@@ -215,37 +216,10 @@
 <div class="sparkline w-full"></div>
 </div>
 </aside>
-<!-- Right Column -->
-<div class="flex-1 flex flex-col gap-5 overflow-hidden">
-<!-- Map Card -->
-<div class="card map-bg flex-1 relative overflow-hidden min-h-[300px] h-[55%] border-none shadow-inner"><div class="absolute inset-0 z-0" id="priority-map"></div>
-<!-- Using a high quality placeholder for the map background if real tiles aren't rendering -->
-<!-- Map UI Elements -->
-<div class="absolute top-5 left-5 bg-white text-black px-4 py-2.5 rounded-full text-sm font-medium shadow-[0_8px_30px_rgb(0,0,0,0.12)] flex items-center gap-2 z-10">
-<span class="material-symbols-outlined text-[18px]">search</span>
-                    New Delhi, India
-                </div>
-<div class="absolute top-5 left-1/2 -translate-x-1/2 bg-white text-black px-4 py-2.5 rounded-full text-sm font-medium shadow-[0_8px_30px_rgb(0,0,0,0.12)] flex items-center gap-2 z-10">
-                    Sort by <span class="font-bold">Priority</span> <span class="material-symbols-outlined text-[16px]">expand_more</span>
-</div>
-<div class="absolute top-5 right-5 flex flex-col gap-3 z-10">
-<button class="w-11 h-11 bg-white text-black rounded-full shadow-[0_8px_30px_rgb(0,0,0,0.12)] flex items-center justify-center hover:bg-gray-50 transition">
-<span class="material-symbols-outlined text-[20px]">fullscreen</span>
-</button>
-<div class="bg-white rounded-full shadow-[0_8px_30px_rgb(0,0,0,0.12)] flex flex-col overflow-hidden">
-<button class="w-11 h-11 text-black flex items-center justify-center hover:bg-gray-50 border-b border-gray-200 transition">
-<span class="material-symbols-outlined text-[20px]">add</span>
-</button>
-<button class="w-11 h-11 text-black flex items-center justify-center hover:bg-gray-50 transition">
-<span class="material-symbols-outlined text-[20px]">remove</span>
-</button>
-</div>
-</div>
-<!-- Pins -->
-<!-- Active Map Pin Info Popover -->
-</div>
+<!-- Center and Right Columns -->
+<div class="flex-1 flex flex-row gap-5 overflow-hidden">
 <!-- Table Card -->
-<div class="card flex-1 flex flex-col overflow-hidden bg-[#161616]">
+<div class="card flex-[1.5] flex flex-col overflow-hidden bg-[#161616]">
 <!-- Table Header Controls -->
 <div class="flex items-center justify-between px-6 py-4 border-b border-[#262626]">
 <h3 class="text-lg text-white font-medium">MP PLANNING: Ranked Projects</h3>
@@ -288,6 +262,35 @@
 <tbody class="divide-y divide-[#262626]" id="queue-body"></tbody>
 </table>
 </div>
+
+<!-- Map Card -->
+<div class="card map-bg flex-1 relative overflow-hidden min-h-[300px] h-full border-none shadow-inner"><div class="absolute inset-0 z-0" id="priority-map"></div>
+<!-- Using a high quality placeholder for the map background if real tiles aren't rendering -->
+<!-- Map UI Elements -->
+<div class="absolute top-5 left-5 bg-white text-black px-4 py-2.5 rounded-full text-sm font-medium shadow-[0_8px_30px_rgb(0,0,0,0.12)] flex items-center gap-2 z-10">
+<span class="material-symbols-outlined text-[18px]">search</span>
+                    New Delhi, India
+                </div>
+<div class="absolute top-5 left-1/2 -translate-x-1/2 bg-white text-black px-4 py-2.5 rounded-full text-sm font-medium shadow-[0_8px_30px_rgb(0,0,0,0.12)] flex items-center gap-2 z-10">
+                    Sort by <span class="font-bold">Priority</span> <span class="material-symbols-outlined text-[16px]">expand_more</span>
+</div>
+<div class="absolute top-5 right-5 flex flex-col gap-3 z-10">
+<button class="w-11 h-11 bg-white text-black rounded-full shadow-[0_8px_30px_rgb(0,0,0,0.12)] flex items-center justify-center hover:bg-gray-50 transition">
+<span class="material-symbols-outlined text-[20px]">fullscreen</span>
+</button>
+<div class="bg-white rounded-full shadow-[0_8px_30px_rgb(0,0,0,0.12)] flex flex-col overflow-hidden">
+<button class="w-11 h-11 text-black flex items-center justify-center hover:bg-gray-50 border-b border-gray-200 transition">
+<span class="material-symbols-outlined text-[20px]">add</span>
+</button>
+<button class="w-11 h-11 text-black flex items-center justify-center hover:bg-gray-50 transition">
+<span class="material-symbols-outlined text-[20px]">remove</span>
+</button>
+</div>
+</div>
+<!-- Pins -->
+<!-- Active Map Pin Info Popover -->
+</div>
+
 </div>
 </div>
 </div>
@@ -600,6 +603,61 @@
         
 
         // Lucknow Smart Grid constraints
+
+        let hexLayerGroup = null;
+        function drawLucknowHexGrid(mapObj, msgData) {
+            if (typeof turf === 'undefined' || !mapObj) return;
+            if (hexLayerGroup) { mapObj.removeLayer(hexLayerGroup); }
+            
+            // Bounding box for Lucknow
+            const bbox = [80.85, 26.75, 81.05, 26.95];
+            const cellSide = 2.5; // kilometers
+            const options = {units: 'kilometers'};
+            let hexGrid = turf.hexGrid(bbox, cellSide, options);
+            
+            // Name the hexes and count data
+            let zones = ["Gomti Nagar", "Hazratganj", "Alambagh", "Indira Nagar", "Chowk", "Aminabad", "Aashiana", "Kapurthala", "Vikas Nagar", "Mahanagar", "Rajajipuram"];
+            
+            // Assign random names to hexes
+            hexGrid.features.forEach((f, i) => {
+                f.properties = f.properties || {};
+                f.properties.name = zones[i % zones.length];
+                f.properties.count = 0;
+            });
+            
+            // Count messages in hexes
+            msgData.forEach(msg => {
+                if (msg.latitude && msg.longitude) {
+                    let pt = turf.point([msg.longitude, msg.latitude]);
+                    for(let i=0; i<hexGrid.features.length; i++) {
+                        if(turf.booleanPointInPolygon(pt, hexGrid.features[i])) {
+                            hexGrid.features[i].properties.count++;
+                            break;
+                        }
+                    }
+                }
+            });
+            
+            // Draw on map
+            hexLayerGroup = L.geoJSON(hexGrid, {
+                style: function(feature) {
+                    let count = feature.properties.count;
+                    let fillColor = count > 5 ? '#ef4444' : (count > 2 ? '#f59e0b' : '#3b82f6');
+                    let fillOpacity = count > 0 ? 0.6 : 0.1;
+                    return {
+                        color: "#ffffff",
+                        weight: 1,
+                        fillColor: fillColor,
+                        fillOpacity: fillOpacity
+                    };
+                },
+                onEachFeature: function(feature, layer) {
+                    let popupContent = `<div class='text-black font-sans'><b>Zone: ${feature.properties.name}</b><br/>Reports: ${feature.properties.count}</div>`;
+                    layer.bindPopup(popupContent);
+                }
+            }).addTo(mapObj);
+        }
+
         function applyLucknowGridAndLock(mapObj, lock) {
             const bounds = [[26.75, 80.85], [26.95, 81.05]]; // Approximate bounds of Lucknow
             L.rectangle(bounds, {color: "#3b82f6", weight: 2, fill: false, opacity: 0.4}).addTo(mapObj);
@@ -813,6 +871,7 @@
                     });
                     
                     // Update main count display so user knows filtering happened
+                    if (window.priorityMap) drawLucknowHexGrid(window.priorityMap, data);
                     const headerCount = document.getElementById('total-reports');
                     if (headerCount) headerCount.innerText = data.length;
 
@@ -961,18 +1020,21 @@
                             let p = projects[cat];
                             let gapScore = Math.min(100, 40 + (p.urgency * 10) + (p.count * 2)); 
                             let impact = p.count * gapScore;
-                            return { sector: cat, title: p.title, count: p.count, gap: gapScore, impact: impact, loc: p.latestLoc };
+                            let severityText = p.urgency > 2 ? "critical" : (p.urgency > 0 ? "moderate" : "minor");
+                            let rationale = `Ranked ${p.count > 5 ? 'High' : 'Normal'} priority due to a ${severityText} ${cat.toLowerCase()} infrastructure gap (${Math.round(gapScore)}/100) affecting ${p.count} recent grievance reports in ${p.latestLoc}.`;
+                            return { sector: cat, title: p.title, count: p.count, gap: gapScore, impact: impact, loc: p.latestLoc, rationale: rationale };
                         }).sort((a,b) => b.impact - a.impact);
 
                         qBody.innerHTML = rankedProjects.slice(0, 10).map((p, i) => {
                             let impactColor = p.impact > 500 ? 'text-red-500' : (p.impact > 200 ? 'text-amber-500' : 'text-green-500');
                             return `<tr class="hover:bg-[#1C1C1C] transition cursor-pointer border-b border-[#262626]">
-                                <td class="px-6 py-4">
-                                    <div class="text-white font-medium flex items-center gap-2">
+                                <td class="px-6 py-4 whitespace-normal min-w-[300px]">
+                                    <div class="text-white font-medium flex items-center gap-2 mb-1">
                                         <span class="material-symbols-outlined text-[18px] text-zinc-400">account_balance</span>
                                         ${p.title}
                                     </div>
-                                    <div class="text-xs text-zinc-500 mt-1">Loc: ${p.loc}</div>
+                                    <div class="text-[11px] text-amber-500 font-medium mb-1 italic whitespace-normal max-w-sm">Rationale: ${p.rationale}</div>
+                                    <div class="text-xs text-zinc-500">Loc: ${p.loc}</div>
                                 </td>
                                 <td class="px-4 py-4 text-zinc-300 font-medium">${p.sector}</td>
                                 <td class="px-4 py-4 text-center">
