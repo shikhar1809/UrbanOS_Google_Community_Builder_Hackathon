@@ -54,6 +54,7 @@ class Message(Base):
     sentiment = Column(String, nullable=True)
     extracted_location = Column(String, nullable=True)
     summary = Column(String, nullable=True)
+    original_language = Column(String, nullable=True)
     reference_id = Column(String, nullable=True)
     status = Column(String, default="Open")
 
@@ -94,11 +95,12 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 gemini_client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
 
 class TriageResult(BaseModel):
-    category: str = Field(description="Must be one of: Cleanliness, Water, Power, Construction and Road Failure, Crime and Common Grievances, Emergency, Other")
+    category: str = Field(description="Must be one of: Education, Healthcare, Public Transport, Community Spaces, Infrastructure Upgrade, Other")
     priority: str = Field(description="Must be one of: Low, Medium, High, Critical")
     sentiment: str = Field(description="Must be one of: Neutral, Frustrated, Angry, Urgent")
     extracted_location: str = Field(description="Street name, landmark, or area extracted from text. Empty string if none.")
-    summary: str = Field(description="Short 4-5 word summary title of the issue.")
+    summary: str = Field(description="Short 4-5 word summary title of the project proposal.")
+    original_language: str = Field(description="The language the user originally submitted their request in (e.g., Hindi, English, Spanish).")
 
 @app.get("/")
 async def root():
@@ -168,9 +170,9 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db: Ses
                     twiml.message(f"Could not find report #{ref_id}.")
                 return HTMLResponse(content=str(twiml), media_type="application/xml")
 
-    if body_lower == "new report":
+    if body_lower == "new proposal" or body_lower == "new report":
         clear_session(db, sender)
-        twiml.message("Previous report discarded. New report started. What issue would you like to report? Please describe it in your own words.")
+        twiml.message("Previous proposal discarded. What development project or community upgrade would you like to propose for your area? Please describe your idea.")
         update_session(db, sender, "awaiting_description", {})
         return HTMLResponse(content=str(twiml), media_type="application/xml")
 
@@ -179,7 +181,7 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db: Ses
     current_step = session.current_step if session else None
     
     if current_step is None:
-        twiml.message("New report started. What issue would you like to report? Please describe it in your own words. (You can also send a voice note!)")
+        twiml.message("What development project or community upgrade would you like to propose for your area? Please describe your idea. (You can also send a voice note!)")
         update_session(db, sender, "awaiting_description", {})
         return HTMLResponse(content=str(twiml), media_type="application/xml")
         
@@ -266,10 +268,11 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db: Ses
         sentiment = None
         extracted_location = location_raw if loc_source == "text" else None
         summary = None
+        original_language = None
         
         if gemini_client and description:
             try:
-                prompt = f"Analyze this citizen grievance report from a Smart City WhatsApp tip-line. Extract the structured triage data.\\n\\nReport Text: {description}"
+                prompt = f"Analyze this community development proposal from a Smart City WhatsApp tip-line. Extract the structured triage data, including what language they originally used.\\n\\nProposal Text: {description}"
                 response = gemini_client.models.generate_content(
                     model='gemini-2.5-flash',
                     contents=prompt,
@@ -282,6 +285,8 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db: Ses
                 category = triage.category
                 priority = triage.priority
                 sentiment = triage.sentiment
+                original_language = triage.original_language
+
                 if loc_source == "text":
                     extracted_location = triage.extracted_location or location_raw
                 summary = triage.summary
@@ -302,6 +307,7 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db: Ses
             sentiment=sentiment,
             extracted_location=extracted_location,
             summary=summary,
+            original_language=original_language,
             reference_id=ref_id,
             status="Open"
         )
@@ -310,8 +316,8 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db: Ses
         clear_session(db, sender)
         db.commit()
         
-        twiml.message(f"Report submitted successfully. Reference ID: #{ref_id}. Your MP's office has received this and it will be reviewed shortly.")
-        logger.info(f"Report {ref_id} successfully created for {sender}.")
+        twiml.message(f"Proposal submitted successfully. Reference ID: #{ref_id}. Your MP's office has received this and it will be reviewed shortly.")
+        logger.info(f"Proposal {ref_id} successfully created for {sender}.")
         return HTMLResponse(content=str(twiml), media_type="application/xml")
     
     return HTMLResponse(content=str(twiml), media_type="application/xml")
@@ -335,7 +341,8 @@ async def get_messages(db: Session = Depends(get_db)):
             "priority": r.priority,
             "sentiment": r.sentiment,
             "extracted_location": r.extracted_location,
-            "summary": r.summary
+            "summary": r.summary,
+            "original_language": r.original_language
         }
         for r in records
     ]

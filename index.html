@@ -139,7 +139,7 @@
                 <span class="text-3xl font-bold tracking-tighter text-transparent bg-clip-text bg-gradient-to-b from-white to-zinc-400">Urban<span class="text-zinc-100">OS</span><span class="text-blue-500">.</span></span>
             </div>
 </div>
-<nav class="flex gap-8"><a class="text-sm hover:text-white transition nav-link active text-white" href="javascript:void(0)" id="nav-live" onclick="switchView('live')">Live Feed</a><a class="text-sm text-zinc-500 hover:text-white transition nav-link" href="javascript:void(0)" id="nav-analysis" onclick="switchView('analysis')">Analysis</a><a class="text-sm text-zinc-500 hover:text-white transition nav-link" href="javascript:void(0)" id="nav-priority" onclick="switchView('priority')">Priority</a><a class="text-sm text-zinc-500 hover:text-white transition nav-link" href="javascript:void(0)" id="nav-insights" onclick="switchView('insights')">Insights</a><a class="text-sm text-zinc-500 hover:text-white transition nav-link" href="javascript:void(0)" id="nav-coordination" onclick="switchView('coordination')">Coordination</a></nav>
+<nav class="flex gap-8"><a class="text-sm hover:text-white transition nav-link active text-white" href="javascript:void(0)" id="nav-live" onclick="switchView('live')">Live Feed</a><a class="text-sm text-zinc-500 hover:text-white transition nav-link" href="javascript:void(0)" id="nav-analysis" onclick="switchView('analysis')">Analysis</a><a class="text-sm text-zinc-500 hover:text-white transition nav-link" href="javascript:void(0)" id="nav-priority" onclick="switchView('priority')">Action Plan</a><a class="text-sm text-zinc-500 hover:text-white transition nav-link" href="javascript:void(0)" id="nav-insights" onclick="switchView('insights')">Insights</a><a class="text-sm text-zinc-500 hover:text-white transition nav-link" href="javascript:void(0)" id="nav-coordination" onclick="switchView('coordination')">Coordination</a></nav>
 <div class="flex items-center gap-5">
 <button class="w-9 h-9 rounded-full border border-zinc-700 flex items-center justify-center text-zinc-400 hover:text-white hover:border-zinc-500 transition">
 <span class="material-symbols-outlined" style="font-size: 18px;">search</span>
@@ -165,16 +165,16 @@
 <!-- Today's Grievance Progress -->
 <div class="card p-6 relative overflow-hidden flex flex-col min-h-[280px]">
 <div class="absolute inset-0 bg-gradient-to-b from-[#222] to-[#161616] opacity-40 z-0"></div>
-<h3 class="text-lg z-10 mb-6 text-white font-medium">Today's Grievance Progress</h3>
+<h3 class="text-lg z-10 mb-6 text-white font-medium">Development Proposals Today</h3>
 <div class="relative z-10 flex-1">
 <div class="inline-flex items-center gap-2 bg-[#262626] border border-[#333] px-3 py-1.5 rounded-full text-xs text-white absolute top-0 left-0 shadow-lg">
-<span class="material-symbols-outlined text-[14px] text-zinc-400">water_drop</span> Sanitation 145
+<span class="material-symbols-outlined text-[14px] text-zinc-400">school</span> Education 45
                     </div>
 <div class="inline-flex items-center gap-2 bg-[#262626] border border-[#333] px-3 py-1.5 rounded-full text-xs text-white absolute top-10 right-0 shadow-lg">
-<span class="material-symbols-outlined text-[14px] text-zinc-400">local_hospital</span> Medical 88
+<span class="material-symbols-outlined text-[14px] text-zinc-400">local_hospital</span> Healthcare 28
                     </div>
 <div class="inline-flex items-center gap-2 bg-[#262626] border border-[#333] px-3 py-1.5 rounded-full text-xs text-white absolute bottom-12 left-6 shadow-lg">
-<span class="material-symbols-outlined text-[14px] text-zinc-400">cleaning_services</span> Cleanliness 121
+<span class="material-symbols-outlined text-[14px] text-zinc-400">directions_bus</span> Transport 61
                     </div>
 </div>
 <div class="relative z-10 mt-auto pt-6 border-t border-zinc-800">
@@ -193,32 +193,32 @@
 </div>
 <!-- Grievance distribution by type -->
 <div class="card p-6 flex flex-col gap-5">
-<h3 class="text-lg text-white font-medium">Grievance distribution</h3>
+<h3 class="text-lg text-white font-medium">Development Sectors</h3>
 <div class="flex flex-col gap-4">
 <div class="flex items-center justify-between text-sm">
 <div class="flex items-center gap-2 w-32 text-zinc-300">
-<span class="material-symbols-outlined text-lg text-zinc-400">cleaning_services</span> Cleanliness
+<span class="material-symbols-outlined text-lg text-zinc-400">school</span> Education
                         </div>
 <div class="flex-1 px-4"><div class="segmented-bar" id="seg-1"></div></div>
 <div class="w-8 text-right text-white" id="pct-clean">0%</div>
 </div>
 <div class="flex items-center justify-between text-sm">
 <div class="flex items-center gap-2 w-32 text-zinc-300">
-<span class="material-symbols-outlined text-lg text-zinc-400">electric_bolt</span> Water & Power
+<span class="material-symbols-outlined text-lg text-zinc-400">local_hospital</span> Healthcare
                         </div>
 <div class="flex-1 px-4"><div class="segmented-bar" id="seg-2"></div></div>
 <div class="w-8 text-right text-white" id="pct-power">0%</div>
 </div>
 <div class="flex items-center justify-between text-sm">
 <div class="flex items-center gap-2 w-48 text-zinc-300 whitespace-nowrap">
-<span class="material-symbols-outlined text-lg text-zinc-400">construction</span> Construction & Road Failure
+<span class="material-symbols-outlined text-lg text-zinc-400">directions_bus</span> Public Transport
                         </div>
 <div class="flex-1 px-4"><div class="segmented-bar" id="seg-3"></div></div>
 <div class="w-8 text-right text-white" id="pct-roads">0%</div>
 </div>
 <div class="flex items-center justify-between text-sm">
 <div class="flex items-center gap-2 w-48 text-zinc-300 whitespace-nowrap">
-<span class="material-symbols-outlined text-lg text-zinc-400">gavel</span> Crime & Common Grievances
+<span class="material-symbols-outlined text-lg text-zinc-400">park</span> Community Spaces
                         </div>
 <div class="flex-1 px-4"><div class="segmented-bar" id="seg-4"></div></div>
 <div class="w-8 text-right text-white" id="pct-crime">0%</div>
@@ -275,14 +275,8 @@
 <div class="card flex-1 flex flex-col overflow-hidden bg-[#161616]">
 <!-- Table Header Controls -->
 <div class="flex items-center justify-between px-6 py-4 border-b border-[#262626]">
-<h3 class="text-lg text-white font-medium">Priority Queue</h3>
-<div class="flex items-center gap-1 bg-[#0A0A0A] p-1 rounded-full border border-[#262626]">
-<button class="px-5 py-1.5 text-xs font-medium text-zinc-400 hover:text-white transition rounded-full">All</button>
-<button class="px-5 py-1.5 text-xs font-medium text-zinc-400 hover:text-white transition rounded-full">Pending</button>
-<button class="px-5 py-1.5 text-xs font-medium text-zinc-400 hover:text-white transition rounded-full">Responded</button>
-<button class="px-5 py-1.5 text-xs font-medium bg-[#EDE8DC] text-black shadow-sm transition rounded-full">Assigned</button>
-<button class="px-5 py-1.5 text-xs font-medium text-zinc-400 hover:text-white transition rounded-full">Completed</button>
-</div>
+<div class="flex items-center justify-between px-6 py-4 border-b border-[#262626]">
+<h3 class="text-lg text-white font-medium">MP Action Plan: Ranked Projects</h3>
 <div class="flex gap-3">
 <button class="w-9 h-9 rounded-full border border-zinc-700 flex items-center justify-center text-zinc-400 hover:text-white hover:border-zinc-500 transition"><span class="material-symbols-outlined text-[18px]">calendar_today</span></button>
 <button class="w-9 h-9 rounded-full border border-zinc-700 flex items-center justify-center text-zinc-400 hover:text-white hover:border-zinc-500 transition"><span class="material-symbols-outlined text-[18px]">filter_list</span></button>
@@ -293,11 +287,11 @@
 <table class="w-full text-left text-sm whitespace-nowrap">
 <thead class="text-xs text-zinc-500 bg-[#161616] sticky top-0 z-10 border-b border-[#262626]">
 <tr>
-<th class="font-medium px-6 py-4">Report ID</th>
-<th class="font-medium px-4 py-4">Sender</th>
-<th class="font-medium px-4 py-4">Details</th>
-<th class="font-medium px-4 py-4 text-right">Score</th>
-<th class="font-medium px-6 py-4 text-right">Status</th>
+<th class="font-medium px-6 py-4">Proposed Project</th>
+<th class="font-medium px-4 py-4">Sector</th>
+<th class="font-medium px-4 py-4 text-center">Demand Volume</th>
+<th class="font-medium px-4 py-4 text-center">Infrastructure Gap</th>
+<th class="font-medium px-6 py-4 text-right">Impact Score</th>
 </tr>
 </thead>
 <tbody class="divide-y divide-[#262626]" id="queue-body"></tbody>
@@ -309,7 +303,7 @@
 <div class="view-content w-full h-full gap-5" id="view-analysis">
 <aside class="w-[340px] flex flex-col gap-5 overflow-y-auto pr-1">
 <div class="card p-6 flex flex-col gap-5">
-<h3 class="text-lg text-white font-medium">Monthly Grievance Volume</h3>
+<h3 class="text-lg text-white font-medium">Monthly Proposal Volume</h3>
 <div class="text-4xl text-white font-medium tracking-tight serif"><span id="dynamic-volume">0</span></div>
 <div class="text-xs text-green-500">+14% vs last month</div>
 <div class="sparkline w-full mt-4"></div>
@@ -340,7 +334,7 @@
 </aside>
 <div class="card flex-1 flex flex-col overflow-hidden bg-[#161616]">
 <div class="p-6 border-b border-[#262626]">
-<h3 class="serif text-xl text-white">Reports Analysis</h3>
+<h3 class="serif text-xl text-white">Development Proposals</h3>
 </div>
 <div class="p-6 text-zinc-400 text-sm">
     <div class="mb-3 text-zinc-300 font-medium">Categorized by Medium</div>
@@ -705,10 +699,10 @@
                         }
                         
                         const cat = (msg.category || "").toLowerCase();
-                        if (cat.includes("cleanliness") || cat.includes("sanitation")) counts.cleanliness++;
-                        else if (cat.includes("water") || cat.includes("power")) counts.powerwater++;
-                        else if (cat.includes("construction") || cat.includes("road") || cat.includes("pothole")) counts.road_failure++;
-                        else counts.crime_general++; // Fallback to Crime and Common Grievances
+                        if (cat.includes("education") || cat.includes("school")) counts.cleanliness++; // Maps to Education
+                        else if (cat.includes("healthcare") || cat.includes("hospital") || cat.includes("medical")) counts.powerwater++; // Maps to Healthcare
+                        else if (cat.includes("transport") || cat.includes("bus") || cat.includes("road")) counts.road_failure++; // Maps to Transport
+                        else counts.crime_general++; // Maps to Community/Other
                         
                         const sent = (msg.sentiment || "").toLowerCase();
                         if (sent.includes("angry")) sCounts.angry++;
@@ -831,28 +825,45 @@
                     // -- DYNAMIC PRIORITY QUEUE & METRICS --
                     const qBody = document.getElementById('queue-body');
                     if (qBody) {
-                        qBody.innerHTML = data.slice(-10).reverse().map((msg, i) => {
-                            let scoreStr = msg.priority || "Medium";
-                            let scoreColor = scoreStr.toLowerCase() === 'critical' ? 'text-red-500' : (scoreStr.toLowerCase() === 'high' ? 'text-amber-500' : 'text-green-500');
-                            let shortDesc = msg.summary || msg.body || 'Media payload';
-                            let sentimentHtml = msg.sentiment ? `<div class="text-xs text-zinc-500 mt-1">Sentiment: ${msg.sentiment}</div>` : `<div class="text-xs text-zinc-500 mt-1">Citizen</div>`;
-                            let locStr = msg.extracted_location ? msg.extracted_location : (msg.latitude ? 'GPS Pin' : 'Unknown');
-                            
+                        let projects = {};
+                        data.forEach(msg => {
+                            let cat = msg.category || "General Infrastructure";
+                            if (!projects[cat]) projects[cat] = { count: 0, urgency: 0, latestLoc: msg.extracted_location || "Various Locations", title: "New " + cat + " Initiative" };
+                            projects[cat].count++;
+                            if(msg.sentiment === "Urgent" || msg.sentiment === "Angry") projects[cat].urgency++;
+                            if(msg.summary) projects[cat].title = msg.summary;
+                        });
+                        
+                        let rankedProjects = Object.keys(projects).map(cat => {
+                            let p = projects[cat];
+                            let gapScore = Math.min(100, 40 + (p.urgency * 10) + (p.count * 2)); 
+                            let impact = p.count * gapScore;
+                            return { sector: cat, title: p.title, count: p.count, gap: gapScore, impact: impact, loc: p.latestLoc };
+                        }).sort((a,b) => b.impact - a.impact);
+
+                        qBody.innerHTML = rankedProjects.slice(0, 10).map((p, i) => {
+                            let impactColor = p.impact > 500 ? 'text-red-500' : (p.impact > 200 ? 'text-amber-500' : 'text-green-500');
                             return `<tr class="hover:bg-[#1C1C1C] transition cursor-pointer border-b border-[#262626]">
-                                <td class="px-6 py-4 text-white font-medium flex items-center gap-3">
-                                    <span class="material-symbols-outlined text-[20px] text-zinc-400">mark_email_unread</span>
-                                    #REQ-${msg.timestamp ? new Date(msg.timestamp).getTime().toString().slice(-6) : Math.floor(Math.random()*100000)}
+                                <td class="px-6 py-4">
+                                    <div class="text-white font-medium flex items-center gap-2">
+                                        <span class="material-symbols-outlined text-[18px] text-zinc-400">account_balance</span>
+                                        ${p.title}
+                                    </div>
+                                    <div class="text-xs text-zinc-500 mt-1">Loc: ${p.loc}</div>
                                 </td>
-                                <td class="px-4 py-4">
-                                    <div class="text-zinc-300">${msg.from}</div>
-                                    ${sentimentHtml}
+                                <td class="px-4 py-4 text-zinc-300 font-medium">${p.sector}</td>
+                                <td class="px-4 py-4 text-center">
+                                    <div class="text-white font-medium">${p.count} requests</div>
+                                    <div class="text-[10px] text-zinc-500">Citizen Backed</div>
                                 </td>
-                                <td class="px-4 py-4">
-                                    <div class="text-zinc-300 font-medium">${msg.category || 'General'}</div>
-                                    <div class="text-zinc-500 truncate max-w-[280px] text-sm">${shortDesc}</div>
+                                <td class="px-4 py-4 text-center">
+                                    <div class="text-white font-medium">${p.gap}% Gap</div>
+                                    <div class="text-[10px] text-zinc-500">Cross-referenced</div>
                                 </td>
-                                <td class="px-4 py-4 text-right font-medium ${scoreColor}">${scoreStr}</td>
-                                <td class="px-6 py-4 text-right text-zinc-300 truncate max-w-[150px]">${locStr}</td>
+                                <td class="px-6 py-4 text-right">
+                                    <div class="font-bold text-lg ${impactColor}">${p.impact.toLocaleString()}</div>
+                                    <button class="mt-2 px-3 py-1 bg-white text-black text-xs font-medium rounded hover:bg-zinc-200">Approve</button>
+                                </td>
                             </tr>`;
                         }).join('');
                     }
