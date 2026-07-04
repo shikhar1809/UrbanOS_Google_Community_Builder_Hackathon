@@ -565,8 +565,8 @@
                 const data = await response.json();
                 
                 // Trigger live animation if new messages arrived
-                if (lastMessageCount !== -1 && data.messages.length > lastMessageCount) {
-                    const numNew = data.messages.length - lastMessageCount;
+                if (lastMessageCount !== -1 && data.length > lastMessageCount) {
+                    const numNew = data.length - lastMessageCount;
                     for(let i=0; i<numNew; i++) {
                         setTimeout(() => {
                             const canvas = document.getElementById('animation-canvas');
@@ -588,7 +588,7 @@
                                     if(rawContainer.innerHTML.includes('Listening for')) {
                                         rawContainer.innerHTML = '';
                                     }
-                                    const rawMsg = data.messages[lastMessageCount + i];
+                                    const rawMsg = data[lastMessageCount + i];
                                     const div = document.createElement('div');
                                     div.className = 'p-3 bg-[#0A0A0A] border border-[#262626] rounded-md shadow-sm break-words';
                                     
@@ -607,13 +607,13 @@
                 if (lastMessageCount === -1) {
                     // First load, just set the counter
                     const counter = document.getElementById('msg-counter');
-                    if(counter) counter.innerText = data.messages.length;
+                    if(counter) counter.innerText = data.length;
                     
                     // Populate raw feed with existing messages on first load
                     const rawContainer = document.getElementById('raw-feed-container');
-                    if(rawContainer && data.messages.length > 0) {
+                    if(rawContainer && data.length > 0) {
                         rawContainer.innerHTML = ''; // clear placeholder
-                        data.messages.forEach(m => {
+                        data.forEach(m => {
                             const div = document.createElement('div');
                             div.className = 'p-3 bg-[#0A0A0A] border border-[#262626] rounded-md shadow-sm break-words';
                             let formattedStr = JSON.stringify(m, null, 2);
@@ -624,12 +624,12 @@
                     }
                 }
                 
-                lastMessageCount = data.messages.length;
+                lastMessageCount = data.length;
 
                 const tbody = document.getElementById('queue-body');
                 
-                if(tbody && data.messages && data.messages.length > 0) {
-                    const newRows = data.messages.map((msg, index) => {
+                if(tbody && data && data.length > 0) {
+                    const newRows = data.map((msg, index) => {
                         const date = new Date(msg.timestamp).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
                         let score = msg.body && msg.body.length > 30 ? 85 : 45;
                         let status = score > 80 ? 'Critical' : 'Pending';
@@ -642,7 +642,7 @@
                             <tr class="hover:bg-[#1C1C1C] transition cursor-pointer group">
                                 <td class="px-6 py-4 text-white font-medium flex items-center gap-3">
                                     <span class="material-symbols-outlined text-[20px] text-zinc-500 group-hover:text-white transition">mark_email_unread</span>
-                                    #AB${1000 + data.messages.length - index}
+                                    #AB${1000 + data.length - index}
                                 </td>
                                 <td class="px-4 py-4">
                                     <div class="text-zinc-300">${msg.from}</div>
