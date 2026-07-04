@@ -158,90 +158,75 @@
 </div>
 </header>
 <!-- Main Content -->
-<main class="flex-1 flex gap-5 p-5 overflow-hidden"><div class="view-content w-full h-full gap-5 flex-col overflow-y-auto custom-scrollbar" id="view-priority">
-<!-- Budget KPI Bar (Moved from Insights) -->
-<div class="flex gap-5 shrink-0">
-    <div class="card p-5 flex-1 flex flex-col justify-center border-l-4 border-l-blue-500">
-        <div class="text-sm text-zinc-500">Annual Allocation</div>
-        <div class="text-2xl text-white font-medium">₹5.00 Cr</div>
-    </div>
-    <div class="card p-5 flex-1 flex flex-col justify-center border-l-4 border-l-amber-500">
-        <div class="text-sm text-zinc-500">Est. Funds Requested</div>
-        <div class="text-2xl text-white font-medium" id="kpi-funds-requested">₹0</div>
-    </div>
-    <div class="card p-5 flex-1 flex flex-col justify-center border-l-4 border-l-green-500">
-        <div class="text-sm text-zinc-500">Est. Unspent Balance</div>
-        <div class="text-2xl text-white font-medium" id="kpi-funds-balance">₹5.00 Cr</div>
-    </div>
-    <div class="card p-5 flex-1 flex flex-col justify-center border-l-4 border-l-purple-500">
-        <div class="text-sm text-zinc-500">Projects Sanctioned</div>
-        <div class="text-2xl text-white font-medium" id="kpi-sanctioned-count">0</div>
-    </div>
-</div>
-
-<div class="flex gap-5 flex-1 shrink-0 h-[400px]">
-    <!-- Sectoral Fund Demand -->
-    <div class="card p-6 flex-1 flex flex-col gap-4">
-        <h3 class="text-lg text-white font-medium">Sectoral Fund Demand</h3>
-        <div class="relative w-full h-full flex items-center justify-center">
-            <canvas id="sectorChart"></canvas>
-        </div>
-    </div>
+<div class="view-content w-full h-full gap-5 flex-col overflow-y-auto custom-scrollbar" id="view-priority">
     
-    <!-- Timeline View -->
-    <div class="card flex-[2] flex flex-col overflow-hidden bg-[#161616]">
-        <div class="p-6 border-b border-[#262626] flex justify-between items-center shrink-0">
-            <h3 class="serif text-xl text-white">Project Timeline Overview</h3>
-            <span class="text-xs text-zinc-500">Active Phases</span>
-        </div>
-        <div class="flex-1 p-6 overflow-x-auto overflow-y-hidden custom-scrollbar">
-            <!-- Simple Gantt/Timeline Layout -->
-            <div class="min-w-[600px] h-full flex flex-col justify-around">
-                <!-- Timeline Headers -->
-                <div class="flex border-b border-[#262626] pb-2 text-xs text-zinc-500 uppercase tracking-wider">
-                    <div class="w-1/4">Q1 2024</div>
-                    <div class="w-1/4">Q2 2024</div>
-                    <div class="w-1/4">Q3 2024</div>
-                    <div class="w-1/4">Q4 2024</div>
-                </div>
-                <!-- Timeline Bars -->
-                <div class="flex items-center w-full group">
-                    <div class="w-48 text-sm text-zinc-300 truncate pr-4">Central Hub Paving</div>
-                    <div class="flex-1 h-8 relative">
-                        <div class="absolute left-[10%] w-[30%] h-full bg-blue-600/20 border border-blue-500 rounded flex items-center px-2 text-xs text-blue-300">Execution</div>
-                    </div>
-                </div>
-                <div class="flex items-center w-full group">
-                    <div class="w-48 text-sm text-zinc-300 truncate pr-4">Ward 4 School Rehab</div>
-                    <div class="flex-1 h-8 relative">
-                        <div class="absolute left-0 w-[20%] h-full bg-amber-600/20 border border-amber-500 rounded flex items-center px-2 text-xs text-amber-300">Tendering</div>
-                    </div>
-                </div>
-                <div class="flex items-center w-full group">
-                    <div class="w-48 text-sm text-zinc-300 truncate pr-4">South Zone Drainage</div>
-                    <div class="flex-1 h-8 relative">
-                        <div class="absolute left-[40%] w-[50%] h-full bg-green-600/20 border border-green-500 rounded flex items-center px-2 text-xs text-green-300">Planning</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Active Projects Section (Opens Modal) -->
-<div class="flex gap-5 shrink-0 pb-10">
-    <div class="card flex-1 bg-[#161616] p-6 cursor-pointer hover:border-blue-500/50 transition-colors group" onclick="document.getElementById('projects-modal').classList.remove('hidden')">
-        <div class="flex justify-between items-center">
+    <!-- Budget Health Dashboard -->
+    <div class="card p-6 flex flex-col gap-4 shrink-0 bg-[#0A0A0A] border-blue-900/30 relative overflow-hidden">
+        <div class="absolute -right-20 -top-20 w-64 h-64 bg-blue-600/10 rounded-full blur-3xl pointer-events-none"></div>
+        <div class="flex justify-between items-end relative z-10">
             <div>
-                <h3 class="serif text-2xl text-white group-hover:text-blue-400 transition-colors">Active Projects Directory</h3>
-                <p class="text-sm text-zinc-400 mt-1">Click to view and manage all active, pipeline, and completed projects.</p>
+                <h2 class="serif text-2xl text-white">Annual MPLADS Budget</h2>
+                <div class="text-sm text-zinc-400 mt-1">FY 2024-25 Allocation Status</div>
             </div>
-            <div class="w-12 h-12 rounded-full bg-zinc-800 flex items-center justify-center group-hover:bg-blue-600 transition-colors">
-                <span class="material-symbols-outlined text-white">open_in_new</span>
+            <div class="text-right">
+                <div class="text-[10px] uppercase tracking-wider text-zinc-500 font-bold mb-1">Total Unspent Balance</div>
+                <div class="text-3xl text-green-400 font-medium font-mono" id="plan-unspent">₹5.00 Cr</div>
+            </div>
+        </div>
+        
+        <div class="relative z-10 mt-2">
+            <div class="flex justify-between text-xs text-zinc-500 font-medium mb-2">
+                <span>Sanctioned: <span id="plan-sanc-amt" class="text-blue-400 font-mono">₹0</span></span>
+                <span>Total Budget: <span class="text-white font-mono">₹5.00 Cr</span></span>
+            </div>
+            <div class="h-3 w-full bg-zinc-800 rounded-full overflow-hidden shadow-inner flex">
+                <div id="plan-sanc-bar" class="h-full bg-gradient-to-r from-blue-600 to-blue-400 transition-all duration-1000" style="width: 0%"></div>
+            </div>
+        </div>
+        
+        <div class="flex gap-4 mt-2 relative z-10">
+            <div class="flex-1 p-3 bg-zinc-900/80 border border-zinc-800 rounded-lg">
+                <div class="text-[10px] text-zinc-500 uppercase tracking-wide">Projects Sanctioned</div>
+                <div class="text-xl text-white font-bold" id="plan-sanc-count">0</div>
+            </div>
+            <div class="flex-1 p-3 bg-zinc-900/80 border border-zinc-800 rounded-lg">
+                <div class="text-[10px] text-zinc-500 uppercase tracking-wide">Pipeline Requested</div>
+                <div class="text-xl text-white font-bold font-mono" id="plan-req-amt">₹0</div>
             </div>
         </div>
     </div>
-</div>
+
+    <!-- AI Project Pipeline Table -->
+    <div class="card flex-1 flex flex-col overflow-hidden">
+        <div class="p-5 border-b border-[#262626] flex justify-between items-center shrink-0 bg-zinc-900">
+            <div>
+                <h3 class="serif text-xl text-white">AI-Ranked Project Pipeline</h3>
+                <span class="text-xs text-zinc-500">Proposals prioritized by community demand and impact score</span>
+            </div>
+            <button class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2">
+                <span class="material-symbols-outlined text-[18px]">add</span> New Proposal
+            </button>
+        </div>
+        <div class="flex-1 overflow-auto custom-scrollbar bg-[#0A0A0A]">
+            <table class="w-full text-left text-sm whitespace-nowrap">
+                <thead class="bg-zinc-900/80 sticky top-0 z-10 text-xs uppercase tracking-wider text-zinc-500">
+                    <tr>
+                        <th class="px-6 py-4 font-medium border-b border-zinc-800">Project Details</th>
+                        <th class="px-4 py-4 font-medium border-b border-zinc-800 text-center">Score</th>
+                        <th class="px-4 py-4 font-medium border-b border-zinc-800 text-center">Status</th>
+                        <th class="px-6 py-4 font-medium border-b border-zinc-800 text-right">Est. Budget</th>
+                        <th class="px-6 py-4 font-medium border-b border-zinc-800 text-center">Action</th>
+                    </tr>
+                </thead>
+                <tbody id="plan-pipeline-body" class="divide-y divide-zinc-800/50">
+                    <!-- JS Injected Rows -->
+                    <tr>
+                        <td colspan="5" class="px-6 py-8 text-center text-zinc-500 text-xs italic">Loading prioritized pipeline...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
 </div>
 <div class="view-content w-full h-full flex-col gap-5 overflow-y-auto" id="view-analysis">
 
@@ -1331,46 +1316,64 @@
 
                     
                     // -- LIVE AI-RANKED PROJECTS (from /projects/ranked) --
-                    const qBody = document.getElementById('queue-body');
-                    if (qBody) {
-                        fetch('/projects/ranked').then(r => r.json()).then(ranked => {
-                            const fmtCr = val => val >= 10000000 ? '₹' + (val/10000000).toFixed(1) + ' Cr' : '₹' + (val/100000).toFixed(1) + ' L';
-                            const zoneColors = {North:'text-blue-400', South:'text-emerald-400', East:'text-amber-400', West:'text-purple-400', Central:'text-rose-400'};
-                            qBody.innerHTML = ranked.map((p, i) => {
-                                const impactColor = p.impact_score > 100 ? 'text-red-400' : (p.impact_score > 50 ? 'text-amber-400' : 'text-green-400');
-                                const zoneColor = zoneColors[p.zone] || 'text-zinc-400';
-                                const isAlreadySanctioned = (p.status === 'Sanctioned');
-                                const sanctionBtn = isAlreadySanctioned
-                                    ? `<span class="px-3 py-1.5 bg-green-900/40 border border-green-700 text-green-400 text-xs font-bold rounded-lg">✓ Sanctioned</span>`
-                                    : `<button onclick="sanctionProject('${p.id}','${p.title.replace(/'/g,"\\'").replace(/"/g,"&quot;")}','${p.zone}','${p.category}',${JSON.stringify(p.senders)})" class="px-3 py-1.5 bg-white hover:bg-zinc-200 text-black text-xs font-bold rounded-lg transition-all shadow-[0_0_10px_rgba(255,255,255,0.1)] hover:shadow-[0_0_15px_rgba(255,255,255,0.3)]">⚡ Sanction</button>`;
-                                return `<tr class="hover:bg-[#1C1C1C] transition cursor-pointer border-b border-[#262626]">
-                                    <td class="px-6 py-4 whitespace-normal min-w-[340px]">
-                                        <div class="text-white font-semibold flex items-center gap-2 mb-1">
-                                            <span class="text-[11px] font-bold ${zoneColor} bg-zinc-800 px-2 py-0.5 rounded">${p.zone.toUpperCase()}</span>
-                                            ${p.title}
-                                        </div>
-                                        <div class="text-[11px] text-amber-400/90 italic whitespace-normal max-w-md mb-1 leading-relaxed">
-                                            🤖 ${p.justification || 'AI analysis pending...'}
-                                        </div>
-                                        <div class="text-xs text-zinc-500">${p.demand_count} citizen proposals · ${p.unique_senders} unique voices</div>
-                                    </td>
-                                    <td class="px-4 py-4 text-zinc-300">${p.category}</td>
-                                    <td class="px-4 py-4 text-center">
-                                        <div class="text-white font-bold text-lg">${p.demand_count}</div>
-                                        <div class="text-[10px] text-zinc-500">Proposals</div>
-                                    </td>
-                                    <td class="px-4 py-4 text-center">
-                                        <div class="font-bold text-lg ${impactColor}">${p.impact_score}</div>
-                                        <div class="text-[10px] text-zinc-500">Impact Score</div>
-                                    </td>
-                                    <td class="px-6 py-4 text-right space-y-2">
-                                        <div class="font-mono text-white text-sm">${fmtCr(p.estimated_budget)}</div>
-                                        ${sanctionBtn}
-                                    </td>
-                                </tr>`;
-                            }).join('');
-                        }).catch(err => console.error('Ranked projects error:', err));
-                    }
+                    const planBody = document.getElementById('plan-pipeline-body');
+                    const qBody = document.getElementById('queue-body'); // fallback for modal if it still exists
+                    
+                    fetch('/projects/ranked').then(r => r.json()).then(ranked => {
+                        const fmtCr = val => val >= 10000000 ? '₹' + (val/10000000).toFixed(1) + ' Cr' : '₹' + (val/100000).toFixed(1) + ' L';
+                        const zoneColors = {North:'text-blue-400', South:'text-emerald-400', East:'text-amber-400', West:'text-purple-400', Central:'text-rose-400'};
+                        
+                        // Calculate Planning Tab Budget KPIs from ranked pipeline
+                        let totalReq = 0, sancAmt = 0, sancCount = 0;
+                        ranked.forEach(p => {
+                            totalReq += p.estimated_budget;
+                            if (p.status === 'Sanctioned') { sancAmt += p.estimated_budget; sancCount++; }
+                        });
+                        
+                        const setEl = (id, v) => { const el = document.getElementById(id); if (el) el.innerText = v; };
+                        setEl('plan-sanc-count', sancCount);
+                        setEl('plan-req-amt', fmtCr(totalReq));
+                        setEl('plan-sanc-amt', fmtCr(sancAmt));
+                        setEl('plan-unspent', fmtCr(50000000 - sancAmt)); // 5Cr budget
+                        const bar = document.getElementById('plan-sanc-bar');
+                        if (bar) bar.style.width = Math.min(100, Math.round((sancAmt / 50000000) * 100)) + '%';
+
+                        const htmlRows = ranked.map((p, i) => {
+                            const impactColor = p.impact_score > 100 ? 'text-red-400' : (p.impact_score > 50 ? 'text-amber-400' : 'text-green-400');
+                            const zoneColor = zoneColors[p.zone] || 'text-zinc-400';
+                            const isAlreadySanctioned = (p.status === 'Sanctioned');
+                            const sanctionBtn = isAlreadySanctioned
+                                ? `<span class="px-3 py-1.5 bg-green-900/40 border border-green-700 text-green-400 text-xs font-bold rounded-lg">✓ Sanctioned</span>`
+                                : `<button onclick="sanctionProject('${p.id}','${p.title.replace(/'/g,"\\'").replace(/"/g,"&quot;")}','${p.zone}','${p.category}',${JSON.stringify(p.senders)})" class="px-3 py-1.5 bg-white hover:bg-zinc-200 text-black text-xs font-bold rounded-lg transition-all shadow-[0_0_10px_rgba(255,255,255,0.1)] hover:shadow-[0_0_15px_rgba(255,255,255,0.3)]">⚡ Sanction</button>`;
+                            
+                            const statColor = isAlreadySanctioned ? 'text-green-400' : 'text-yellow-400';
+                            
+                            return `<tr class="hover:bg-[#1C1C1C] transition border-b border-[#262626]">
+                                <td class="px-6 py-4 whitespace-normal min-w-[340px]">
+                                    <div class="text-white font-semibold flex items-center gap-2 mb-1">
+                                        <span class="text-[11px] font-bold ${zoneColor} bg-zinc-800 px-2 py-0.5 rounded">${p.zone.toUpperCase()}</span>
+                                        ${p.title}
+                                    </div>
+                                    <div class="text-[11px] text-amber-400/90 italic whitespace-normal max-w-md mb-1 leading-relaxed">
+                                        🤖 ${p.justification || 'AI analysis pending...'}
+                                    </div>
+                                    <div class="text-xs text-zinc-500">${p.demand_count} citizen proposals · ${p.unique_senders} unique voices</div>
+                                </td>
+                                <td class="px-4 py-4 text-center">
+                                    <div class="font-bold text-lg ${impactColor}">${p.impact_score}</div>
+                                    <div class="text-[10px] text-zinc-500">Impact Score</div>
+                                </td>
+                                <td class="px-4 py-4 text-center font-medium ${statColor}">${p.status || 'Open'}</td>
+                                <td class="px-6 py-4 text-right font-mono text-white text-sm">${fmtCr(p.estimated_budget)}</td>
+                                <td class="px-6 py-4 text-center">${sanctionBtn}</td>
+                            </tr>`;
+                        }).join('');
+
+                        if (planBody) planBody.innerHTML = htmlRows;
+                        if (qBody) qBody.innerHTML = htmlRows; // update modal too if it exists
+
+                    }).catch(err => console.error('Ranked projects error:', err));
+
 
                     const dCount = document.getElementById('daily-count');
                     const dPct = document.getElementById('daily-pct');
