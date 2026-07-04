@@ -52,6 +52,10 @@ twilio_validator = RequestValidator(TWILIO_AUTH_TOKEN) if TWILIO_AUTH_TOKEN else
 async def root():
     return FileResponse("index.html")
 
+@app.get("/sw.js")
+async def service_worker():
+    return FileResponse("sw.js", media_type="application/javascript")
+
 # Media download helper
 async def download_media(media_url: str) -> bytes:
     if not TWILIO_ACCOUNT_SID or not TWILIO_AUTH_TOKEN:

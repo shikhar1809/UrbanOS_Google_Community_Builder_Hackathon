@@ -101,6 +101,22 @@
     </style>
 <link crossorigin="" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" rel="stylesheet"/><script crossorigin="" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script></head>
 <body class="h-screen flex flex-col overflow-hidden">
+<div class="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#0A0A0A] transition-opacity duration-700" id="splash-screen">
+<div class="flex flex-col items-center">
+<!-- Animated Loading Ring -->
+<div class="relative w-24 h-24 mb-8">
+<div class="absolute inset-0 border-4 border-[#262626] rounded-full"></div>
+<div class="absolute inset-0 border-4 border-white rounded-full border-t-transparent animate-spin"></div>
+</div>
+<h1 class="text-4xl serif text-white mb-4">UrbanOS</h1>
+<p class="text-zinc-400 font-mono text-sm tracking-wider uppercase animate-pulse" id="splash-text">Initializing System...</p>
+<!-- Progress Bar -->
+<div class="w-64 h-1 bg-[#161616] mt-8 rounded-full overflow-hidden">
+<div class="h-full bg-white w-0 transition-all duration-300 ease-out" id="splash-progress"></div>
+</div>
+</div>
+</div>
+
 <!-- Header -->
 <header class="flex items-center justify-between px-8 py-5 border-b border-[#262626]">
 <div class="flex items-center gap-3">
@@ -237,13 +253,7 @@
 </div>
 </div>
 <!-- Pins -->
-
-
-
-
-
 <!-- Active Map Pin Info Popover -->
-
 </div>
 <!-- Table Card -->
 <div class="card flex-1 flex flex-col overflow-hidden bg-[#161616]">
@@ -366,8 +376,6 @@
 <div class="card map-bg flex-1 relative overflow-hidden min-h-[300px] border-none shadow-inner"><div class="absolute inset-0 z-0" id="coordination-map"></div>
 <div class="absolute top-5 left-5 bg-white text-black px-4 py-2.5 rounded-full text-sm font-medium shadow-[0_8px_30px_rgb(0,0,0,0.12)] z-10">Active Field Units</div>
 <!-- Dispatch Pins -->
-
-
 </div>
 <aside class="w-[340px] flex flex-col gap-5 overflow-y-auto pr-1">
 <div class="card p-6 flex flex-col gap-4">
@@ -917,6 +925,49 @@
                 }
             }
         }, 1000);
-    </script>
+    
+        // --- Splash Screen & Service Worker Logic ---
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js');
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const splashText = document.getElementById('splash-text');
+            const splashProgress = document.getElementById('splash-progress');
+            const splashScreen = document.getElementById('splash-screen');
+            
+            const sequence = [
+                { text: "fetching grievances...", progress: "30%", delay: 600 },
+                { text: "loading grievances...", progress: "70%", delay: 1500 },
+                { text: "updating dashboard...", progress: "100%", delay: 2200 }
+            ];
+            
+            let totalDelay = 0;
+            
+            sequence.forEach((step) => {
+                setTimeout(() => {
+                    splashText.textContent = step.text;
+                    splashProgress.style.width = step.progress;
+                }, step.delay);
+                totalDelay = Math.max(totalDelay, step.delay);
+            });
+            
+            // Fade out and remove after sequence completes
+            setTimeout(() => {
+                splashScreen.style.opacity = '0';
+                setTimeout(() => {
+                    splashScreen.style.display = 'none';
+                    // Trigger initial fetch only after splash screen finishes
+                    fetchMessages();
+                    setInterval(fetchMessages, 2000); // Resume polling
+                }, 700); // wait for CSS fade transition
+            }, totalDelay + 800);
+        });
+        
+        // Remove the existing automatic calls to fetchMessages to prevent double fetching
+    
+</script>
 </body>
 </html>
