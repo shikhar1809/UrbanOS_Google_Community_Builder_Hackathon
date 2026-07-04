@@ -640,10 +640,11 @@
                             if(ts > latestTs) latestTs = ts;
                         }
                         
-                        if (body.match(/trash|garbage|waste|clean|sweep/)) counts.cleanliness++;
-                        else if (body.match(/water|leak|pipe|flood|drain/)) counts.water++;
-                        else if (body.match(/light|power|electric|wire/)) counts.power++;
-                        else if (body.match(/road|pothole|street|break/)) counts.roads++;
+                        const cat = (msg.category || "").toLowerCase();
+                        if (cat.includes("cleanliness")) counts.cleanliness++;
+                        else if (cat.includes("water")) counts.water++;
+                        else if (cat.includes("power")) counts.power++;
+                        else if (cat.includes("roads")) counts.roads++;
                         else counts.general++;
                     });
                     
@@ -751,7 +752,12 @@
                     const qBody = document.getElementById('queue-body');
                     if (qBody) {
                         qBody.innerHTML = data.slice(-10).reverse().map((msg, i) => {
-                            let score = msg.body && msg.body.length > 30 ? 85 + (i%15) : 45 + (i%15);
+                            let scoreStr = msg.priority || "Medium";
+                            let scoreColor = scoreStr.toLowerCase() === 'critical' ? 'text-red-500' : (scoreStr.toLowerCase() === 'high' ? 'text-amber-500' : 'text-green-500');
+                            let shortDesc = msg.summary || msg.body || 'Media payload';
+                            let sentimentHtml = msg.sentiment ? `<div class="text-xs text-zinc-500 mt-1">Sentiment: ${msg.sentiment}</div>` : `<div class="text-xs text-zinc-500 mt-1">Citizen</div>`;
+                            let locStr = msg.extracted_location ? msg.extracted_location : (msg.latitude ? 'GPS Pin' : 'Unknown');
+                            
                             return `<tr class="hover:bg-[#1C1C1C] transition cursor-pointer border-b border-[#262626]">
                                 <td class="px-6 py-4 text-white font-medium flex items-center gap-3">
                                     <span class="material-symbols-outlined text-[20px] text-zinc-400">mark_email_unread</span>
@@ -759,13 +765,14 @@
                                 </td>
                                 <td class="px-4 py-4">
                                     <div class="text-zinc-300">${msg.from}</div>
-                                    <div class="text-xs text-zinc-500 mt-1">Citizen</div>
+                                    ${sentimentHtml}
                                 </td>
                                 <td class="px-4 py-4">
-                                    <div class="text-zinc-300 truncate max-w-[280px]">${msg.body || 'Media payload'}</div>
+                                    <div class="text-zinc-300 font-medium">${msg.category || 'General'}</div>
+                                    <div class="text-zinc-500 truncate max-w-[280px] text-sm">${shortDesc}</div>
                                 </td>
-                                <td class="px-4 py-4 text-right font-medium text-white">${score}</td>
-                                <td class="px-6 py-4 text-right text-zinc-300">Logged</td>
+                                <td class="px-4 py-4 text-right font-medium ${scoreColor}">${scoreStr}</td>
+                                <td class="px-6 py-4 text-right text-zinc-300 truncate max-w-[150px]">${locStr}</td>
                             </tr>`;
                         }).join('');
                     }
