@@ -57,6 +57,8 @@ class Message(Base):
     original_language = Column(String, nullable=True)
     reference_id = Column(String, nullable=True)
     status = Column(String, default="Open")
+    constituency_zone = Column(String, nullable=True)
+    estimated_budget = Column(Integer, nullable=True)
 
 class ConversationSession(Base):
     __tablename__ = "sessions"
@@ -95,12 +97,14 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 gemini_client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
 
 class TriageResult(BaseModel):
-    category: str = Field(description="Must be one of: Education, Healthcare, Public Transport, Community Spaces, Infrastructure Upgrade, Other")
+    category: str = Field(description="Must be one of: Construction Development, Land Development, Infrastructure Upgrade, Public Utility Works, Environmental Project, Maintenance & Repair, Other")
     priority: str = Field(description="Must be one of: Low, Medium, High, Critical")
     feasibility: str = Field(alias="sentiment", description="Must be one of: High, Moderate, Complex, Unknown. Maps to the old sentiment DB column.")
     extracted_location: str = Field(description="Street name, landmark, or area extracted from text. Empty string if none.")
     summary: str = Field(description="Short 4-5 word summary title of the project proposal.")
     original_language: str = Field(description="The language the user originally submitted their request in (e.g., Hindi, English, Spanish).")
+    constituency_zone: str = Field(description="Must be one of: North, South, East, West, Central. Infer this constituency zone from the location context. Default to Central if unknown.")
+    estimated_budget: int = Field(description="An integer representing the estimated cost in INR based on the project scale (e.g., 500000 for small, 50000000 for large capital works).")
 
 @app.get("/")
 async def root():
@@ -269,6 +273,8 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db: Ses
         extracted_location = location_raw if loc_source == "text" else None
         summary = None
         original_language = None
+        constituency_zone = None
+        estimated_budget = None
         
         if gemini_client and description:
             try:
@@ -290,6 +296,8 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db: Ses
                 if loc_source == "text":
                     extracted_location = triage.extracted_location or location_raw
                 summary = triage.summary
+                constituency_zone = triage.constituency_zone
+                estimated_budget = triage.estimated_budget
             except Exception as e:
                 logger.error(f"[AI ERROR] Gemini Triage Failed: {e}", exc_info=True)
                 
@@ -308,6 +316,8 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db: Ses
             extracted_location=extracted_location,
             summary=summary,
             original_language=original_language,
+            constituency_zone=constituency_zone,
+            estimated_budget=estimated_budget,
             reference_id=ref_id,
             status="Open"
         )

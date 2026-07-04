@@ -708,11 +708,8 @@
                     let feasi = (msg.sentiment || "").toLowerCase();
                     let prio = (msg.priority || "").toLowerCase();
                     
-                    // Estimate Budget (Mock logic based on priority)
-                    let estBudget = 500000; // base 5 Lakhs
-                    if (prio === "critical") estBudget = 5000000;
-                    else if (prio === "high") estBudget = 2500000;
-                    else if (prio === "medium") estBudget = 1000000;
+                    // Estimate Budget (Native)
+                    let estBudget = msg.estimated_budget || 0; // 0 for legacy messages without budget
                     
                     totalRequested += estBudget;
                     
@@ -806,13 +803,9 @@
                         if (mediumFilter === 'image' && !isPhoto) return false;
                         if (mediumFilter === 'audio' && !isVoice) return false;
                         
-                        // 3. Filter Location (Mock hashing)
+                        // 3. Filter Location (Native)
                         if (locFilter !== 'all') {
-                            let rawLoc = (msg.extracted_location || msg.latitude || "Unknown").toString();
-                            let hash = 0;
-                            for (let i = 0; i < rawLoc.length; i++) hash = Math.imul(31, hash) + rawLoc.charCodeAt(i) | 0;
-                            let zones = ['north', 'south', 'east', 'west', 'central'];
-                            let assignedZone = zones[Math.abs(hash) % 5];
+                            let assignedZone = (msg.constituency_zone || 'central').toLowerCase();
                             if (locFilter !== assignedZone) return false;
                         }
                         
