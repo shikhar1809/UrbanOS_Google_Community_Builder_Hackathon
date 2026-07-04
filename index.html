@@ -339,22 +339,26 @@
 </div>
 <div class="p-6 text-zinc-400 text-sm">
     <div class="mb-3 text-zinc-300 font-medium">Categorized by Medium</div>
-    <div class="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-6">
+    <div class="grid grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
         <div class="p-3 border border-[#262626] rounded-lg bg-[#0A0A0A]">
             <div class="text-[10px] text-zinc-500 uppercase tracking-wider">Text Only</div>
             <div class="text-xl text-white serif mt-1" id="type-text">0</div>
+        </div>
+        <div class="p-3 border border-[#262626] rounded-lg bg-[#0A0A0A]">
+            <div class="text-[10px] text-zinc-500 uppercase tracking-wider">Photo Only</div>
+            <div class="text-xl text-white serif mt-1" id="type-photo">0</div>
         </div>
         <div class="p-3 border border-[#262626] rounded-lg bg-[#0A0A0A]">
             <div class="text-[10px] text-zinc-500 uppercase tracking-wider">Text+Photo</div>
             <div class="text-xl text-white serif mt-1" id="type-photo-text">0</div>
         </div>
         <div class="p-3 border border-[#262626] rounded-lg bg-[#0A0A0A]">
-            <div class="text-[10px] text-zinc-500 uppercase tracking-wider">Voice+Text</div>
-            <div class="text-xl text-white serif mt-1" id="type-voice-text">0</div>
-        </div>
-        <div class="p-3 border border-[#262626] rounded-lg bg-[#0A0A0A]">
             <div class="text-[10px] text-zinc-500 uppercase tracking-wider">Voice Only</div>
             <div class="text-xl text-white serif mt-1" id="type-voice">0</div>
+        </div>
+        <div class="p-3 border border-[#262626] rounded-lg bg-[#0A0A0A]">
+            <div class="text-[10px] text-zinc-500 uppercase tracking-wider">Voice+Text</div>
+            <div class="text-xl text-white serif mt-1" id="type-voice-text">0</div>
         </div>
         <div class="p-3 border border-[#262626] rounded-lg bg-[#0A0A0A]">
             <div class="text-[10px] text-zinc-500 uppercase tracking-wider">All Media</div>
@@ -694,7 +698,7 @@
                     const elRoads = document.getElementById('cat-roads-pct'); if(elRoads) elRoads.innerText = pRoads + '%';
 
                     // -- DYNAMIC REPORTS ANALYSIS --
-                    let typeText = 0, typePhotoText = 0, typeVoiceText = 0, typeVoice = 0, typeAll = 0;
+                    let typeText = 0, typePhoto = 0, typePhotoText = 0, typeVoiceText = 0, typeVoice = 0, typeAll = 0;
                     let hasLoc = 0, hasPhoto = 0;
                     
                     data.forEach(msg => {
@@ -707,7 +711,7 @@
                         else if (isVoice && isText) typeVoiceText++;
                         else if (isPhoto && isText) typePhotoText++;
                         else if (isVoice) typeVoice++;
-                        else if (isPhoto) typePhotoText++; 
+                        else if (isPhoto) typePhoto++; 
                         else typeText++;
                         
                         if (msg.latitude || msg.extracted_location) hasLoc++;
@@ -715,6 +719,7 @@
                     });
                     
                     if(document.getElementById('type-text')) document.getElementById('type-text').innerText = typeText;
+                    if(document.getElementById('type-photo')) document.getElementById('type-photo').innerText = typePhoto;
                     if(document.getElementById('type-photo-text')) document.getElementById('type-photo-text').innerText = typePhotoText;
                     if(document.getElementById('type-voice-text')) document.getElementById('type-voice-text').innerText = typeVoiceText;
                     if(document.getElementById('type-voice')) document.getElementById('type-voice').innerText = typeVoice;
