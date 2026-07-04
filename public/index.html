@@ -1139,7 +1139,8 @@
                 if (window.sectorChart) {
                     window.sectorChart.data.datasets[0].data = [sectorBudgets.constr, sectorBudgets.land, sectorBudgets.infra, sectorBudgets.util];
                     window.sectorChart.update();
-if (window.lifecycleChart) {
+                }
+                if (window.lifecycleChart) {
                     window.lifecycleChart.data.datasets[0].data = [lifecycle.requested, lifecycle.review, lifecycle.sanctioned, lifecycle.completed];
                     window.lifecycleChart.update();
                 }
