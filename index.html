@@ -315,21 +315,26 @@
 <div class="sparkline w-full mt-4"></div>
 </div>
 <div class="card p-6 flex flex-col gap-5">
-<h3 class="text-lg text-white font-medium">Resolution Rates</h3>
+<h3 class="text-lg text-white font-medium">Sentiment Analysis</h3>
 <div class="flex items-center justify-between text-sm">
-<div class="w-24 text-zinc-400">Sanitation</div>
-<div class="flex-1 px-4"><div class="segmented-bar" id="ana-seg-1"></div></div>
-<div class="w-8 text-right text-white">92%</div>
+<div class="w-24 text-red-400">Angry</div>
+<div class="flex-1 px-4"><div class="segmented-bar" id="ana-seg-angry"></div></div>
+<div class="w-8 text-right text-white" id="ana-pct-angry">0%</div>
 </div>
 <div class="flex items-center justify-between text-sm">
-<div class="w-24 text-zinc-400">Cleanliness</div>
-<div class="flex-1 px-4"><div class="segmented-bar" id="ana-seg-2"></div></div>
-<div class="w-8 text-right text-white">78%</div>
+<div class="w-24 text-orange-400">Frustrated</div>
+<div class="flex-1 px-4"><div class="segmented-bar" id="ana-seg-frust"></div></div>
+<div class="w-8 text-right text-white" id="ana-pct-frust">0%</div>
 </div>
 <div class="flex items-center justify-between text-sm">
-<div class="w-24 text-zinc-400">Medical</div>
-<div class="flex-1 px-4"><div class="segmented-bar" id="ana-seg-3"></div></div>
-<div class="w-8 text-right text-white">95%</div>
+<div class="w-24 text-yellow-400">Urgent</div>
+<div class="flex-1 px-4"><div class="segmented-bar" id="ana-seg-urgent"></div></div>
+<div class="w-8 text-right text-white" id="ana-pct-urgent">0%</div>
+</div>
+<div class="flex items-center justify-between text-sm">
+<div class="w-24 text-green-400">Neutral</div>
+<div class="flex-1 px-4"><div class="segmented-bar" id="ana-seg-neutral"></div></div>
+<div class="w-8 text-right text-white" id="ana-pct-neutral">0%</div>
 </div>
 </div>
 </aside>
@@ -688,6 +693,7 @@
                     
                     // -- REALTIME NLP CATEGORIZATION ENGINE --
                     const counts = { cleanliness: 0, powerwater: 0, road_failure: 0, crime_general: 0 };
+                    const sCounts = { angry: 0, frust: 0, urgent: 0, neutral: 0 };
                     const now = Date.now();
                     let latestTs = 0;
                     
@@ -703,6 +709,12 @@
                         else if (cat.includes("water") || cat.includes("power")) counts.powerwater++;
                         else if (cat.includes("construction") || cat.includes("road") || cat.includes("pothole")) counts.road_failure++;
                         else counts.crime_general++; // Fallback to Crime and Common Grievances
+                        
+                        const sent = (msg.sentiment || "").toLowerCase();
+                        if (sent.includes("angry")) sCounts.angry++;
+                        else if (sent.includes("frustrated")) sCounts.frust++;
+                        else if (sent.includes("urgent")) sCounts.urgent++;
+                        else sCounts.neutral++;
                     });
                     
                     const total = data.length || 1;
@@ -711,21 +723,33 @@
                     const pRoads = Math.round((counts.road_failure / total) * 100);
                     const pCrime = Math.round((counts.crime_general / total) * 100);
                     
+                    const pAngry = Math.round((sCounts.angry / total) * 100);
+                    const pFrust = Math.round((sCounts.frust / total) * 100);
+                    const pUrgent = Math.round((sCounts.urgent / total) * 100);
+                    const pNeutral = Math.round((sCounts.neutral / total) * 100);
+                    
                     // Update Sidebar Graphs dynamically
                     if(typeof drawSegments === 'function') {
                         drawSegments('seg-1', pClean);
                         drawSegments('seg-2', pPowerWater);
                         drawSegments('seg-3', pRoads);
                         drawSegments('seg-4', pCrime);
-                        drawSegments('ana-seg-1', pClean);
-                        drawSegments('ana-seg-2', pPowerWater);
-                        drawSegments('ana-seg-3', pRoads);
+                        
+                        drawSegments('ana-seg-angry', pAngry);
+                        drawSegments('ana-seg-frust', pFrust);
+                        drawSegments('ana-seg-urgent', pUrgent);
+                        drawSegments('ana-seg-neutral', pNeutral);
                     }
                     
                     const elClean = document.getElementById('pct-clean'); if(elClean) elClean.innerText = pClean + '%';
                     const elPower = document.getElementById('pct-power'); if(elPower) elPower.innerText = pPowerWater + '%';
                     const elRoads = document.getElementById('pct-roads'); if(elRoads) elRoads.innerText = pRoads + '%';
                     const elCrime = document.getElementById('pct-crime'); if(elCrime) elCrime.innerText = pCrime + '%';
+                    
+                    const elAngry = document.getElementById('ana-pct-angry'); if(elAngry) elAngry.innerText = pAngry + '%';
+                    const elFrust = document.getElementById('ana-pct-frust'); if(elFrust) elFrust.innerText = pFrust + '%';
+                    const elUrgent = document.getElementById('ana-pct-urgent'); if(elUrgent) elUrgent.innerText = pUrgent + '%';
+                    const elNeutral = document.getElementById('ana-pct-neutral'); if(elNeutral) elNeutral.innerText = pNeutral + '%';
 
                     // -- DYNAMIC REPORTS ANALYSIS --
                     let typeText = 0, typePhoto = 0, typePhotoText = 0, typeVoiceText = 0, typeVoice = 0, typeAll = 0;
