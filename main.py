@@ -288,7 +288,7 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db):
         
         if gemini_client and description:
             try:
-                prompt = f"Analyze this community development proposal from a Smart City WhatsApp tip-line. Extract the structured triage data, including what language they originally used.\\n\\nProposal Text: {description}"
+                prompt = f"Analyze this community development proposal from a Smart City WhatsApp tip-line. Extract the structured triage data, including what language they originally used.\n\nProposal Text: {description}"
                 response = gemini_client.models.generate_content(
                     model='gemini-2.5-flash',
                     contents=prompt,
@@ -489,7 +489,13 @@ async def get_ranked_projects(db = Depends(get_db)):
     # Cluster by (category, constituency_zone)
     clusters = {}
     for m in messages:
-        cat = m.get("category") or "Other"
+        raw_cat = m.get("category")
+        if not raw_cat:
+            # Use first 40 chars of body as a unique cluster key so uncategorized
+            # requests are still individually visible in the ranking
+            body_snippet = (m.get("body") or "").strip()[:40]
+            raw_cat = body_snippet if body_snippet else "General Proposal"
+        cat = raw_cat
         zone = m.get("constituency_zone") or "Central"
         key = f"{cat}|{zone}"
         if key not in clusters:
