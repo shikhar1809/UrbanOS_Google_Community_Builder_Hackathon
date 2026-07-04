@@ -1,1110 +1,352 @@
 <!DOCTYPE html>
-
-<html class="dark" lang="en"><head>
-<meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>UrbanOS Admin | Priority</title>
-<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@600;700&amp;family=Hanken+Grotesk:wght@400;500;600&amp;family=JetBrains+Mono:wght@500&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com/css2?family='Source+Serif+4':wght@100..900&amp;family=Hanken+Grotesk:wght@100..900&amp;family=JetBrains+Mono:wght@100..900&amp;display=swap" rel="stylesheet"/>
-<style>
-    .material-symbols-outlined {
-      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
-    }
-    .custom-scrollbar::-webkit-scrollbar {
-      width: 4px;
-    }
-    .custom-scrollbar::-webkit-scrollbar-track {
-      background: #191210;
-    }
-    .custom-scrollbar::-webkit-scrollbar-thumb {
-      background: #3c3331;
-      border-radius: 10px;
-    }
-  </style>
-<script id="tailwind-config">
-    tailwind.config = {
-      darkMode: "class",
-      theme: {
-        extend: {
-          "colors": {
-            "on-primary-container": "#51140d",
-            "inverse-surface": "#efdfdc",
-            "tertiary": "#b6c6ee",
-            "on-surface": "#efdfdc",
-            "on-tertiary-fixed": "#081b3a",
-            "secondary": "#91d2d1",
-            "surface-dim": "#191210",
-            "on-secondary-container": "#83c3c3",
-            "tertiary-container": "#8091b6",
-            "tertiary-fixed-dim": "#b6c6ee",
-            "primary": "#ffb4a8",
-            "surface-container-high": "#312827",
-            "surface-container-low": "#221a18",
-            "secondary-container": "#005252",
-            "on-tertiary": "#203050",
-            "inverse-primary": "#95473c",
-            "surface-variant": "#3c3331",
-            "on-secondary-fixed-variant": "#004f50",
-            "on-surface-variant": "#dac1bd",
-            "surface": "#191210",
-            "on-tertiary-container": "#182949",
-            "primary-container": "#d3776a",
-            "on-primary-fixed-variant": "#773027",
-            "on-primary-fixed": "#3d0503",
-            "on-tertiary-fixed-variant": "#374767",
-            "surface-container-highest": "#3c3331",
-            "inverse-on-surface": "#372e2d",
-            "error-container": "#93000a",
-            "surface-container": "#261e1c",
-            "primary-fixed": "#ffdad4",
-            "secondary-fixed-dim": "#91d2d1",
-            "secondary-fixed": "#adeeee",
-            "on-secondary-fixed": "#002020",
-            "surface-bright": "#413735",
-            "tertiary-fixed": "#d8e2ff",
-            "on-error": "#690005",
-            "surface-tint": "#ffb4a8",
-            "primary-fixed-dim": "#ffb4a8",
-            "on-primary": "#5a1a13",
-            "on-error-container": "#ffdad6",
-            "on-background": "#efdfdc",
-            "on-secondary": "#003737",
-            "background": "#191210",
-            "outline": "#a28c88",
-            "error": "#ffb4ab",
-            "outline-variant": "#544340",
-            "surface-container-lowest": "#140c0b",
-            "terracotta": "#E07A5F",
-            "moss": "#81B29A",
-            "teal": "#3D5A80",
-            "indigo-brand": "#3F37C9"
-          },
-          "borderRadius": {
-            "DEFAULT": "0.25rem",
-            "lg": "0.5rem",
-            "xl": "0.75rem",
-            "2xl": "20px",
-            "full": "9999px"
-          },
-          "spacing": {
-            "container-padding": "24px",
-            "stack-lg": "32px",
-            "unit": "4px",
-            "margin-mobile": "16px",
-            "gutter": "16px",
-            "margin-desktop": "32px",
-            "stack-md": "16px",
-            "stack-sm": "8px"
-          },
-          "fontFamily": {
-            "label-sm": ["JetBrains Mono"],
-            "label-md": ["JetBrains Mono"],
-            "headline-md": ["'Source Serif 4'"],
-            "headline-lg": ["'Source Serif 4'"],
-            "body-md": ["Hanken Grotesk"],
-            "body-lg": ["Hanken Grotesk"]
-          }
-        }
-      }
-    }
-  </script>
-<style>
-        .view-content { display: none; }
-        .view-content.active { display: block; }
-        .nav-link { cursor: pointer; }
-        .nav-link.active { color: var(--color-primary, #ffb4a8); border-bottom-width: 2px; border-color: var(--color-primary, #ffb4a8); padding-bottom: 0.25rem; }
-    </style><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Playfair+Display:wght@600;700&amp;display=swap" rel="stylesheet"/><style>
-        /* Premium Core Override */
-        :root {
-            --bg-shell: #141414;
-            --bg-card: #1E1E1E;
-            --border-card: #2A2A2A;
-            --map-cream: #EDE8DC;
-        }
-
-        body, html, main {
-            background-color: var(--bg-shell) !important;
-            font-family: 'Inter', sans-serif !important;
-            color: #efdfdc !important;
-        }
-
-        /* Enforce Serif for Headers */
-        h1, h2, h3, h4, h5, h6, 
-        .font-headline-lg, .font-headline-md, .font-display-lg,
-        th, .serif-override {
-            font-family: 'Playfair Display', serif !important;
-            letter-spacing: 0.02em;
-        }
-
-        /* Glassmorphism Header */
-        header {
-            background: rgba(20, 20, 20, 0.75) !important;
-            backdrop-filter: blur(16px) !important;
-            -webkit-backdrop-filter: blur(16px) !important;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
-            position: sticky;
-            top: 0;
-            z-index: 100;
-        }
-
-        /* Flat Cards with strict 20px radius */
-        /* Target all cards and sections */
-        section, aside > div, .bg-\[\#1E1E1E\], .bg-surface-container, .bg-surface, .bg-surface-dim {
-            background-color: var(--bg-card) !important;
-            border-radius: 20px !important;
-            box-shadow: none !important;
-            border: 1px solid var(--border-card) !important;
-            transition: border-color 0.2s ease, transform 0.2s ease;
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UrbanOS Admin | Priority</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0A0A0A; color: #a1a1aa; }
+        h1, h2, h3, h4, .serif { font-family: 'Playfair Display', serif; color: #ffffff; letter-spacing: 0.02em; }
+        
+        .card {
+            background-color: #161616;
+            border: 1px solid #262626;
+            border-radius: 16px;
         }
         
-        /* Specific override for the map card to ensure it stays cream */
-        .bg-\[\#EDE8DC\] {
-            background-color: var(--map-cream) !important;
-            border: none !important;
-        }
-
-        /* Micro-animations */
-        tr {
-            transition: background-color 0.15s ease-in-out;
-        }
-        tr:hover {
-            background-color: #252525 !important;
-        }
-
-        button:hover, .cursor-pointer:hover {
-            opacity: 0.85;
-            transform: translateY(-1px);
+        /* Custom map styling */
+        .map-bg { background-color: #EDE8DC; }
+        .map-pin {
+            width: 28px; height: 28px; background: #111; color: white;
+            border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            position: absolute; border: 2px solid white;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
         }
         
-        /* Fix Table borders */
-        table {
-            border-collapse: collapse;
+        /* Custom segmented progress bar */
+        .segmented-bar {
+            display: flex; gap: 2px; height: 12px; width: 100%;
         }
-        th, td {
-            border-bottom: 1px solid var(--border-card) !important;
+        .segment {
+            flex: 1; background: #333; border-radius: 1px;
         }
-    </style></head>
-<body class="bg-background text-on-background font-body-md overflow-x-hidden selection:bg-primary-container selection:text-on-primary-container">
-<!-- TopNavBar -->
-<header class="flex justify-between items-center w-full px-margin-desktop h-16 bg-surface dark:bg-surface border-b border-outline-variant dark:border-outline-variant fixed top-0 z-50">
-<div class="flex items-center gap-8">
-<div class="flex items-center gap-2">
-<div class="w-8 h-8 bg-primary rounded flex items-center justify-center">
-<span class="material-symbols-outlined text-on-primary" style="font-variation-settings: 'FILL' 1;">location_city</span>
-</div>
-<span class="font-headline-md text-headline-md font-bold text-on-surface dark:text-on-surface">UrbanOS</span>
-</div>
-<nav class="hidden md:flex gap-6 items-center h-16">
-<a class="font-body-md text-body-md transition-colors cursor-pointer active:opacity-80 nav-link text-on-surface-variant dark:text-on-surface-variant hover:text-primary dark:hover:text-primary" href="javascript:void(0)" onclick="switchView('analysis')">Analysis</a>
-<a class="font-body-md text-body-md transition-colors cursor-pointer active:opacity-80 nav-link active" href="javascript:void(0)" onclick="switchView('priority')">Priority</a>
-<a class="font-body-md text-body-md transition-colors cursor-pointer active:opacity-80 nav-link text-on-surface-variant dark:text-on-surface-variant hover:text-primary dark:hover:text-primary" href="javascript:void(0)" onclick="switchView('survey')">Survey</a>
-<a class="font-body-md text-body-md transition-colors cursor-pointer active:opacity-80 nav-link text-on-surface-variant dark:text-on-surface-variant hover:text-primary dark:hover:text-primary" href="javascript:void(0)" onclick="switchView('coordination')">Coordination</a>
-</nav>
-</div>
-<div class="flex items-center gap-4">
-<div class="relative group">
-<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant">search</span>
-<input class="bg-surface-container border-none rounded-full pl-10 pr-4 py-1.5 text-sm focus:ring-1 focus:ring-primary w-48 transition-all group-hover:w-64" placeholder="Search..." type="text"/>
-</div>
-<button class="p-2 rounded-full hover:bg-surface-container-high transition-colors relative">
-<span class="material-symbols-outlined text-on-surface">notifications</span>
-<span class="absolute top-2 right-2 w-2 h-2 bg-primary rounded-full"></span>
-</button>
-<div class="flex items-center gap-3 pl-4 border-l border-outline-variant">
-<div class="text-right hidden sm:block">
-<p class="font-label-md text-label-md text-on-surface">Admin Profile</p>
-<p class="text-[10px] uppercase tracking-wider text-primary">Superuser</p>
-</div>
-<div class="w-10 h-10 rounded-full bg-surface-container-highest border border-outline-variant overflow-hidden">
-<img class="w-full h-full object-cover" data-alt="Close-up portrait of a professional urban planner in a modern office, cinematic lighting, sharp focus, professional headshot style, muted dark background with subtle blue accents, high resolution photography." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAiuG1tWSvMKhKV_Rzpc6RvZwNTtWYJhJWCsYzs3S36xj36SyvN1IBTl2mWRVBOXXVzd3pIWYtryvi9Mz94TecVmP3-j7w1aJ6f-v5alFLQo-X8JF0vh_6-st6-CqYuVnk5diywZ7tmzWIJ5QENtoXUqXAxWcLSUjmvyZ-xI7csfF476JHPWaT8hBzG8y0TIR709iCDDvTGt7xQkI4GLzAEnz9B6E9BvgbOiYaa_B2pTMXoewP-OBpEd1ox43J_qvlH2fQlSTtRYPng"/>
-</div>
-</div>
-</div>
-</header>
-<main class="pt-24 pb-12 px-margin-desktop min-h-screen"><div class="view-content active" id="view-priority">
-<div class="grid grid-cols-1 md:grid-cols-[280px_1fr] gap-stack-lg max-w-[1600px] mx-auto">
-<!-- LEFT COLUMN -->
-<aside class="flex flex-col gap-stack-md">
-<!-- Today's Grievance Load -->
-<section class="bg-[#1E1E1E] rounded-2xl p-stack-md border border-[#2A2A2A]">
-<h3 class="font-headline-md text-label-md text-on-surface-variant mb-4 uppercase tracking-widest">Today's Grievance Load</h3>
-<div class="flex flex-col items-center mb-6">
-<div class="relative w-32 h-32 flex items-center justify-center">
-<svg class="w-full h-full transform -rotate-90">
-<circle class="text-surface-container-highest" cx="64" cy="64" fill="transparent" r="58" stroke="currentColor" stroke-width="8"></circle>
-<circle class="text-primary" cx="64" cy="64" fill="transparent" r="58" stroke="currentColor" stroke-dasharray="364.4" stroke-dashoffset="100" stroke-width="8"></circle>
-</svg>
-<div class="absolute inset-0 flex flex-col items-center justify-center">
-<span class="font-headline-lg text-headline-lg text-on-surface">72%</span>
-<span class="text-[10px] text-on-surface-variant uppercase">Triaged</span>
-</div>
-</div>
-</div>
-<div class="grid grid-cols-2 gap-2">
-<div class="bg-surface-container p-2 rounded-lg flex items-center gap-2">
-<span class="material-symbols-outlined text-terracotta text-lg">add_road</span>
-<span class="font-label-md text-on-surface">42</span>
-</div>
-<div class="bg-surface-container p-2 rounded-lg flex items-center gap-2">
-<span class="material-symbols-outlined text-teal text-lg">water_drop</span>
-<span class="font-label-md text-on-surface">28</span>
-</div>
-<div class="bg-surface-container p-2 rounded-lg flex items-center gap-2">
-<span class="material-symbols-outlined text-indigo-brand text-lg">school</span>
-<span class="font-label-md text-on-surface">92</span>
-</div>
-<div class="bg-surface-container p-2 rounded-lg flex items-center gap-2">
-<span class="material-symbols-outlined text-moss text-lg">cleaning_services</span>
-<span class="font-label-md text-on-surface">19</span>
-</div>
-</div>
-</section>
-<!-- Reports by Category -->
-<section class="bg-[#1E1E1E] rounded-2xl p-stack-md border border-[#2A2A2A]">
-<h3 class="font-headline-md text-label-md text-on-surface-variant mb-4 uppercase tracking-widest">Reports by Category</h3>
-<div class="space-y-4">
-<div class="space-y-1">
-<div class="flex justify-between text-xs mb-1">
-<div class="flex items-center gap-2">
-<span class="material-symbols-outlined text-terracotta text-sm">add_road</span>
-<span class="text-on-surface">Roads</span>
-</div>
-<span class="text-on-surface-variant">42</span>
-</div>
-<div class="h-1 bg-surface-container rounded-full overflow-hidden">
-<div class="h-full bg-terracotta w-2/3"></div>
-</div>
-</div>
-<div class="space-y-1">
-<div class="flex justify-between text-xs mb-1">
-<div class="flex items-center gap-2">
-<span class="material-symbols-outlined text-teal text-sm">water_drop</span>
-<span class="text-on-surface">Water</span>
-</div>
-<span class="text-on-surface-variant">28</span>
-</div>
-<div class="h-1 bg-surface-container rounded-full overflow-hidden">
-<div class="h-full bg-teal w-1/2"></div>
-</div>
-</div>
-<div class="space-y-1">
-<div class="flex justify-between text-xs mb-1">
-<div class="flex items-center gap-2">
-<span class="material-symbols-outlined text-indigo-brand text-sm">school</span>
-<span class="text-on-surface">Schools</span>
-</div>
-<span class="text-on-surface-variant">92</span>
-</div>
-<div class="h-1 bg-surface-container rounded-full overflow-hidden">
-<div class="h-full bg-indigo-brand w-[85%]"></div>
-</div>
-</div>
-<div class="space-y-1">
-<div class="flex justify-between text-xs mb-1">
-<div class="flex items-center gap-2">
-<span class="material-symbols-outlined text-moss text-sm">cleaning_services</span>
-<span class="text-on-surface">Sanitation</span>
-</div>
-<span class="text-on-surface-variant">19</span>
-</div>
-<div class="h-1 bg-surface-container rounded-full overflow-hidden">
-<div class="h-full bg-moss w-[30%]"></div>
-</div>
-</div>
-</div>
-</section>
-<!-- Response Time -->
-<section class="bg-[#1E1E1E] rounded-2xl p-stack-md border border-[#2A2A2A]">
-<h3 class="font-headline-md text-label-md text-on-surface-variant mb-2 uppercase tracking-widest">Response Time</h3>
-<div class="flex items-end justify-between">
-<div>
-<span class="font-headline-lg text-[48px] leading-none text-on-surface">2.1d</span>
-<div class="flex items-center text-moss gap-1 mt-1">
-<span class="material-symbols-outlined text-sm">arrow_downward</span>
-<span class="text-xs font-label-md">12% from last week</span>
-</div>
-</div>
-<div class="w-24 h-12 flex items-end gap-1 pb-1">
-<div class="w-2 h-4 bg-surface-container-highest rounded-sm"></div>
-<div class="w-2 h-6 bg-surface-container-highest rounded-sm"></div>
-<div class="w-2 h-8 bg-primary rounded-sm"></div>
-<div class="w-2 h-10 bg-primary rounded-sm"></div>
-<div class="w-2 h-7 bg-primary rounded-sm"></div>
-<div class="w-2 h-9 bg-primary rounded-sm"></div>
-</div>
-</div>
-</section>
-</aside>
-<!-- RIGHT SIDE -->
-<div class="flex flex-col gap-stack-lg">
-<!-- MAP WIDGET -->
-<div class="relative h-[500px] w-full rounded-2xl overflow-hidden border border-[#2A2A2A]">
-<!-- Map Background -->
-<div class="absolute inset-0 bg-[#EDE8DC]" data-location="Lucknow, India" style="">
-<div class="w-full h-full opacity-40 mix-blend-multiply bg-[url('https://www.transparenttextures.com/patterns/pinstriped-suit.png')]"></div>
-<!-- Mock Map Elements -->
-<svg class="absolute inset-0 w-full h-full">
-<path d="M0 100 L200 150 L400 120 L800 200 L1200 180" fill="none" opacity="0.3" stroke="#3D5A80" stroke-width="4"></path>
-<path d="M100 0 L150 500 M400 0 L450 500 M800 0 L750 500" fill="none" opacity="0.1" stroke="#544340" stroke-width="1"></path>
-</svg>
-</div>
-<!-- Pins -->
-<div class="absolute top-[180px] left-[320px] group cursor-pointer">
-<div class="w-8 h-8 bg-black rounded-full border-2 border-white flex items-center justify-center text-white font-bold text-xs shadow-lg transition-transform group-hover:scale-110">R</div>
-</div>
-<div class="absolute top-[280px] left-[520px] group cursor-pointer">
-<div class="w-8 h-8 bg-black rounded-full border-2 border-white flex items-center justify-center text-white font-bold text-xs shadow-lg transition-transform group-hover:scale-110">W</div>
-</div>
-<div class="absolute top-[120px] left-[650px] group cursor-pointer">
-<div class="w-8 h-8 bg-black rounded-full border-2 border-white flex items-center justify-center text-white font-bold text-xs shadow-lg transition-transform group-hover:scale-110 z-20">S</div>
-<!-- Detail Card for S pin -->
-<div class="absolute top-10 -left-20 w-56 bg-[#1E1E1E] rounded-xl p-3 border border-primary shadow-2xl z-30 pointer-events-none">
-<div class="flex justify-between items-start mb-2">
-<h4 class="font-headline-md text-sm text-on-surface">Rampur Govt School</h4>
-<span class="text-[10px] bg-error-container text-on-error-container px-1.5 py-0.5 rounded uppercase font-bold">Critical</span>
-</div>
-<div class="grid grid-cols-2 gap-2 text-[11px] text-on-surface-variant">
-<div>
-<p class="uppercase opacity-60">Location</p>
-<p class="text-on-surface font-medium">Ward 4</p>
-</div>
-<div>
-<p class="uppercase opacity-60">Reports</p>
-<p class="text-on-surface font-medium">42 total</p>
-</div>
-<div class="col-span-2 pt-2 border-t border-outline-variant flex justify-between items-center">
-<p class="uppercase opacity-60">Priority Score</p>
-<p class="text-error font-bold text-lg">92</p>
-</div>
-</div>
-</div>
-</div>
-<div class="absolute top-[400px] left-[200px] group cursor-pointer">
-<div class="w-8 h-8 bg-black rounded-full border-2 border-white flex items-center justify-center text-white font-bold text-xs shadow-lg transition-transform group-hover:scale-110">S</div>
-</div>
-<!-- Floating Controls -->
-<div class="absolute top-6 left-6 flex items-center gap-3 w-full max-w-md pr-12">
-<div class="flex-1 bg-white rounded-lg shadow-xl flex items-center px-4 py-2 gap-3">
-<span class="material-symbols-outlined text-outline">search</span>
-<input class="border-none bg-transparent w-full text-sm text-background focus:ring-0" placeholder="Search ward or facility..." type="text"/>
-</div>
-<div class="bg-white rounded-lg shadow-xl flex items-center px-4 py-2 gap-2 cursor-pointer border-l">
-<span class="text-sm font-medium text-background">Sort: Score</span>
-<span class="material-symbols-outlined text-background text-sm">expand_more</span>
-</div>
-</div>
-<!-- Map Legend -->
-<div class="absolute bottom-6 left-6 bg-background/80 backdrop-blur-md rounded-lg p-3 border border-outline-variant flex gap-4">
-<div class="flex items-center gap-2 text-[10px] text-on-surface font-label-md">
-<div class="w-2 h-2 rounded-full bg-terracotta"></div> ROAD
-            </div>
-<div class="flex items-center gap-2 text-[10px] text-on-surface font-label-md">
-<div class="w-2 h-2 rounded-full bg-teal"></div> WATER
-            </div>
-<div class="flex items-center gap-2 text-[10px] text-on-surface font-label-md">
-<div class="w-2 h-2 rounded-full bg-indigo-brand"></div> SCHOOL
-            </div>
-<div class="flex items-center gap-2 text-[10px] text-on-surface font-label-md">
-<div class="w-2 h-2 rounded-full bg-moss"></div> SANITATION
-            </div>
-</div>
-</div>
-<!-- PRIORITY QUEUE TABLE -->
-<section class="bg-[#1E1E1E] rounded-2xl p-stack-lg border border-[#2A2A2A]">
-<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-<h2 class="font-headline-lg text-headline-lg text-on-surface">Priority queue</h2>
-<div class="flex bg-surface-container p-1 rounded-lg gap-1">
-<button class="px-4 py-1.5 rounded-md text-xs font-label-md transition-all bg-primary text-on-primary">All</button>
-<button class="px-4 py-1.5 rounded-md text-xs font-label-md transition-all text-on-surface-variant hover:bg-surface-container-high">Critical</button>
-<button class="px-4 py-1.5 rounded-md text-xs font-label-md transition-all text-on-surface-variant hover:bg-surface-container-high">Assigned</button>
-<button class="px-4 py-1.5 rounded-md text-xs font-label-md transition-all text-on-surface-variant hover:bg-surface-container-high">Resolved</button>
-</div>
-</div>
-<div class="overflow-x-auto custom-scrollbar">
-<table class="w-full text-left border-collapse">
-<thead>
-<tr class="border-b border-outline-variant">
-<th class="py-4 px-2 font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">ID</th>
-<th class="py-4 px-2 font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Location</th>
-<th class="py-4 px-2 font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Category</th>
-<th class="py-4 px-2 font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Reports</th>
-<th class="py-4 px-2 font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider text-center">Score</th>
-<th class="py-4 px-2 font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Status</th>
-<th class="py-4 px-2"></th>
-</tr>
-</thead>
-<tbody class="text-sm">
-<!-- ID 001 -->
-<tr class="group hover:bg-surface-container-low transition-colors border-b border-outline-variant/30">
-<td class="py-4 px-2 font-label-md text-on-surface-variant">#001</td>
-<td class="py-4 px-2">
-<p class="font-semibold text-on-surface">Rampur govt school</p>
-<p class="text-[10px] text-on-surface-variant uppercase font-label-sm tracking-tighter">Ward 4</p>
-</td>
-<td class="py-4 px-2">
-<div class="flex items-center gap-2">
-<span class="material-symbols-outlined text-indigo-brand text-lg">school</span>
-<span class="text-on-surface">School</span>
-</div>
-</td>
-<td class="py-4 px-2 text-on-surface">42</td>
-<td class="py-4 px-2 text-center">
-<span class="text-error font-bold text-lg">92</span>
-</td>
-<td class="py-4 px-2">
-<span class="bg-error-container/20 text-error border border-error/30 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide">Critical</span>
-</td>
-<td class="py-4 px-2 text-right">
-<button class="material-symbols-outlined text-on-surface-variant hover:text-on-surface transition-colors">more_vert</button>
-</td>
-</tr>
-<!-- ID 002 -->
-<tr class="group hover:bg-surface-container-low transition-colors border-b border-outline-variant/30">
-<td class="py-4 px-2 font-label-md text-on-surface-variant">#002</td>
-<td class="py-4 px-2">
-<p class="font-semibold text-on-surface">Gomti Nagar main road</p>
-<p class="text-[10px] text-on-surface-variant uppercase font-label-sm tracking-tighter">Ward 7</p>
-</td>
-<td class="py-4 px-2">
-<div class="flex items-center gap-2">
-<span class="material-symbols-outlined text-terracotta text-lg">add_road</span>
-<span class="text-on-surface">Road</span>
-</div>
-</td>
-<td class="py-4 px-2 text-on-surface">37</td>
-<td class="py-4 px-2 text-center">
-<span class="text-orange-400 font-bold text-lg">85</span>
-</td>
-<td class="py-4 px-2">
-<span class="bg-primary-container/20 text-primary border border-primary/30 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide">Assigned</span>
-</td>
-<td class="py-4 px-2 text-right">
-<button class="material-symbols-outlined text-on-surface-variant hover:text-on-surface transition-colors">more_vert</button>
-</td>
-</tr>
-<!-- ID 003 -->
-<tr class="group hover:bg-surface-container-low transition-colors border-b border-outline-variant/30">
-<td class="py-4 px-2 font-label-md text-on-surface-variant">#003</td>
-<td class="py-4 px-2">
-<p class="font-semibold text-on-surface">Alambagh water supply</p>
-<p class="text-[10px] text-on-surface-variant uppercase font-label-sm tracking-tighter">Ward 2</p>
-</td>
-<td class="py-4 px-2">
-<div class="flex items-center gap-2">
-<span class="material-symbols-outlined text-teal text-lg">water_drop</span>
-<span class="text-on-surface">Water</span>
-</div>
-</td>
-<td class="py-4 px-2 text-on-surface">28</td>
-<td class="py-4 px-2 text-center">
-<span class="text-primary font-bold text-lg">71</span>
-</td>
-<td class="py-4 px-2">
-<span class="bg-secondary-container/20 text-secondary border border-secondary/30 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide">In Progress</span>
-</td>
-<td class="py-4 px-2 text-right">
-<button class="material-symbols-outlined text-on-surface-variant hover:text-on-surface transition-colors">more_vert</button>
-</td>
-</tr>
-<!-- ID 004 -->
-<tr class="group hover:bg-surface-container-low transition-colors">
-<td class="py-4 px-2 font-label-md text-on-surface-variant">#004</td>
-<td class="py-4 px-2">
-<p class="font-semibold text-on-surface">Chowk market sanitation</p>
-<p class="text-[10px] text-on-surface-variant uppercase font-label-sm tracking-tighter">Ward 1</p>
-</td>
-<td class="py-4 px-2">
-<div class="flex items-center gap-2">
-<span class="material-symbols-outlined text-moss text-lg">cleaning_services</span>
-<span class="text-on-surface">Sanitation</span>
-</div>
-</td>
-<td class="py-4 px-2 text-on-surface">19</td>
-<td class="py-4 px-2 text-center">
-<span class="text-moss font-bold text-lg">54</span>
-</td>
-<td class="py-4 px-2">
-<span class="bg-moss/20 text-moss border border-moss/30 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide">Resolved</span>
-</td>
-<td class="py-4 px-2 text-right">
-<button class="material-symbols-outlined text-on-surface-variant hover:text-on-surface transition-colors">more_vert</button>
-</td>
-</tr>
-</tbody>
-</table>
-</div>
-</section>
-</div>
-</div>
-</div><div class="view-content" id="view-analysis">
-<!-- Grievance Volume Chart -->
-<section class="bg-surface-container-low border border-outline-variant rounded-card p-stack-md">
-<header class="flex justify-between items-center mb-stack-md">
-<h2 class="font-headline-md text-headline-md text-on-surface">Grievance Volume (30 Days)</h2>
-<span class="material-symbols-outlined text-secondary">analytics</span>
-</header>
-<div class="h-40 w-full relative flex items-end justify-between gap-1 mt-4">
-<!-- Simple SVG Sparkline visualization -->
-<svg class="absolute inset-0 w-full h-full preserve-3d" preserveaspectratio="none" viewbox="0 0 400 100">
-<path class="text-secondary" d="M0,80 Q40,60 80,75 T160,40 T240,60 T320,30 T400,50" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="3"></path>
-<path class="text-secondary opacity-10" d="M0,80 Q40,60 80,75 T160,40 T240,60 T320,30 T400,50 L400,100 L0,100 Z" fill="currentColor"></path>
-</svg>
-<!-- Labels -->
-<div class="absolute bottom-0 w-full flex justify-between px-1">
-<span class="font-label-sm text-label-sm text-on-surface-variant">1 May</span>
-<span class="font-label-sm text-label-sm text-on-surface-variant">30 May</span>
-</div>
-</div>
-<div class="mt-4 flex justify-between items-center">
-<div class="flex items-center gap-1">
-<div class="w-3 h-3 rounded-full bg-secondary"></div>
-<span class="font-label-md text-label-md text-on-surface-variant">Total Reports: 1,248</span>
-</div>
-<div class="px-2 py-0.5 bg-secondary-container/20 border border-secondary/30 rounded text-secondary font-label-sm text-label-sm">
-                    Trend: UP
-                </div>
-</div>
-</section>
-<!-- Resolution Rate Metric -->
-<section class="bg-surface-container-low border border-outline-variant rounded-card p-stack-md flex items-center justify-between">
-<div>
-<h2 class="font-headline-md text-headline-md text-on-surface">Resolution Rate</h2>
-<div class="flex items-baseline gap-2 mt-2">
-<span class="font-display-lg text-display-lg text-secondary">84%</span>
-<span class="font-label-md text-label-md text-secondary-fixed flex items-center">
-<span class="material-symbols-outlined text-[16px]">arrow_upward</span>
-                        5% vs last month
-                    </span>
-</div>
-</div>
-<div class="relative w-16 h-16">
-<svg class="w-full h-full rotate-[-90deg]" viewbox="0 0 36 36">
-<circle class="stroke-surface-variant" cx="18" cy="18" fill="none" r="16" stroke-width="3"></circle>
-<circle class="stroke-secondary" cx="18" cy="18" fill="none" r="16" stroke-dasharray="84, 100" stroke-linecap="round" stroke-width="3"></circle>
-</svg>
-</div>
-</section>
-<!-- Hotspots Progress Bars -->
-<section class="bg-surface-container-low border border-outline-variant rounded-card p-stack-md">
-<h2 class="font-headline-md text-headline-md text-on-surface mb-stack-md">Report Density Hotspots</h2>
-<div class="space-y-4">
-<div class="space-y-1">
-<div class="flex justify-between font-label-md text-label-md text-on-surface-variant">
-<span>Ward 4 (Central)</span>
-<span>420 Reports</span>
-</div>
-<div class="h-2 w-full bg-surface-variant rounded-full overflow-hidden">
-<div class="h-full bg-primary" style="width: 85%;"></div>
-</div>
-</div>
-<div class="space-y-1">
-<div class="flex justify-between font-label-md text-label-md text-on-surface-variant">
-<span>Ward 7 (West Bypass)</span>
-<span>310 Reports</span>
-</div>
-<div class="h-2 w-full bg-surface-variant rounded-full overflow-hidden">
-<div class="h-full bg-primary" style="width: 62%;"></div>
-</div>
-</div>
-<div class="space-y-1">
-<div class="flex justify-between font-label-md text-label-md text-on-surface-variant">
-<span>Ward 2 (Industrial)</span>
-<span>285 Reports</span>
-</div>
-<div class="h-2 w-full bg-surface-variant rounded-full overflow-hidden">
-<div class="h-full bg-primary" style="width: 58%;"></div>
-</div>
-</div>
-</div>
-</section>
-<!-- Heatmap Map Component -->
-<section class="bg-surface-container-low border border-outline-variant rounded-card overflow-hidden">
-<div class="p-stack-md border-b border-outline-variant flex justify-between items-center bg-surface-container-low/50 backdrop-blur-sm">
-<h2 class="font-headline-md text-headline-md text-on-surface">Report Heatmap</h2>
-<span class="font-label-md text-label-md text-on-surface-variant px-2 py-0.5 border border-outline-variant rounded">LIVE</span>
-</div>
-<div class="h-64 relative bg-[#EDE8DC] overflow-hidden">
-<!-- Simple Map representation with high-density blobs -->
-<div class="absolute inset-0 opacity-20 pointer-events-none">
-<svg height="100%" width="100%" xmlns="http://www.w3.org/2000/svg">
-<path d="M0 20 L50 20 L50 100 M100 0 L100 200 M150 0 L150 150 L300 150 M0 250 L400 250" fill="none" stroke="#141414" stroke-width="1"></path>
-</svg>
-</div>
-<!-- Heat Blobs -->
-<div class="heat-blob absolute top-1/4 left-1/3 w-20 h-20 bg-primary/40 rounded-full blur-xl"></div>
-<div class="heat-blob absolute top-1/2 left-1/4 w-16 h-16 bg-error/50 rounded-full blur-lg" style="animation-delay: 0.5s;"></div>
-<div class="heat-blob absolute bottom-1/4 right-1/4 w-24 h-24 bg-primary-container/40 rounded-full blur-2xl" style="animation-delay: 1s;"></div>
-<!-- Map UI -->
-<div class="absolute bottom-4 left-4 bg-white/80 backdrop-blur-md p-2 rounded border border-black/5 shadow-sm">
-<div class="flex flex-col gap-1">
-<div class="flex items-center gap-2">
-<div class="w-2 h-2 rounded-full bg-error"></div>
-<span class="text-[10px] font-bold text-black uppercase">Critical Cluster</span>
-</div>
-<div class="flex items-center gap-2">
-<div class="w-2 h-2 rounded-full bg-primary-container"></div>
-<span class="text-[10px] font-bold text-black uppercase">Moderate Activity</span>
-</div>
-</div>
-</div>
-</div>
-<div class="p-3 bg-surface-container-low text-center">
-<button class="font-label-md text-label-md text-primary hover:underline">View Detailed Map Assets</button>
-</div>
-</section>
-<!-- Recent Resolutions Feed -->
-<section class="bg-surface-container-low border border-outline-variant rounded-card p-stack-md">
-<header class="flex justify-between items-center mb-stack-md">
-<h2 class="font-headline-md text-headline-md text-on-surface">Recent Resolutions</h2>
-<span class="material-symbols-outlined text-secondary-fixed-dim">history</span>
-</header>
-<div class="space-y-4">
-<!-- Row 1 -->
-<div class="flex items-center gap-4 py-2 border-b border-outline-variant/30 last:border-0">
-<div class="w-10 h-10 rounded-lg bg-surface-variant flex items-center justify-center">
-<span class="material-symbols-outlined text-secondary">water_drop</span>
-</div>
-<div class="flex-1">
-<p class="font-body-md text-body-md text-on-surface font-semibold">Rampur Water Leak</p>
-<p class="font-label-sm text-label-sm text-on-surface-variant">2h ago • Sector 4B</p>
-</div>
-<div class="px-2 py-1 bg-secondary/10 border border-secondary/20 rounded-full">
-<span class="font-label-sm text-label-sm text-secondary">Resolved</span>
-</div>
-</div>
-<!-- Row 2 -->
-<div class="flex items-center gap-4 py-2 border-b border-outline-variant/30 last:border-0">
-<div class="w-10 h-10 rounded-lg bg-surface-variant flex items-center justify-center">
-<span class="material-symbols-outlined text-primary">edit_road</span>
-</div>
-<div class="flex-1">
-<p class="font-body-md text-body-md text-on-surface font-semibold">Gauri Main Pothole</p>
-<p class="font-label-sm text-label-sm text-on-surface-variant">5h ago • Market Road</p>
-</div>
-<div class="px-2 py-1 bg-secondary/10 border border-secondary/20 rounded-full">
-<span class="font-label-sm text-label-sm text-secondary">Resolved</span>
-</div>
-</div>
-<!-- Row 3 -->
-<div class="flex items-center gap-4 py-2 border-b border-outline-variant/30 last:border-0">
-<div class="w-10 h-10 rounded-lg bg-surface-variant flex items-center justify-center">
-<span class="material-symbols-outlined text-tertiary">lightbulb</span>
-</div>
-<div class="flex-1">
-<p class="font-body-md text-body-md text-on-surface font-semibold">Street Light Outage</p>
-<p class="font-label-sm text-label-sm text-on-surface-variant">Yesterday • West Ward</p>
-</div>
-<div class="px-2 py-1 bg-secondary/10 border border-secondary/20 rounded-full">
-<span class="font-label-sm text-label-sm text-secondary">Resolved</span>
-</div>
-</div>
-</div>
-<button class="w-full mt-stack-md py-3 border border-outline rounded-lg font-label-md text-label-md text-on-surface-variant hover:bg-surface-variant transition-all">
-                Export Analysis Report (PDF)
+        .segment.active { background: #d4d4d8; }
+        
+        /* Chart line sparkline */
+        .sparkline {
+            width: 100%; height: 40px;
+            background: repeating-linear-gradient(90deg, #d4d4d8, #d4d4d8 2px, transparent 2px, transparent 4px);
+            opacity: 0.8;
+            mask-image: linear-gradient(to top, transparent, black);
+            -webkit-mask-image: linear-gradient(to top, transparent, black);
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+    </style>
+</head>
+<body class="h-screen flex flex-col overflow-hidden">
+    <!-- Header -->
+    <header class="flex items-center justify-between px-8 py-5 border-b border-[#262626]">
+        <div class="flex items-center gap-3">
+            <svg class="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2L2 22h20L12 2zm0 4.5l6.5 13h-13L12 6.5z"/></svg>
+            <span class="serif text-xl text-white">UrbanOS.</span>
+        </div>
+        <nav class="flex gap-8">
+            <a href="#" class="text-sm text-zinc-500 hover:text-white transition">Analysis</a>
+            <a href="#" class="text-sm text-white font-medium">Priority</a>
+            <a href="#" class="text-sm text-zinc-500 hover:text-white transition">Survey</a>
+            <a href="#" class="text-sm text-zinc-500 hover:text-white transition">Coordination</a>
+        </nav>
+        <div class="flex items-center gap-5">
+            <button class="w-9 h-9 rounded-full border border-zinc-700 flex items-center justify-center text-zinc-400 hover:text-white hover:border-zinc-500 transition">
+                <span class="material-symbols-outlined" style="font-size: 18px;">search</span>
             </button>
-</section>
-</div><div class="view-content" id="view-survey">
-<!-- Section: New Survey Section -->
-<section class="flex flex-col gap-stack-md" id="new-survey">
-<div class="flex flex-col gap-1">
-<h2 class="text-headline-lg font-headline-lg text-on-surface">New Citizen Survey</h2>
-<p class="text-body-md font-body-md text-on-surface-variant">Design and deploy institutional outreach initiatives.</p>
-</div>
-<!-- Form Container -->
-<div class="bg-surface-container-low border border-outline-variant rounded-2xl p-6 flex flex-col gap-6">
-<div class="grid grid-cols-1 md:grid-cols-2 gap-stack-md">
-<div class="flex flex-col gap-2">
-<label class="text-label-sm font-label-sm text-outline uppercase tracking-wider">Survey Title</label>
-<input class="bg-surface-container-lowest border border-outline-variant text-on-surface rounded-lg px-4 py-3 focus:ring-1 focus:ring-secondary outline-none transition-all placeholder:text-surface-variant" placeholder="e.g. 2024 Transportation Equity Study" type="text"/>
-</div>
-<div class="flex flex-col gap-2 md:grid-cols-1">
-<label class="text-label-sm font-label-sm text-outline uppercase tracking-wider">Target Ward</label>
-<select class="bg-surface-container-lowest border border-outline-variant text-on-surface rounded-lg px-4 py-3 focus:ring-1 focus:ring-secondary outline-none appearance-none cursor-pointer">
-<option>All Districts</option>
-<option>Ward 1: Central Hub</option>
-<option>Ward 2: Industrial North</option>
-<option>Ward 3: Residential East</option>
-<option>Ward 4: Academic District</option>
-</select>
-</div>
-<div class="md:col-span-2 flex flex-col gap-2">
-<label class="text-label-sm font-label-sm text-outline uppercase tracking-wider">Category</label>
-<select class="bg-surface-container-lowest border border-outline-variant text-on-surface rounded-lg px-4 py-3 focus:ring-1 focus:ring-secondary outline-none appearance-none cursor-pointer">
-<option>Infrastructure &amp; Maintenance</option>
-<option>Public Safety</option>
-<option>Education &amp; Parks</option>
-<option>Sustainability</option>
-</select>
-</div>
-</div>
-<!-- Question Builder -->
-<div class="flex flex-col gap-4 mt-4">
-<h3 class="text-label-md font-label-md text-on-surface uppercase border-b border-outline-variant pb-2">Questions</h3>
-<div class="space-y-3">
-<!-- Question Card -->
-<div class="bg-surface-container border border-outline-variant rounded-xl p-4 flex justify-between items-center group hover:border-outline transition-colors">
-<div class="flex items-center gap-4">
-<span class="material-symbols-outlined text-outline text-sm">drag_indicator</span>
-<div>
-<p class="text-body-md font-body-md text-on-surface">Rate the road quality 1-5</p>
-<span class="text-label-sm font-label-sm text-outline">Scale / Quantitative</span>
-</div>
-</div>
-<button class="text-outline hover:text-error transition-colors">
-<span class="material-symbols-outlined">delete</span>
-</button>
-</div>
-<!-- Question Card -->
-<div class="bg-surface-container border border-outline-variant rounded-xl p-4 flex justify-between items-center group hover:border-outline transition-colors">
-<div class="flex items-center gap-4">
-<span class="material-symbols-outlined text-outline text-sm">drag_indicator</span>
-<div>
-<p class="text-body-md font-body-md text-on-surface">Preferred frequency of neighborhood patrols</p>
-<span class="text-label-sm font-label-sm text-outline">Multiple Choice</span>
-</div>
-</div>
-<button class="text-outline hover:text-error transition-colors">
-<span class="material-symbols-outlined">delete</span>
-</button>
-</div>
-</div>
-<button class="mt-2 flex items-center justify-center gap-2 border border-tertiary-container text-tertiary px-4 py-3 rounded-xl font-label-md text-label-md hover:bg-surface-container-highest transition-all active:scale-95">
-<span class="material-symbols-outlined text-[20px]">add</span>
-                        Add Question
-                    </button>
-</div>
-<div class="pt-4 border-t border-outline-variant mt-2">
-<button class="w-full bg-brand-terracotta text-white py-4 rounded-xl font-headline-md text-headline-md shadow-lg shadow-brand-terracotta/10 hover:opacity-90 active:scale-[0.98] transition-all">
-                        Deploy Survey
-                    </button>
-</div>
-</div>
-</section>
-<!-- Section: Survey Management Section -->
-<section class="flex flex-col gap-stack-md mt-stack-lg" id="manage-surveys">
-<div class="flex justify-between items-end">
-<h2 class="text-headline-lg font-headline-lg text-on-surface">Active &amp; Past Surveys</h2>
-<a class="text-label-md font-label-md text-tertiary hover:underline mb-1" href="#">View Archive</a>
-</div>
-<div class="grid grid-cols-1 gap-4">
-<!-- Survey Management Card 1 -->
-<div class="bg-surface-container-low border border-outline-variant rounded-2xl p-5 hover:border-outline transition-all cursor-pointer">
-<div class="flex justify-between items-start mb-4">
-<div class="flex flex-col gap-1">
-<div class="flex items-center gap-2 mb-1">
-<span class="bg-secondary-container text-on-secondary-container px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-widest">Active</span>
-<span class="text-label-sm font-label-sm text-outline">Expires in 12 days</span>
-</div>
-<h4 class="text-body-lg font-body-lg font-semibold text-on-surface">Ward 4 School Feedback</h4>
-</div>
-<span class="material-symbols-outlined text-outline">more_vert</span>
-</div>
-<div class="grid grid-cols-2 md:grid-cols-4 gap-4 py-4 border-t border-outline-variant/30">
-<div>
-<p class="text-label-sm font-label-sm text-outline uppercase mb-1">Responses</p>
-<p class="text-headline-md font-headline-md text-on-surface">450</p>
-</div>
-<div>
-<p class="text-label-sm font-label-sm text-outline uppercase mb-1">Completion</p>
-<p class="text-headline-md font-headline-md text-on-surface">68%</p>
-</div>
-<div class="col-span-2 flex flex-col justify-end gap-2">
-<p class="text-label-sm font-label-sm text-outline uppercase">Response Distribution</p>
-<div class="flex items-end gap-1 h-12 w-full pt-2">
-<div class="bg-secondary/40 w-full rounded-t-sm" style="height: 40%"></div>
-<div class="bg-secondary/60 w-full rounded-t-sm" style="height: 60%"></div>
-<div class="bg-secondary w-full rounded-t-sm" style="height: 90%"></div>
-<div class="bg-secondary/70 w-full rounded-t-sm" style="height: 50%"></div>
-<div class="bg-secondary/30 w-full rounded-t-sm" style="height: 20%"></div>
-<div class="bg-secondary/50 w-full rounded-t-sm" style="height: 45%"></div>
-<div class="bg-secondary/80 w-full rounded-t-sm" style="height: 75%"></div>
-</div>
-</div>
-</div>
-</div>
-<!-- Survey Management Card 2 -->
-<div class="bg-surface-container-low border border-outline-variant rounded-2xl p-5 hover:border-outline transition-all cursor-pointer opacity-80">
-<div class="flex justify-between items-start mb-4">
-<div class="flex flex-col gap-1">
-<div class="flex items-center gap-2 mb-1">
-<span class="bg-surface-container-highest text-outline px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-widest">Completed</span>
-<span class="text-label-sm font-label-sm text-outline">Ended Oct 14, 2023</span>
-</div>
-<h4 class="text-body-lg font-body-lg font-semibold text-on-surface">Central Hub Paving Quality</h4>
-</div>
-<span class="material-symbols-outlined text-outline">more_vert</span>
-</div>
-<div class="grid grid-cols-2 md:grid-cols-4 gap-4 py-4 border-t border-outline-variant/30">
-<div>
-<p class="text-label-sm font-label-sm text-outline uppercase mb-1">Responses</p>
-<p class="text-headline-md font-headline-md text-on-surface">1,208</p>
-</div>
-<div>
-<p class="text-label-sm font-label-sm text-outline uppercase mb-1">Completion</p>
-<p class="text-headline-md font-headline-md text-on-surface">94%</p>
-</div>
-<div class="col-span-2 flex flex-col justify-end gap-2">
-<p class="text-label-sm font-label-sm text-outline uppercase">Response Distribution</p>
-<div class="flex items-end gap-1 h-12 w-full pt-2">
-<div class="bg-outline/20 w-full rounded-t-sm" style="height: 30%"></div>
-<div class="bg-outline/20 w-full rounded-t-sm" style="height: 20%"></div>
-<div class="bg-outline/20 w-full rounded-t-sm" style="height: 10%"></div>
-<div class="bg-outline/20 w-full rounded-t-sm" style="height: 50%"></div>
-<div class="bg-outline/20 w-full rounded-t-sm" style="height: 80%"></div>
-<div class="bg-outline/20 w-full rounded-t-sm" style="height: 95%"></div>
-<div class="bg-outline/20 w-full rounded-t-sm" style="height: 60%"></div>
-</div>
-</div>
-</div>
-</div>
-</div>
-</section>
-</div><div class="view-content" id="view-coordination">
-<div class="px-6 py-4 flex items-end justify-between">
-<div>
-<h2 class="text-headline-lg-mobile md:text-headline-lg font-headline-lg text-on-background">Service Coordination</h2>
-<p class="text-body-md text-on-surface-variant">Active field operations and inter-departmental tasks.</p>
-</div>
-<div class="hidden md:flex gap-2">
-<button class="bg-primary text-on-primary px-4 py-2 rounded-lg font-label-md text-label-md flex items-center gap-2">
-<span class="material-symbols-outlined text-[20px]" data-icon="add">add</span>
-                    New Task
-                </button>
-</div>
-</div>
-<!-- Kanban Scroll Area -->
-<div class="kanban-container flex flex-row overflow-x-auto gap-4 px-6 pb-24 lg:pb-8 flex-grow">
-<!-- Column: Open -->
-<section class="kanban-column flex flex-col gap-4">
-<div class="flex items-center justify-between py-2 border-b border-outline-variant/30">
-<h3 class="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest flex items-center gap-2">
-                        Open
-                        <span class="bg-surface-container-highest text-on-surface px-2 py-0.5 rounded-full text-[10px]">1</span>
-</h3>
-<span class="material-symbols-outlined text-on-surface-variant text-sm" data-icon="more_vert">more_vert</span>
-</div>
-<div class="flex flex-col gap-3">
-<!-- Task Card 1 -->
-<div class="bg-[#1E1E1E] border border-[#2A2A2A] rounded-card-xl p-4 flex flex-col gap-3 hover:border-primary/50 transition-all duration-300">
-<div class="flex justify-between items-start">
-<div class="w-10 h-10 rounded-xl bg-surface-container-high flex items-center justify-center text-primary">
-<span class="material-symbols-outlined" data-icon="cleaning_services">cleaning_services</span>
-</div>
-<span class="chip-sanitation text-label-sm px-2 py-0.5 rounded uppercase font-label-md">Sanitation</span>
-</div>
-<div>
-<h4 class="text-body-lg font-bold text-on-surface leading-tight">Chowk market sanitation</h4>
-<p class="text-label-sm text-on-surface-variant mt-1">Dept of Sanitation</p>
-</div>
-<div class="flex items-center justify-between mt-2 pt-3 border-t border-outline-variant/20">
-<span class="text-label-sm text-outline flex items-center gap-1">
-<span class="material-symbols-outlined text-xs" data-icon="schedule">schedule</span>
-                                2h ago
-                            </span>
-<div class="flex -space-x-2">
-<div class="w-6 h-6 rounded-full border-2 border-[#1E1E1E] bg-surface-container flex items-center justify-center text-[10px] text-on-surface">
-                                    +
-                                </div>
-</div>
-</div>
-</div>
-</div>
-</section>
-<!-- Column: Assigned -->
-<section class="kanban-column flex flex-col gap-4">
-<div class="flex items-center justify-between py-2 border-b border-outline-variant/30">
-<h3 class="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest flex items-center gap-2">
-                        Assigned
-                        <span class="bg-surface-container-highest text-on-surface px-2 py-0.5 rounded-full text-[10px]">1</span>
-</h3>
-<span class="material-symbols-outlined text-on-surface-variant text-sm" data-icon="more_vert">more_vert</span>
-</div>
-<div class="flex flex-col gap-3">
-<!-- Task Card 2 -->
-<div class="bg-[#1E1E1E] border border-[#2A2A2A] rounded-card-xl p-4 flex flex-col gap-3">
-<div class="flex justify-between items-start">
-<div class="w-10 h-10 rounded-xl bg-surface-container-high flex items-center justify-center text-secondary">
-<span class="material-symbols-outlined" data-icon="road">road</span>
-</div>
-<span class="chip-road text-label-sm px-2 py-0.5 rounded uppercase font-label-md">Road</span>
-</div>
-<div>
-<h4 class="text-body-lg font-bold text-on-surface leading-tight">Gomti Nagar main road</h4>
-<p class="text-label-sm text-on-surface-variant mt-1">Dept of Public Works</p>
-</div>
-<div class="flex items-center justify-between mt-2 pt-3 border-t border-outline-variant/20">
-<div class="flex items-center gap-2">
-<div class="w-8 h-8 rounded-full overflow-hidden border border-outline-variant">
-<img class="w-full h-full object-cover" data-alt="Close-up portrait of Officer A, a focused municipal worker in a reflective high-visibility vest. The setting is a sharp, modern office environment with industrial lighting and a background of digital maps. High contrast, professional urban photography style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAL-altv_7C4_PK_7_Efv4DnXcV42MR8myLuFKFQaugr1kt3-2gLV2VVugX3y1qBpBxekyAtiFfwMS7lldu-3TrrcOVUqriX4sAIGN5zqfSZY1GiZUyj3SvXIqlkYEvrp-HX434tXFugd_GhU5AmO3mDdu8GVW-8KclosPJJ92VZK-0VOv2HgVN3XbbROOMPwbf2uY6aU8FxqCuJJV_A2T_zllnFkR8Za4odOU-IhI5nR28UwvONVetIABzQIjtlnX3Ng36VnqOd7IY"/>
-</div>
-<span class="text-label-sm text-on-surface">Officer A</span>
-</div>
-<span class="text-label-sm text-outline">Priority 1</span>
-</div>
-</div>
-</div>
-</section>
-<!-- Column: In Progress -->
-<section class="kanban-column flex flex-col gap-4">
-<div class="flex items-center justify-between py-2 border-b border-outline-variant/30">
-<h3 class="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest flex items-center gap-2">
-                        In Progress
-                        <span class="bg-surface-container-highest text-on-surface px-2 py-0.5 rounded-full text-[10px]">1</span>
-</h3>
-<span class="material-symbols-outlined text-on-surface-variant text-sm" data-icon="more_vert">more_vert</span>
-</div>
-<div class="flex flex-col gap-3">
-<!-- Task Card 3 -->
-<div class="bg-[#1E1E1E] border border-primary/40 rounded-card-xl p-4 flex flex-col gap-3 relative overflow-hidden shadow-lg shadow-primary/5">
-<div class="absolute top-0 right-0 p-1">
-<div class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></div>
-</div>
-<div class="flex justify-between items-start">
-<div class="w-10 h-10 rounded-xl bg-surface-container-high flex items-center justify-center text-tertiary">
-<span class="material-symbols-outlined" data-icon="water_drop">water_drop</span>
-</div>
-<span class="chip-water text-label-sm px-2 py-0.5 rounded uppercase font-label-md">Water</span>
-</div>
-<div>
-<h4 class="text-body-lg font-bold text-on-surface leading-tight">Alambagh water supply</h4>
-<p class="text-label-sm text-on-surface-variant mt-1">Dept of Water Resources</p>
-</div>
-<div class="flex items-center justify-between mt-2 pt-3 border-t border-outline-variant/20">
-<div class="flex items-center gap-2">
-<div class="w-8 h-8 rounded-full overflow-hidden border border-outline-variant">
-<img class="w-full h-full object-cover" data-alt="Portrait of Officer B, an experienced field technician with a rugged appearance, wearing professional blue coveralls. The background shows a modern infrastructure schematic on a glowing screen with teal and indigo tones. Strong lighting, institutional modernism aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDwch09N9szNEHa0hhL_fTkwjhZ8k9xLoI_STcd4iivd5F_DlZehFAvLieFHP58brliL8OD3IP42STqXkdTHCFzCIyD1UKF2tfHjmKkyQWn1dcP-8Zs8r4N7jaRwZWFtlXWM0GurHzQI8vVHFF153rdbTNRGJJKqkmFg1HF3AeT6jTPlB1JLc6JL47KvDjUDlA2RlPT9oLFT4nN6VWx84yPcppLXkB8Qdt6ZhgYAZ986H7mBrpbqS0EKqEVeNUkQwilgBK--5my_Gwa"/>
-</div>
-<span class="text-label-sm text-on-surface">Officer B</span>
-</div>
-<div class="flex items-center gap-1">
-<div class="w-12 bg-surface-container-highest h-1 rounded-full overflow-hidden">
-<div class="bg-primary w-2/3 h-full"></div>
-</div>
-<span class="text-[10px] text-primary">65%</span>
-</div>
-</div>
-</div>
-</div>
-</section>
-<!-- Column: Resolved -->
-<section class="kanban-column flex flex-col gap-4">
-<div class="flex items-center justify-between py-2 border-b border-outline-variant/30">
-<h3 class="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest flex items-center gap-2">
-                        Resolved
-                        <span class="bg-surface-container-highest text-on-surface px-2 py-0.5 rounded-full text-[10px]">1</span>
-</h3>
-<span class="material-symbols-outlined text-on-surface-variant text-sm" data-icon="more_vert">more_vert</span>
-</div>
-<div class="flex flex-col gap-3">
-<!-- Task Card 4 -->
-<div class="bg-[#1E1E1E] border border-[#2A2A2A] opacity-60 rounded-card-xl p-4 flex flex-col gap-3">
-<div class="flex justify-between items-start">
-<div class="w-10 h-10 rounded-xl bg-surface-container-high flex items-center justify-center text-on-surface-variant">
-<span class="material-symbols-outlined" data-icon="school">school</span>
-</div>
-<span class="chip-school text-label-sm px-2 py-0.5 rounded uppercase font-label-md">School</span>
-</div>
-<div>
-<h4 class="text-body-lg font-bold text-on-surface-variant line-through leading-tight">Rampur govt school repair</h4>
-<p class="text-label-sm text-on-surface-variant mt-1">Dept of Education</p>
-</div>
-<div class="flex items-center justify-between mt-2 pt-3 border-t border-outline-variant/20">
-<span class="text-label-sm text-on-secondary-container bg-secondary-container px-2 py-0.5 rounded-full flex items-center gap-1">
-<span class="material-symbols-outlined text-[14px]" data-icon="check_circle">check_circle</span>
-                                Completed
-                            </span>
-<span class="text-label-sm text-outline">Today</span>
-</div>
-</div>
-</div>
-</section>
-</div>
-</div></main>
-<!-- Interactive Map Micro-Interactions -->
-<script>
-    document.addEventListener('DOMContentLoaded', () => {
-      const pins = document.querySelectorAll('.group.cursor-pointer');
-      pins.forEach(pin => {
-        pin.addEventListener('mouseenter', () => {
-          pin.querySelector('.w-8').classList.add('bg-primary', 'text-on-primary');
-        });
-        pin.addEventListener('mouseleave', () => {
-          pin.querySelector('.w-8').classList.remove('bg-primary', 'text-on-primary');
-        });
-      });
+            <button class="w-9 h-9 rounded-full border border-zinc-700 flex items-center justify-center text-zinc-400 hover:text-white hover:border-zinc-500 transition relative">
+                <span class="material-symbols-outlined" style="font-size: 18px;">notifications</span>
+                <span class="absolute top-2 right-2 w-1.5 h-1.5 bg-white rounded-full"></span>
+            </button>
+            <div class="flex items-center gap-3 pl-5 border-l border-zinc-800 cursor-pointer">
+                <img src="https://i.pravatar.cc/150?img=33" class="w-9 h-9 rounded-full object-cover">
+                <div class="text-xs">
+                    <div class="text-white font-medium">Admin User</div>
+                    <div class="text-zinc-500 mt-0.5">Dispatch Officer</div>
+                </div>
+                <span class="material-symbols-outlined text-zinc-500 text-[18px]">expand_more</span>
+            </div>
+        </div>
+    </header>
 
-      // Filter Toggle Mock
-      const filterBtns = document.querySelectorAll('.bg-surface-container button');
-      filterBtns.forEach(btn => {
-        btn.addEventListener('click', () => {
-          filterBtns.forEach(b => {
-            b.classList.remove('bg-primary', 'text-on-primary');
-            b.classList.add('text-on-surface-variant', 'hover:bg-surface-container-high');
-          });
-          btn.classList.add('bg-primary', 'text-on-primary');
-          btn.classList.remove('text-on-surface-variant', 'hover:bg-surface-container-high');
-        });
-      });
-    });
-  </script>
-<script>
-    function switchView(viewId) {
-        document.querySelectorAll('.view-content').forEach(el => el.classList.remove('active'));
-        document.getElementById('view-' + viewId).classList.add('active');
+    <!-- Main Content -->
+    <main class="flex-1 flex gap-5 p-5 overflow-hidden">
         
-        document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
-        document.querySelectorAll('.nav-link').forEach(el => {
-            if(el.textContent.trim().toLowerCase() === viewId) {
-                el.classList.add('active');
-            }
-        });
-    }
-
-    async function fetchMessages() {
-        try {
-            const response = await fetch('/messages');
-            const data = await response.json();
+        <!-- Left Column (320px fixed width) -->
+        <aside class="w-[340px] flex flex-col gap-5 overflow-y-auto pr-1">
             
-            const tbody = document.querySelector('#view-priority table tbody');
-            if(tbody && data.messages) {
-                const newRows = data.messages.map((msg, index) => {
-                    const date = new Date(msg.timestamp).toLocaleString();
-                    let score = msg.body && msg.body.length > 30 ? 85 : 45;
-                    let color = score > 80 ? 'text-error' : 'text-primary';
-                    let status = score > 80 ? 'Critical' : 'New';
-                    
-                    let media = '';
-                    if(msg.num_media > 0) media += ' 📸 Photo/Audio ';
-                    if(msg.latitude) media += ' 📍 Location ';
-                    if(!media && msg.body) media = '📝 Text';
+            <!-- Today's Grievance Progress -->
+            <div class="card p-6 relative overflow-hidden flex flex-col min-h-[280px]">
+                <div class="absolute inset-0 bg-gradient-to-b from-[#222] to-[#161616] opacity-40 z-0"></div>
+                <h3 class="text-lg z-10 mb-6 text-white font-medium">Today's Grievance Progress</h3>
+                
+                <div class="relative z-10 flex-1">
+                    <div class="inline-flex items-center gap-2 bg-[#262626] border border-[#333] px-3 py-1.5 rounded-full text-xs text-white absolute top-0 left-0 shadow-lg">
+                        <span class="material-symbols-outlined text-[14px] text-zinc-400">water_drop</span> Sanitation 145
+                    </div>
+                    <div class="inline-flex items-center gap-2 bg-[#262626] border border-[#333] px-3 py-1.5 rounded-full text-xs text-white absolute top-10 right-0 shadow-lg">
+                        <span class="material-symbols-outlined text-[14px] text-zinc-400">local_hospital</span> Medical 88
+                    </div>
+                    <div class="inline-flex items-center gap-2 bg-[#262626] border border-[#333] px-3 py-1.5 rounded-full text-xs text-white absolute bottom-12 left-6 shadow-lg">
+                        <span class="material-symbols-outlined text-[14px] text-zinc-400">pothole</span> Roads 121
+                    </div>
+                </div>
 
-                    return `
-                        <tr class="border-b border-[#222] hover:bg-[#222] transition-colors">
-                            <td class="py-4 text-on-surface">#${data.messages.length - index}</td>
-                            <td class="py-4 text-on-surface">
-                                <div>${msg.from}</div>
-                                <div class="text-xs text-on-surface-variant">${date}</div>
-                            </td>
-                            <td class="py-4 text-on-surface-variant">${media}</td>
-                            <td class="py-4 text-on-surface-variant line-clamp-1 max-w-xs">${msg.body || 'Media message'}</td>
-                            <td class="py-4 font-headline-md ${color}">${score}</td>
-                            <td class="py-4">
-                                <span class="px-2 py-1 bg-surface-container-high rounded-full text-xs">${status}</span>
-                            </td>
-                        </tr>
-                    `;
-                }).join('');
-                if(newRows) {
-                    tbody.innerHTML = newRows;
-                }
+                <div class="relative z-10 mt-auto pt-6 border-t border-zinc-800">
+                    <div class="flex justify-between text-xs text-zinc-500 mb-2">
+                        <span>0%</span>
+                        <span class="bg-white text-black px-2.5 py-0.5 rounded-full font-bold">56%</span>
+                        <span>100%</span>
+                    </div>
+                    <div class="h-1.5 w-full bg-zinc-800 rounded-full overflow-hidden mb-3">
+                        <div class="h-full bg-gradient-to-r from-red-400 via-amber-200 to-green-400 w-[56%] rounded-full"></div>
+                    </div>
+                    <div class="text-center text-xs text-zinc-500">
+                        <span class="text-white font-medium">560 / 1,000</span> daily goal (56%)
+                    </div>
+                </div>
+            </div>
+
+            <!-- Grievance distribution by type -->
+            <div class="card p-6 flex flex-col gap-5">
+                <h3 class="text-lg text-white font-medium">Grievance distribution</h3>
+                
+                <div class="flex flex-col gap-4">
+                    <div class="flex items-center justify-between text-sm">
+                        <div class="flex items-center gap-2 w-24">
+                            <span class="material-symbols-outlined text-lg text-zinc-400">water_drop</span> Sanitation
+                        </div>
+                        <div class="flex-1 px-4"><div class="segmented-bar" id="seg-1"></div></div>
+                        <div class="w-8 text-right text-white">84%</div>
+                    </div>
+                    
+                    <div class="flex items-center justify-between text-sm">
+                        <div class="flex items-center gap-2 w-24">
+                            <span class="material-symbols-outlined text-lg text-zinc-400">pothole</span> Roads
+                        </div>
+                        <div class="flex-1 px-4"><div class="segmented-bar" id="seg-2"></div></div>
+                        <div class="w-8 text-right text-white">60%</div>
+                    </div>
+
+                    <div class="flex items-center justify-between text-sm">
+                        <div class="flex items-center gap-2 w-24">
+                            <span class="material-symbols-outlined text-lg text-zinc-400">electric_bolt</span> Power
+                        </div>
+                        <div class="flex-1 px-4"><div class="segmented-bar" id="seg-3"></div></div>
+                        <div class="w-8 text-right text-white">40%</div>
+                    </div>
+                    
+                    <div class="flex items-center justify-between text-sm">
+                        <div class="flex items-center gap-2 w-24">
+                            <span class="material-symbols-outlined text-lg text-zinc-400">local_hospital</span> Medical
+                        </div>
+                        <div class="flex-1 px-4"><div class="segmented-bar" id="seg-4"></div></div>
+                        <div class="w-8 text-right text-white">30%</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Response Metrics -->
+            <div class="card p-6">
+                <h3 class="text-lg text-white font-medium mb-5">Response Time & Volume</h3>
+                <div class="flex justify-between items-end mb-5">
+                    <div>
+                        <div class="text-xs text-zinc-500 mb-1">Average Resolution Time</div>
+                        <div class="text-4xl text-white font-medium tracking-tight">7.4 H</div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-xs text-zinc-500 mb-1">Total Cases</div>
+                        <div class="text-sm text-white font-medium">1,245</div>
+                        <div class="text-xs text-green-500 mt-1">+6% last month</div>
+                    </div>
+                </div>
+                <div class="sparkline w-full"></div>
+            </div>
+        </aside>
+
+        <!-- Right Column -->
+        <div class="flex-1 flex flex-col gap-5 overflow-hidden">
+            
+            <!-- Map Card -->
+            <div class="card map-bg flex-1 relative overflow-hidden min-h-[300px] h-[55%] border-none shadow-inner">
+                <!-- Using a high quality placeholder for the map background if real tiles aren't rendering -->
+                <div class="absolute inset-0 opacity-40 bg-[url('https://www.transparenttextures.com/patterns/cartographer.png')] mix-blend-multiply"></div>
+                
+                <!-- Map UI Elements -->
+                <div class="absolute top-5 left-5 bg-white text-black px-4 py-2.5 rounded-full text-sm font-medium shadow-[0_8px_30px_rgb(0,0,0,0.12)] flex items-center gap-2">
+                    <span class="material-symbols-outlined text-[18px]">search</span>
+                    New Delhi, India
+                </div>
+
+                <div class="absolute top-5 left-1/2 -translate-x-1/2 bg-white text-black px-4 py-2.5 rounded-full text-sm font-medium shadow-[0_8px_30px_rgb(0,0,0,0.12)] flex items-center gap-2">
+                    Sort by <span class="font-bold">Priority</span> <span class="material-symbols-outlined text-[16px]">expand_more</span>
+                </div>
+
+                <div class="absolute top-5 right-5 flex flex-col gap-3">
+                    <button class="w-11 h-11 bg-white text-black rounded-full shadow-[0_8px_30px_rgb(0,0,0,0.12)] flex items-center justify-center hover:bg-gray-50 transition">
+                        <span class="material-symbols-outlined text-[20px]">fullscreen</span>
+                    </button>
+                    <div class="bg-white rounded-full shadow-[0_8px_30px_rgb(0,0,0,0.12)] flex flex-col overflow-hidden">
+                        <button class="w-11 h-11 text-black flex items-center justify-center hover:bg-gray-50 border-b border-gray-200 transition">
+                            <span class="material-symbols-outlined text-[20px]">add</span>
+                        </button>
+                        <button class="w-11 h-11 text-black flex items-center justify-center hover:bg-gray-50 transition">
+                            <span class="material-symbols-outlined text-[20px]">remove</span>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Pins -->
+                <div class="map-pin" style="top: 35%; left: 45%;"><span class="material-symbols-outlined text-[16px]">priority_high</span></div>
+                <div class="map-pin" style="top: 55%; left: 65%;"><span class="material-symbols-outlined text-[16px]">priority_high</span></div>
+                <div class="map-pin" style="top: 25%; left: 75%;"><span class="material-symbols-outlined text-[16px]">priority_high</span></div>
+                <div class="map-pin" style="top: 75%; left: 35%;"><span class="material-symbols-outlined text-[16px]">priority_high</span></div>
+                <div class="map-pin" style="top: 65%; left: 85%;"><span class="material-symbols-outlined text-[16px]">priority_high</span></div>
+
+                <!-- Active Map Pin Info Popover -->
+                <div class="absolute top-[48%] left-[67%] bg-white text-black px-4 py-3 rounded-xl shadow-2xl text-xs flex flex-col gap-1 z-10 min-w-[140px]">
+                    <div class="font-bold flex items-center justify-between text-sm">
+                        #AB045861
+                    </div>
+                    <div class="text-zinc-500">Sanitation Issue</div>
+                </div>
+            </div>
+
+            <!-- Table Card -->
+            <div class="card flex-1 flex flex-col overflow-hidden bg-[#161616]">
+                <!-- Table Header Controls -->
+                <div class="flex items-center justify-between px-6 py-4 border-b border-[#262626]">
+                    <h3 class="text-lg text-white font-medium">Priority Queue</h3>
+                    
+                    <div class="flex items-center gap-1 bg-[#0A0A0A] p-1 rounded-full border border-[#262626]">
+                        <button class="px-5 py-1.5 text-xs font-medium text-zinc-400 hover:text-white transition rounded-full">All</button>
+                        <button class="px-5 py-1.5 text-xs font-medium text-zinc-400 hover:text-white transition rounded-full">Pending</button>
+                        <button class="px-5 py-1.5 text-xs font-medium text-zinc-400 hover:text-white transition rounded-full">Responded</button>
+                        <button class="px-5 py-1.5 text-xs font-medium bg-[#EDE8DC] text-black shadow-sm transition rounded-full">Assigned</button>
+                        <button class="px-5 py-1.5 text-xs font-medium text-zinc-400 hover:text-white transition rounded-full">Completed</button>
+                    </div>
+                    
+                    <div class="flex gap-3">
+                        <button class="w-9 h-9 rounded-full border border-zinc-700 flex items-center justify-center text-zinc-400 hover:text-white hover:border-zinc-500 transition"><span class="material-symbols-outlined text-[18px]">calendar_today</span></button>
+                        <button class="w-9 h-9 rounded-full border border-zinc-700 flex items-center justify-center text-zinc-400 hover:text-white hover:border-zinc-500 transition"><span class="material-symbols-outlined text-[18px]">filter_list</span></button>
+                    </div>
+                </div>
+                
+                <!-- Table Data -->
+                <div class="flex-1 overflow-y-auto">
+                    <table class="w-full text-left text-sm whitespace-nowrap">
+                        <thead class="text-xs text-zinc-500 bg-[#161616] sticky top-0 z-10 border-b border-[#262626]">
+                            <tr>
+                                <th class="font-medium px-6 py-4">Report ID</th>
+                                <th class="font-medium px-4 py-4">Sender</th>
+                                <th class="font-medium px-4 py-4">Details</th>
+                                <th class="font-medium px-4 py-4 text-right">Score</th>
+                                <th class="font-medium px-6 py-4 text-right">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="queue-body" class="divide-y divide-[#262626]">
+                            <!-- Static Row (if no data) -->
+                            <tr class="hover:bg-[#1C1C1C] transition cursor-pointer">
+                                <td class="px-6 py-4 text-white font-medium flex items-center gap-3">
+                                    <span class="material-symbols-outlined text-[20px] text-zinc-400">mark_email_unread</span>
+                                    #AB045861
+                                </td>
+                                <td class="px-4 py-4">
+                                    <div class="text-zinc-300">Shikhar Singh</div>
+                                    <div class="text-xs text-zinc-500 mt-1">Citizen</div>
+                                </td>
+                                <td class="px-4 py-4">
+                                    <div class="text-zinc-300 truncate max-w-[280px]">Garbage overflow near market</div>
+                                    <div class="text-xs text-zinc-500 mt-1 flex items-center"><span class="material-symbols-outlined text-[14px] align-middle mr-1">image</span> 12 Sep, 2026</div>
+                                </td>
+                                <td class="px-4 py-4 text-right font-medium text-white">85</td>
+                                <td class="px-6 py-4 text-right text-zinc-300">In Transit</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // Generate Segmented Bars exactly like the reference image
+        function drawSegments(id, percentage) {
+            const container = document.getElementById(id);
+            const totalSegments = 30; // More segments for fidelity
+            const activeSegments = Math.round((percentage / 100) * totalSegments);
+            let html = '';
+            for(let i=0; i<totalSegments; i++) {
+                html += `<div class="segment ${i < activeSegments ? 'active' : ''}"></div>`;
             }
-        } catch (error) {
-            console.error('Error fetching messages:', error);
+            if(container) container.innerHTML = html;
         }
-    }
-    
-    setInterval(fetchMessages, 3000);
-    fetchMessages();
-    </script></body></html>
+        drawSegments('seg-1', 84);
+        drawSegments('seg-2', 60);
+        drawSegments('seg-3', 40);
+        drawSegments('seg-4', 30);
+
+        // Fetch Live Messages from FastAPI backend
+        async function fetchMessages() {
+            try {
+                const response = await fetch('/messages');
+                const data = await response.json();
+                const tbody = document.getElementById('queue-body');
+                
+                if(tbody && data.messages && data.messages.length > 0) {
+                    const newRows = data.messages.map((msg, index) => {
+                        const date = new Date(msg.timestamp).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+                        let score = msg.body && msg.body.length > 30 ? 85 : 45;
+                        let status = score > 80 ? 'Critical' : 'Pending';
+                        
+                        let media = '';
+                        if(msg.num_media > 0) media += '<span class="material-symbols-outlined text-[14px] align-middle mr-1">image</span>';
+                        if(msg.latitude) media += '<span class="material-symbols-outlined text-[14px] align-middle mr-1">location_on</span>';
+                        
+                        return `
+                            <tr class="hover:bg-[#1C1C1C] transition cursor-pointer group">
+                                <td class="px-6 py-4 text-white font-medium flex items-center gap-3">
+                                    <span class="material-symbols-outlined text-[20px] text-zinc-500 group-hover:text-white transition">mark_email_unread</span>
+                                    #AB${1000 + data.messages.length - index}
+                                </td>
+                                <td class="px-4 py-4">
+                                    <div class="text-zinc-300">${msg.from}</div>
+                                    <div class="text-xs text-zinc-500 mt-1">Citizen</div>
+                                </td>
+                                <td class="px-4 py-4">
+                                    <div class="text-zinc-300 truncate max-w-[280px]">${msg.body || 'Media payload attached'}</div>
+                                    <div class="text-xs text-zinc-500 mt-1 flex items-center">${media} ${date}</div>
+                                </td>
+                                <td class="px-4 py-4 text-right font-medium text-white">${score}</td>
+                                <td class="px-6 py-4 text-right text-zinc-300">${status}</td>
+                            </tr>
+                        `;
+                    }).join('');
+                    
+                    if(newRows) {
+                        tbody.innerHTML = newRows;
+                    }
+                }
+            } catch (error) {
+                console.error('Error fetching messages:', error);
+            }
+        }
+        
+        setInterval(fetchMessages, 3000);
+        fetchMessages();
+    </script>
+</body>
+</html>
