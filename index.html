@@ -1,13 +1,14 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+
+<html class="dark" lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>UrbanOS Admin | Priority</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
-    <style>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>UrbanOS Admin | Priority</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Playfair+Display:wght@600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<style>
         body { font-family: 'Inter', sans-serif; background-color: #0A0A0A; color: #a1a1aa; }
         h1, h2, h3, h4, .serif { font-family: 'Playfair Display', serif; color: #ffffff; letter-spacing: 0.02em; }
         
@@ -48,241 +49,377 @@
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+    
+        .view-content { display: none !important; }
+        .view-content.active { display: flex !important; }
+        .nav-link { cursor: pointer; border-bottom: 2px solid transparent; padding-bottom: 4px; }
+        .nav-link.active { color: white !important; border-bottom-color: white !important; font-weight: 500; }
     </style>
-</head>
+</link></head>
 <body class="h-screen flex flex-col overflow-hidden">
-    <!-- Header -->
-    <header class="flex items-center justify-between px-8 py-5 border-b border-[#262626]">
-        <div class="flex items-center gap-3">
-            <svg class="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2L2 22h20L12 2zm0 4.5l6.5 13h-13L12 6.5z"/></svg>
-            <span class="serif text-xl text-white">UrbanOS.</span>
-        </div>
-        <nav class="flex gap-8">
-            <a href="#" class="text-sm text-zinc-500 hover:text-white transition">Analysis</a>
-            <a href="#" class="text-sm text-white font-medium">Priority</a>
-            <a href="#" class="text-sm text-zinc-500 hover:text-white transition">Survey</a>
-            <a href="#" class="text-sm text-zinc-500 hover:text-white transition">Coordination</a>
-        </nav>
-        <div class="flex items-center gap-5">
-            <button class="w-9 h-9 rounded-full border border-zinc-700 flex items-center justify-center text-zinc-400 hover:text-white hover:border-zinc-500 transition">
-                <span class="material-symbols-outlined" style="font-size: 18px;">search</span>
-            </button>
-            <button class="w-9 h-9 rounded-full border border-zinc-700 flex items-center justify-center text-zinc-400 hover:text-white hover:border-zinc-500 transition relative">
-                <span class="material-symbols-outlined" style="font-size: 18px;">notifications</span>
-                <span class="absolute top-2 right-2 w-1.5 h-1.5 bg-white rounded-full"></span>
-            </button>
-            <div class="flex items-center gap-3 pl-5 border-l border-zinc-800 cursor-pointer">
-                <img src="https://i.pravatar.cc/150?img=33" class="w-9 h-9 rounded-full object-cover">
-                <div class="text-xs">
-                    <div class="text-white font-medium">Admin User</div>
-                    <div class="text-zinc-500 mt-0.5">Dispatch Officer</div>
-                </div>
-                <span class="material-symbols-outlined text-zinc-500 text-[18px]">expand_more</span>
-            </div>
-        </div>
-    </header>
-
-    <!-- Main Content -->
-    <main class="flex-1 flex gap-5 p-5 overflow-hidden">
-        
-        <!-- Left Column (320px fixed width) -->
-        <aside class="w-[340px] flex flex-col gap-5 overflow-y-auto pr-1">
-            
-            <!-- Today's Grievance Progress -->
-            <div class="card p-6 relative overflow-hidden flex flex-col min-h-[280px]">
-                <div class="absolute inset-0 bg-gradient-to-b from-[#222] to-[#161616] opacity-40 z-0"></div>
-                <h3 class="text-lg z-10 mb-6 text-white font-medium">Today's Grievance Progress</h3>
-                
-                <div class="relative z-10 flex-1">
-                    <div class="inline-flex items-center gap-2 bg-[#262626] border border-[#333] px-3 py-1.5 rounded-full text-xs text-white absolute top-0 left-0 shadow-lg">
-                        <span class="material-symbols-outlined text-[14px] text-zinc-400">water_drop</span> Sanitation 145
+<!-- Header -->
+<header class="flex items-center justify-between px-8 py-5 border-b border-[#262626]">
+<div class="flex items-center gap-3">
+<svg class="w-6 h-6 text-white" fill="currentColor" viewbox="0 0 24 24"><path d="M12 2L2 22h20L12 2zm0 4.5l6.5 13h-13L12 6.5z"></path></svg>
+<span class="serif text-xl text-white">UrbanOS.</span>
+</div>
+<nav class="flex gap-8"><a class="text-sm text-zinc-500 hover:text-white transition nav-link" href="javascript:void(0)" id="nav-analysis" onclick="switchView('analysis')">Analysis</a><a class="text-sm text-zinc-500 hover:text-white transition nav-link active" href="javascript:void(0)" id="nav-priority" onclick="switchView('priority')">Priority</a><a class="text-sm text-zinc-500 hover:text-white transition nav-link" href="javascript:void(0)" id="nav-survey" onclick="switchView('survey')">Survey</a><a class="text-sm text-zinc-500 hover:text-white transition nav-link" href="javascript:void(0)" id="nav-coordination" onclick="switchView('coordination')">Coordination</a></nav>
+<div class="flex items-center gap-5">
+<button class="w-9 h-9 rounded-full border border-zinc-700 flex items-center justify-center text-zinc-400 hover:text-white hover:border-zinc-500 transition">
+<span class="material-symbols-outlined" style="font-size: 18px;">search</span>
+</button>
+<button class="w-9 h-9 rounded-full border border-zinc-700 flex items-center justify-center text-zinc-400 hover:text-white hover:border-zinc-500 transition relative">
+<span class="material-symbols-outlined" style="font-size: 18px;">notifications</span>
+<span class="absolute top-2 right-2 w-1.5 h-1.5 bg-white rounded-full"></span>
+</button>
+<div class="flex items-center gap-3 pl-5 border-l border-zinc-800 cursor-pointer">
+<img class="w-9 h-9 rounded-full object-cover" src="https://i.pravatar.cc/150?img=33"/>
+<div class="text-xs">
+<div class="text-white font-medium">Admin User</div>
+<div class="text-zinc-500 mt-0.5">Dispatch Officer</div>
+</div>
+<span class="material-symbols-outlined text-zinc-500 text-[18px]">expand_more</span>
+</div>
+</div>
+</header>
+<!-- Main Content -->
+<main class="flex-1 flex gap-5 p-5 overflow-hidden"><div class="view-content active w-full h-full gap-5" id="view-priority">
+<!-- Left Column (320px fixed width) -->
+<aside class="w-[340px] flex flex-col gap-5 overflow-y-auto pr-1">
+<!-- Today's Grievance Progress -->
+<div class="card p-6 relative overflow-hidden flex flex-col min-h-[280px]">
+<div class="absolute inset-0 bg-gradient-to-b from-[#222] to-[#161616] opacity-40 z-0"></div>
+<h3 class="text-lg z-10 mb-6 text-white font-medium">Today's Grievance Progress</h3>
+<div class="relative z-10 flex-1">
+<div class="inline-flex items-center gap-2 bg-[#262626] border border-[#333] px-3 py-1.5 rounded-full text-xs text-white absolute top-0 left-0 shadow-lg">
+<span class="material-symbols-outlined text-[14px] text-zinc-400">water_drop</span> Sanitation 145
                     </div>
-                    <div class="inline-flex items-center gap-2 bg-[#262626] border border-[#333] px-3 py-1.5 rounded-full text-xs text-white absolute top-10 right-0 shadow-lg">
-                        <span class="material-symbols-outlined text-[14px] text-zinc-400">local_hospital</span> Medical 88
+<div class="inline-flex items-center gap-2 bg-[#262626] border border-[#333] px-3 py-1.5 rounded-full text-xs text-white absolute top-10 right-0 shadow-lg">
+<span class="material-symbols-outlined text-[14px] text-zinc-400">local_hospital</span> Medical 88
                     </div>
-                    <div class="inline-flex items-center gap-2 bg-[#262626] border border-[#333] px-3 py-1.5 rounded-full text-xs text-white absolute bottom-12 left-6 shadow-lg">
-                        <span class="material-symbols-outlined text-[14px] text-zinc-400">pothole</span> Roads 121
+<div class="inline-flex items-center gap-2 bg-[#262626] border border-[#333] px-3 py-1.5 rounded-full text-xs text-white absolute bottom-12 left-6 shadow-lg">
+<span class="material-symbols-outlined text-[14px] text-zinc-400">pothole</span> Roads 121
                     </div>
-                </div>
-
-                <div class="relative z-10 mt-auto pt-6 border-t border-zinc-800">
-                    <div class="flex justify-between text-xs text-zinc-500 mb-2">
-                        <span>0%</span>
-                        <span class="bg-white text-black px-2.5 py-0.5 rounded-full font-bold">56%</span>
-                        <span>100%</span>
+</div>
+<div class="relative z-10 mt-auto pt-6 border-t border-zinc-800">
+<div class="flex justify-between text-xs text-zinc-500 mb-2">
+<span>0%</span>
+<span class="bg-white text-black px-2.5 py-0.5 rounded-full font-bold">56%</span>
+<span>100%</span>
+</div>
+<div class="h-1.5 w-full bg-zinc-800 rounded-full overflow-hidden mb-3">
+<div class="h-full bg-gradient-to-r from-red-400 via-amber-200 to-green-400 w-[56%] rounded-full"></div>
+</div>
+<div class="text-center text-xs text-zinc-500">
+<span class="text-white font-medium">560 / 1,000</span> daily goal (56%)
                     </div>
-                    <div class="h-1.5 w-full bg-zinc-800 rounded-full overflow-hidden mb-3">
-                        <div class="h-full bg-gradient-to-r from-red-400 via-amber-200 to-green-400 w-[56%] rounded-full"></div>
-                    </div>
-                    <div class="text-center text-xs text-zinc-500">
-                        <span class="text-white font-medium">560 / 1,000</span> daily goal (56%)
-                    </div>
-                </div>
-            </div>
-
-            <!-- Grievance distribution by type -->
-            <div class="card p-6 flex flex-col gap-5">
-                <h3 class="text-lg text-white font-medium">Grievance distribution</h3>
-                
-                <div class="flex flex-col gap-4">
-                    <div class="flex items-center justify-between text-sm">
-                        <div class="flex items-center gap-2 w-24">
-                            <span class="material-symbols-outlined text-lg text-zinc-400">water_drop</span> Sanitation
+</div>
+</div>
+<!-- Grievance distribution by type -->
+<div class="card p-6 flex flex-col gap-5">
+<h3 class="text-lg text-white font-medium">Grievance distribution</h3>
+<div class="flex flex-col gap-4">
+<div class="flex items-center justify-between text-sm">
+<div class="flex items-center gap-2 w-24">
+<span class="material-symbols-outlined text-lg text-zinc-400">water_drop</span> Sanitation
                         </div>
-                        <div class="flex-1 px-4"><div class="segmented-bar" id="seg-1"></div></div>
-                        <div class="w-8 text-right text-white">84%</div>
-                    </div>
-                    
-                    <div class="flex items-center justify-between text-sm">
-                        <div class="flex items-center gap-2 w-24">
-                            <span class="material-symbols-outlined text-lg text-zinc-400">pothole</span> Roads
+<div class="flex-1 px-4"><div class="segmented-bar" id="seg-1"></div></div>
+<div class="w-8 text-right text-white">84%</div>
+</div>
+<div class="flex items-center justify-between text-sm">
+<div class="flex items-center gap-2 w-24">
+<span class="material-symbols-outlined text-lg text-zinc-400">pothole</span> Roads
                         </div>
-                        <div class="flex-1 px-4"><div class="segmented-bar" id="seg-2"></div></div>
-                        <div class="w-8 text-right text-white">60%</div>
-                    </div>
-
-                    <div class="flex items-center justify-between text-sm">
-                        <div class="flex items-center gap-2 w-24">
-                            <span class="material-symbols-outlined text-lg text-zinc-400">electric_bolt</span> Power
+<div class="flex-1 px-4"><div class="segmented-bar" id="seg-2"></div></div>
+<div class="w-8 text-right text-white">60%</div>
+</div>
+<div class="flex items-center justify-between text-sm">
+<div class="flex items-center gap-2 w-24">
+<span class="material-symbols-outlined text-lg text-zinc-400">electric_bolt</span> Power
                         </div>
-                        <div class="flex-1 px-4"><div class="segmented-bar" id="seg-3"></div></div>
-                        <div class="w-8 text-right text-white">40%</div>
-                    </div>
-                    
-                    <div class="flex items-center justify-between text-sm">
-                        <div class="flex items-center gap-2 w-24">
-                            <span class="material-symbols-outlined text-lg text-zinc-400">local_hospital</span> Medical
+<div class="flex-1 px-4"><div class="segmented-bar" id="seg-3"></div></div>
+<div class="w-8 text-right text-white">40%</div>
+</div>
+<div class="flex items-center justify-between text-sm">
+<div class="flex items-center gap-2 w-24">
+<span class="material-symbols-outlined text-lg text-zinc-400">local_hospital</span> Medical
                         </div>
-                        <div class="flex-1 px-4"><div class="segmented-bar" id="seg-4"></div></div>
-                        <div class="w-8 text-right text-white">30%</div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Response Metrics -->
-            <div class="card p-6">
-                <h3 class="text-lg text-white font-medium mb-5">Response Time & Volume</h3>
-                <div class="flex justify-between items-end mb-5">
-                    <div>
-                        <div class="text-xs text-zinc-500 mb-1">Average Resolution Time</div>
-                        <div class="text-4xl text-white font-medium tracking-tight">7.4 H</div>
-                    </div>
-                    <div class="text-right">
-                        <div class="text-xs text-zinc-500 mb-1">Total Cases</div>
-                        <div class="text-sm text-white font-medium">1,245</div>
-                        <div class="text-xs text-green-500 mt-1">+6% last month</div>
-                    </div>
-                </div>
-                <div class="sparkline w-full"></div>
-            </div>
-        </aside>
-
-        <!-- Right Column -->
-        <div class="flex-1 flex flex-col gap-5 overflow-hidden">
-            
-            <!-- Map Card -->
-            <div class="card map-bg flex-1 relative overflow-hidden min-h-[300px] h-[55%] border-none shadow-inner">
-                <!-- Using a high quality placeholder for the map background if real tiles aren't rendering -->
-                <div class="absolute inset-0 opacity-40 bg-[url('https://www.transparenttextures.com/patterns/cartographer.png')] mix-blend-multiply"></div>
-                
-                <!-- Map UI Elements -->
-                <div class="absolute top-5 left-5 bg-white text-black px-4 py-2.5 rounded-full text-sm font-medium shadow-[0_8px_30px_rgb(0,0,0,0.12)] flex items-center gap-2">
-                    <span class="material-symbols-outlined text-[18px]">search</span>
+<div class="flex-1 px-4"><div class="segmented-bar" id="seg-4"></div></div>
+<div class="w-8 text-right text-white">30%</div>
+</div>
+</div>
+</div>
+<!-- Response Metrics -->
+<div class="card p-6">
+<h3 class="text-lg text-white font-medium mb-5">Response Time &amp; Volume</h3>
+<div class="flex justify-between items-end mb-5">
+<div>
+<div class="text-xs text-zinc-500 mb-1">Average Resolution Time</div>
+<div class="text-4xl text-white font-medium tracking-tight">7.4 H</div>
+</div>
+<div class="text-right">
+<div class="text-xs text-zinc-500 mb-1">Total Cases</div>
+<div class="text-sm text-white font-medium">1,245</div>
+<div class="text-xs text-green-500 mt-1">+6% last month</div>
+</div>
+</div>
+<div class="sparkline w-full"></div>
+</div>
+</aside>
+<!-- Right Column -->
+<div class="flex-1 flex flex-col gap-5 overflow-hidden">
+<!-- Map Card -->
+<div class="card map-bg flex-1 relative overflow-hidden min-h-[300px] h-[55%] border-none shadow-inner">
+<!-- Using a high quality placeholder for the map background if real tiles aren't rendering -->
+<div class="absolute inset-0 opacity-40 bg-[url('https://www.transparenttextures.com/patterns/cartographer.png')] mix-blend-multiply"></div>
+<!-- Map UI Elements -->
+<div class="absolute top-5 left-5 bg-white text-black px-4 py-2.5 rounded-full text-sm font-medium shadow-[0_8px_30px_rgb(0,0,0,0.12)] flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]">search</span>
                     New Delhi, India
                 </div>
-
-                <div class="absolute top-5 left-1/2 -translate-x-1/2 bg-white text-black px-4 py-2.5 rounded-full text-sm font-medium shadow-[0_8px_30px_rgb(0,0,0,0.12)] flex items-center gap-2">
+<div class="absolute top-5 left-1/2 -translate-x-1/2 bg-white text-black px-4 py-2.5 rounded-full text-sm font-medium shadow-[0_8px_30px_rgb(0,0,0,0.12)] flex items-center gap-2">
                     Sort by <span class="font-bold">Priority</span> <span class="material-symbols-outlined text-[16px]">expand_more</span>
-                </div>
-
-                <div class="absolute top-5 right-5 flex flex-col gap-3">
-                    <button class="w-11 h-11 bg-white text-black rounded-full shadow-[0_8px_30px_rgb(0,0,0,0.12)] flex items-center justify-center hover:bg-gray-50 transition">
-                        <span class="material-symbols-outlined text-[20px]">fullscreen</span>
-                    </button>
-                    <div class="bg-white rounded-full shadow-[0_8px_30px_rgb(0,0,0,0.12)] flex flex-col overflow-hidden">
-                        <button class="w-11 h-11 text-black flex items-center justify-center hover:bg-gray-50 border-b border-gray-200 transition">
-                            <span class="material-symbols-outlined text-[20px]">add</span>
-                        </button>
-                        <button class="w-11 h-11 text-black flex items-center justify-center hover:bg-gray-50 transition">
-                            <span class="material-symbols-outlined text-[20px]">remove</span>
-                        </button>
-                    </div>
-                </div>
-                
-                <!-- Pins -->
-                <div class="map-pin" style="top: 35%; left: 45%;"><span class="material-symbols-outlined text-[16px]">priority_high</span></div>
-                <div class="map-pin" style="top: 55%; left: 65%;"><span class="material-symbols-outlined text-[16px]">priority_high</span></div>
-                <div class="map-pin" style="top: 25%; left: 75%;"><span class="material-symbols-outlined text-[16px]">priority_high</span></div>
-                <div class="map-pin" style="top: 75%; left: 35%;"><span class="material-symbols-outlined text-[16px]">priority_high</span></div>
-                <div class="map-pin" style="top: 65%; left: 85%;"><span class="material-symbols-outlined text-[16px]">priority_high</span></div>
-
-                <!-- Active Map Pin Info Popover -->
-                <div class="absolute top-[48%] left-[67%] bg-white text-black px-4 py-3 rounded-xl shadow-2xl text-xs flex flex-col gap-1 z-10 min-w-[140px]">
-                    <div class="font-bold flex items-center justify-between text-sm">
+</div>
+<div class="absolute top-5 right-5 flex flex-col gap-3">
+<button class="w-11 h-11 bg-white text-black rounded-full shadow-[0_8px_30px_rgb(0,0,0,0.12)] flex items-center justify-center hover:bg-gray-50 transition">
+<span class="material-symbols-outlined text-[20px]">fullscreen</span>
+</button>
+<div class="bg-white rounded-full shadow-[0_8px_30px_rgb(0,0,0,0.12)] flex flex-col overflow-hidden">
+<button class="w-11 h-11 text-black flex items-center justify-center hover:bg-gray-50 border-b border-gray-200 transition">
+<span class="material-symbols-outlined text-[20px]">add</span>
+</button>
+<button class="w-11 h-11 text-black flex items-center justify-center hover:bg-gray-50 transition">
+<span class="material-symbols-outlined text-[20px]">remove</span>
+</button>
+</div>
+</div>
+<!-- Pins -->
+<div class="map-pin" style="top: 35%; left: 45%;"><span class="material-symbols-outlined text-[16px]">priority_high</span></div>
+<div class="map-pin" style="top: 55%; left: 65%;"><span class="material-symbols-outlined text-[16px]">priority_high</span></div>
+<div class="map-pin" style="top: 25%; left: 75%;"><span class="material-symbols-outlined text-[16px]">priority_high</span></div>
+<div class="map-pin" style="top: 75%; left: 35%;"><span class="material-symbols-outlined text-[16px]">priority_high</span></div>
+<div class="map-pin" style="top: 65%; left: 85%;"><span class="material-symbols-outlined text-[16px]">priority_high</span></div>
+<!-- Active Map Pin Info Popover -->
+<div class="absolute top-[48%] left-[67%] bg-white text-black px-4 py-3 rounded-xl shadow-2xl text-xs flex flex-col gap-1 z-10 min-w-[140px]">
+<div class="font-bold flex items-center justify-between text-sm">
                         #AB045861
                     </div>
-                    <div class="text-zinc-500">Sanitation Issue</div>
-                </div>
-            </div>
-
-            <!-- Table Card -->
-            <div class="card flex-1 flex flex-col overflow-hidden bg-[#161616]">
-                <!-- Table Header Controls -->
-                <div class="flex items-center justify-between px-6 py-4 border-b border-[#262626]">
-                    <h3 class="text-lg text-white font-medium">Priority Queue</h3>
-                    
-                    <div class="flex items-center gap-1 bg-[#0A0A0A] p-1 rounded-full border border-[#262626]">
-                        <button class="px-5 py-1.5 text-xs font-medium text-zinc-400 hover:text-white transition rounded-full">All</button>
-                        <button class="px-5 py-1.5 text-xs font-medium text-zinc-400 hover:text-white transition rounded-full">Pending</button>
-                        <button class="px-5 py-1.5 text-xs font-medium text-zinc-400 hover:text-white transition rounded-full">Responded</button>
-                        <button class="px-5 py-1.5 text-xs font-medium bg-[#EDE8DC] text-black shadow-sm transition rounded-full">Assigned</button>
-                        <button class="px-5 py-1.5 text-xs font-medium text-zinc-400 hover:text-white transition rounded-full">Completed</button>
-                    </div>
-                    
-                    <div class="flex gap-3">
-                        <button class="w-9 h-9 rounded-full border border-zinc-700 flex items-center justify-center text-zinc-400 hover:text-white hover:border-zinc-500 transition"><span class="material-symbols-outlined text-[18px]">calendar_today</span></button>
-                        <button class="w-9 h-9 rounded-full border border-zinc-700 flex items-center justify-center text-zinc-400 hover:text-white hover:border-zinc-500 transition"><span class="material-symbols-outlined text-[18px]">filter_list</span></button>
-                    </div>
-                </div>
-                
-                <!-- Table Data -->
-                <div class="flex-1 overflow-y-auto">
-                    <table class="w-full text-left text-sm whitespace-nowrap">
-                        <thead class="text-xs text-zinc-500 bg-[#161616] sticky top-0 z-10 border-b border-[#262626]">
-                            <tr>
-                                <th class="font-medium px-6 py-4">Report ID</th>
-                                <th class="font-medium px-4 py-4">Sender</th>
-                                <th class="font-medium px-4 py-4">Details</th>
-                                <th class="font-medium px-4 py-4 text-right">Score</th>
-                                <th class="font-medium px-6 py-4 text-right">Status</th>
-                            </tr>
-                        </thead>
-                        <tbody id="queue-body" class="divide-y divide-[#262626]">
-                            <!-- Static Row (if no data) -->
-                            <tr class="hover:bg-[#1C1C1C] transition cursor-pointer">
-                                <td class="px-6 py-4 text-white font-medium flex items-center gap-3">
-                                    <span class="material-symbols-outlined text-[20px] text-zinc-400">mark_email_unread</span>
+<div class="text-zinc-500">Sanitation Issue</div>
+</div>
+</div>
+<!-- Table Card -->
+<div class="card flex-1 flex flex-col overflow-hidden bg-[#161616]">
+<!-- Table Header Controls -->
+<div class="flex items-center justify-between px-6 py-4 border-b border-[#262626]">
+<h3 class="text-lg text-white font-medium">Priority Queue</h3>
+<div class="flex items-center gap-1 bg-[#0A0A0A] p-1 rounded-full border border-[#262626]">
+<button class="px-5 py-1.5 text-xs font-medium text-zinc-400 hover:text-white transition rounded-full">All</button>
+<button class="px-5 py-1.5 text-xs font-medium text-zinc-400 hover:text-white transition rounded-full">Pending</button>
+<button class="px-5 py-1.5 text-xs font-medium text-zinc-400 hover:text-white transition rounded-full">Responded</button>
+<button class="px-5 py-1.5 text-xs font-medium bg-[#EDE8DC] text-black shadow-sm transition rounded-full">Assigned</button>
+<button class="px-5 py-1.5 text-xs font-medium text-zinc-400 hover:text-white transition rounded-full">Completed</button>
+</div>
+<div class="flex gap-3">
+<button class="w-9 h-9 rounded-full border border-zinc-700 flex items-center justify-center text-zinc-400 hover:text-white hover:border-zinc-500 transition"><span class="material-symbols-outlined text-[18px]">calendar_today</span></button>
+<button class="w-9 h-9 rounded-full border border-zinc-700 flex items-center justify-center text-zinc-400 hover:text-white hover:border-zinc-500 transition"><span class="material-symbols-outlined text-[18px]">filter_list</span></button>
+</div>
+</div>
+<!-- Table Data -->
+<div class="flex-1 overflow-y-auto">
+<table class="w-full text-left text-sm whitespace-nowrap">
+<thead class="text-xs text-zinc-500 bg-[#161616] sticky top-0 z-10 border-b border-[#262626]">
+<tr>
+<th class="font-medium px-6 py-4">Report ID</th>
+<th class="font-medium px-4 py-4">Sender</th>
+<th class="font-medium px-4 py-4">Details</th>
+<th class="font-medium px-4 py-4 text-right">Score</th>
+<th class="font-medium px-6 py-4 text-right">Status</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-[#262626]" id="queue-body">
+<!-- Static Row (if no data) -->
+<tr class="hover:bg-[#1C1C1C] transition cursor-pointer">
+<td class="px-6 py-4 text-white font-medium flex items-center gap-3">
+<span class="material-symbols-outlined text-[20px] text-zinc-400">mark_email_unread</span>
                                     #AB045861
                                 </td>
-                                <td class="px-4 py-4">
-                                    <div class="text-zinc-300">Shikhar Singh</div>
-                                    <div class="text-xs text-zinc-500 mt-1">Citizen</div>
-                                </td>
-                                <td class="px-4 py-4">
-                                    <div class="text-zinc-300 truncate max-w-[280px]">Garbage overflow near market</div>
-                                    <div class="text-xs text-zinc-500 mt-1 flex items-center"><span class="material-symbols-outlined text-[14px] align-middle mr-1">image</span> 12 Sep, 2026</div>
-                                </td>
-                                <td class="px-4 py-4 text-right font-medium text-white">85</td>
-                                <td class="px-6 py-4 text-right text-zinc-300">In Transit</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </main>
+<td class="px-4 py-4">
+<div class="text-zinc-300">Shikhar Singh</div>
+<div class="text-xs text-zinc-500 mt-1">Citizen</div>
+</td>
+<td class="px-4 py-4">
+<div class="text-zinc-300 truncate max-w-[280px]">Garbage overflow near market</div>
+<div class="text-xs text-zinc-500 mt-1 flex items-center"><span class="material-symbols-outlined text-[14px] align-middle mr-1">image</span> 12 Sep, 2026</div>
+</td>
+<td class="px-4 py-4 text-right font-medium text-white">85</td>
+<td class="px-6 py-4 text-right text-zinc-300">In Transit</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+</div>
+<div class="view-content w-full h-full gap-5" id="view-analysis">
+<aside class="w-[340px] flex flex-col gap-5 overflow-y-auto pr-1">
+<div class="card p-6 flex flex-col gap-5">
+<h3 class="text-lg text-white font-medium">Monthly Grievance Volume</h3>
+<div class="text-4xl text-white font-medium tracking-tight serif">12,450</div>
+<div class="text-xs text-green-500">+14% vs last month</div>
+<div class="sparkline w-full mt-4"></div>
+</div>
+<div class="card p-6 flex flex-col gap-5">
+<h3 class="text-lg text-white font-medium">Resolution Rates</h3>
+<div class="flex items-center justify-between text-sm">
+<div class="w-24 text-zinc-400">Sanitation</div>
+<div class="flex-1 px-4"><div class="segmented-bar" id="ana-seg-1"></div></div>
+<div class="w-8 text-right text-white">92%</div>
+</div>
+<div class="flex items-center justify-between text-sm">
+<div class="w-24 text-zinc-400">Roads</div>
+<div class="flex-1 px-4"><div class="segmented-bar" id="ana-seg-2"></div></div>
+<div class="w-8 text-right text-white">78%</div>
+</div>
+<div class="flex items-center justify-between text-sm">
+<div class="w-24 text-zinc-400">Medical</div>
+<div class="flex-1 px-4"><div class="segmented-bar" id="ana-seg-3"></div></div>
+<div class="w-8 text-right text-white">95%</div>
+</div>
+</div>
+</aside>
+<div class="card flex-1 flex flex-col overflow-hidden bg-[#161616]">
+<div class="p-6 border-b border-[#262626]">
+<h3 class="serif text-xl text-white">Predictive Hotspot Analysis</h3>
+</div>
+<div class="p-6 text-zinc-400 text-sm">
+                AI analysis indicates a 40% probability of severe waterlogging in South Zone over the next 72 hours based on recent complaint clusters and weather forecasts.
+                <div class="mt-8 grid grid-cols-3 gap-6">
+<div class="p-4 border border-[#262626] rounded-xl bg-[#0A0A0A]">
+<div class="text-xs text-zinc-500">Predicted Volume</div>
+<div class="text-2xl text-white serif mt-1">850</div>
+</div>
+<div class="p-4 border border-[#262626] rounded-xl bg-[#0A0A0A]">
+<div class="text-xs text-zinc-500">Resource Readiness</div>
+<div class="text-2xl text-red-400 serif mt-1">Low</div>
+</div>
+<div class="p-4 border border-[#262626] rounded-xl bg-[#0A0A0A]">
+<div class="text-xs text-zinc-500">Estimated SLA breach</div>
+<div class="text-2xl text-white serif mt-1">12%</div>
+</div>
+</div>
+</div>
+</div>
+</div>
 
-    <script>
+<div class="view-content w-full h-full gap-5" id="view-survey">
+<aside class="w-[340px] flex flex-col gap-5 overflow-y-auto pr-1">
+<div class="card p-6 flex flex-col gap-5">
+<h3 class="text-lg text-white font-medium">Citizen Satisfaction</h3>
+<div class="text-5xl text-white font-medium tracking-tight serif text-center my-4">4.2<span class="text-xl text-zinc-500">/5</span></div>
+<div class="flex justify-center gap-1 text-amber-400 mb-2">
+<span class="material-symbols-outlined">star</span>
+<span class="material-symbols-outlined">star</span>
+<span class="material-symbols-outlined">star</span>
+<span class="material-symbols-outlined">star</span>
+<span class="material-symbols-outlined text-zinc-600">star</span>
+</div>
+<div class="text-center text-xs text-zinc-500">Based on 4,192 responses</div>
+</div>
+</aside>
+<div class="card flex-1 flex flex-col overflow-hidden bg-[#161616]">
+<div class="p-6 border-b border-[#262626]">
+<h3 class="serif text-xl text-white">Recent Feedback</h3>
+</div>
+<div class="flex-1 overflow-auto">
+<table class="w-full text-left text-sm whitespace-nowrap">
+<thead class="text-xs text-zinc-500 bg-[#161616] sticky top-0 border-b border-[#262626]">
+<tr>
+<th class="font-medium px-6 py-4">Citizen</th>
+<th class="font-medium px-4 py-4">Category</th>
+<th class="font-medium px-4 py-4">Feedback</th>
+<th class="font-medium px-6 py-4 text-right">Rating</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-[#262626]">
+<tr class="hover:bg-[#1C1C1C] transition">
+<td class="px-6 py-4 text-white">Rahul K.</td>
+<td class="px-4 py-4 text-zinc-400">Sanitation</td>
+<td class="px-4 py-4 text-zinc-300">Resolved quickly, but area was left messy.</td>
+<td class="px-6 py-4 text-right text-amber-400">⭐⭐⭐</td>
+</tr>
+<tr class="hover:bg-[#1C1C1C] transition">
+<td class="px-6 py-4 text-white">Priya S.</td>
+<td class="px-4 py-4 text-zinc-400">Medical</td>
+<td class="px-4 py-4 text-zinc-300">Excellent emergency response time!</td>
+<td class="px-6 py-4 text-right text-amber-400">⭐⭐⭐⭐⭐</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+
+<div class="view-content w-full h-full gap-5" id="view-coordination">
+<div class="card map-bg flex-1 relative overflow-hidden min-h-[300px] border-none shadow-inner">
+<div class="absolute inset-0 opacity-40 bg-[url('https://www.transparenttextures.com/patterns/cartographer.png')] mix-blend-multiply"></div>
+<div class="absolute top-5 left-5 bg-white text-black px-4 py-2.5 rounded-full text-sm font-medium shadow-[0_8px_30px_rgb(0,0,0,0.12)]">Active Field Units</div>
+<!-- Dispatch Pins -->
+<div class="map-pin" style="top: 40%; left: 30%; background: #4f46e5;"><span class="material-symbols-outlined text-[14px]">local_shipping</span></div>
+<div class="map-pin" style="top: 60%; left: 70%; background: #059669;"><span class="material-symbols-outlined text-[14px]">local_hospital</span></div>
+</div>
+<aside class="w-[340px] flex flex-col gap-5 overflow-y-auto pr-1">
+<div class="card p-6 flex flex-col gap-4">
+<h3 class="text-lg text-white font-medium">Active Dispatches</h3>
+<div class="p-4 bg-[#0A0A0A] border border-[#262626] rounded-xl">
+<div class="flex justify-between items-start mb-2">
+<div class="font-medium text-white">Unit Alpha-1</div>
+<div class="text-xs bg-[#EDE8DC] text-black px-2 py-0.5 rounded-full">En Route</div>
+</div>
+<div class="text-xs text-zinc-500 mb-2">Sanitation Dept</div>
+<div class="text-xs text-zinc-400">Heading to Market Square for priority clean-up. ETA 12 mins.</div>
+</div>
+<div class="p-4 bg-[#0A0A0A] border border-[#262626] rounded-xl">
+<div class="flex justify-between items-start mb-2">
+<div class="font-medium text-white">Unit Med-4</div>
+<div class="text-xs border border-green-500 text-green-500 px-2 py-0.5 rounded-full">On Site</div>
+</div>
+<div class="text-xs text-zinc-500 mb-2">Health Dept</div>
+<div class="text-xs text-zinc-400">Attending medical camp at South Zone.</div>
+</div>
+</div>
+</aside>
+</div>
+</main>
+<script>
+        function switchView(viewId) {
+            document.querySelectorAll('.view-content').forEach(el => {
+                el.classList.remove('active');
+            });
+            document.getElementById('view-' + viewId).classList.add('active');
+            
+            document.querySelectorAll('.nav-link').forEach(el => {
+                el.classList.remove('active');
+                el.classList.remove('text-white');
+                el.classList.add('text-zinc-500');
+            });
+            
+            const activeLink = document.getElementById('nav-' + viewId);
+            if(activeLink) {
+                activeLink.classList.add('active');
+                activeLink.classList.add('text-white');
+                activeLink.classList.remove('text-zinc-500');
+            }
+        }
+
+        // Initialize Analysis segments
+        setTimeout(() => {
+            if(typeof drawSegments === 'function') {
+                drawSegments('ana-seg-1', 92);
+                drawSegments('ana-seg-2', 78);
+                drawSegments('ana-seg-3', 95);
+            }
+        }, 500);
+    
         // Generate Segmented Bars exactly like the reference image
         function drawSegments(id, percentage) {
             const container = document.getElementById(id);
