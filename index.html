@@ -581,6 +581,21 @@
         
         
 
+        // Lucknow Smart Grid constraints
+        function applyLucknowGridAndLock(mapObj, lock) {
+            const bounds = [[26.75, 80.85], [26.95, 81.05]]; // Approximate bounds of Lucknow
+            L.rectangle(bounds, {color: "#3b82f6", weight: 2, fill: false, opacity: 0.4}).addTo(mapObj);
+            
+            if (lock) {
+                mapObj.dragging.disable();
+                mapObj.touchZoom.disable();
+                mapObj.doubleClickZoom.disable();
+                mapObj.scrollWheelZoom.disable();
+                mapObj.boxZoom.disable();
+                mapObj.keyboard.disable();
+            }
+        }
+
         // Fetch Live Messages from FastAPI backend
         async function fetchMessages() {
             try {
