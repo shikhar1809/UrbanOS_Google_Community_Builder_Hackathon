@@ -554,6 +554,36 @@
             try {
                 const response = await fetch('/messages');
                 const data = await response.json();
+                
+                // Trigger live animation if new messages arrived
+                if (lastMessageCount !== -1 && data.messages.length > lastMessageCount) {
+                    const numNew = data.messages.length - lastMessageCount;
+                    for(let i=0; i<numNew; i++) {
+                        setTimeout(() => {
+                            const canvas = document.getElementById('animation-canvas');
+                            if(canvas) {
+                                const packet = document.createElement('div');
+                                packet.className = 'data-packet fly-once';
+                                canvas.appendChild(packet);
+                                
+                                // Increment counter
+                                const counter = document.getElementById('msg-counter');
+                                if(counter) counter.innerText = parseInt(counter.innerText) + 1;
+                                
+                                setTimeout(() => packet.remove(), 1500);
+                            }
+                        }, i * 300);
+                    }
+                }
+                
+                if (lastMessageCount === -1) {
+                    // First load, just set the counter
+                    const counter = document.getElementById('msg-counter');
+                    if(counter) counter.innerText = data.messages.length;
+                }
+                
+                lastMessageCount = data.messages.length;
+
                 const tbody = document.getElementById('queue-body');
                 
                 if(tbody && data.messages && data.messages.length > 0) {
