@@ -1800,14 +1800,44 @@
         let q = document.getElementById('survey-q').value;
         let opt = document.getElementById('survey-opt').value;
         if(!q || !opt) return alert("Fill fields");
-        await fetch('/surveys', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({question: q, options: opt})
-        });
-        document.getElementById('survey-q').value = '';
-        document.getElementById('survey-opt').value = '';
-        loadSurveys();
+        
+        const btn = event.target;
+        btn.disabled = true;
+        btn.textContent = 'Launching...';
+        
+        try {
+            // Step 1: Create
+            let res = await fetch('/surveys', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({question: q, options: opt})
+            });
+            let data = await res.json();
+            const newId = data.id;
+            
+            // Step 2: Activate
+            await fetch(`/surveys/${newId}/activate`, {method: 'POST'});
+            
+            // Step 3: Broadcast
+            btn.textContent = 'Broadcasting...';
+            let bRes = await fetch(`/surveys/${newId}/broadcast`, {method: 'POST'});
+            let bData = await bRes.json();
+            
+            document.getElementById('survey-q').value = '';
+            document.getElementById('survey-opt').value = '';
+            loadSurveys();
+            
+            if(bData.broadcast_count > 0) {
+                alert(`✅ Survey launched & sent to ${bData.broadcast_count} citizens via WhatsApp!`);
+            } else {
+                alert(`✅ Survey created and set active. No citizen numbers found to broadcast yet — citizens who have previously submitted proposals will receive it automatically after their next interaction.`);
+            }
+        } catch(e) {
+            alert("Error launching survey: " + e.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Create & Launch';
+        }
     }
     
     
@@ -1829,6 +1859,14 @@
     
     async function activateSurvey(id) {
         await fetch(`/surveys/${id}/activate`, {method: 'POST'});
+        // Also broadcast immediately on activation
+        try {
+            let bRes = await fetch(`/surveys/${id}/broadcast`, {method: 'POST'});
+            let bData = await bRes.json();
+            if(bData.broadcast_count > 0) {
+                alert(`✅ Survey activated & broadcast to ${bData.broadcast_count} citizens!`);
+            }
+        } catch(e) { /* silent */ }
         loadSurveys();
     }
     
