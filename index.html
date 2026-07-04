@@ -103,7 +103,7 @@
 <svg class="w-6 h-6 text-white" fill="currentColor" viewbox="0 0 24 24"><path d="M12 2L2 22h20L12 2zm0 4.5l6.5 13h-13L12 6.5z"></path></svg>
 <span class="serif text-xl text-white">UrbanOS.</span>
 </div>
-<nav class="flex gap-8"><a class="text-sm text-zinc-500 hover:text-white transition nav-link" href="javascript:void(0)" id="nav-analysis" onclick="switchView('analysis')">Analysis</a><a class="text-sm text-zinc-500 hover:text-white transition nav-link active" href="javascript:void(0)" id="nav-priority" onclick="switchView('priority')">Priority</a><a class="text-sm text-zinc-500 hover:text-white transition nav-link" href="javascript:void(0)" id="nav-survey" onclick="switchView('survey')">Survey</a><a class="text-sm text-zinc-500 hover:text-white transition nav-link" href="javascript:void(0)" id="nav-coordination" onclick="switchView('coordination')">Coordination</a><a class="text-sm text-zinc-500 hover:text-white transition nav-link" href="javascript:void(0)" id="nav-live" onclick="switchView('live')">Live Feed</a></nav>
+<nav class="flex gap-8"><a class="text-sm hover:text-white transition nav-link active text-white" href="javascript:void(0)" id="nav-live" onclick="switchView('live')">Live Feed</a><a class="text-sm text-zinc-500 hover:text-white transition nav-link" href="javascript:void(0)" id="nav-analysis" onclick="switchView('analysis')">Analysis</a><a class="text-sm text-zinc-500 hover:text-white transition nav-link" href="javascript:void(0)" id="nav-priority" onclick="switchView('priority')">Priority</a><a class="text-sm text-zinc-500 hover:text-white transition nav-link" href="javascript:void(0)" id="nav-survey" onclick="switchView('survey')">Survey</a><a class="text-sm text-zinc-500 hover:text-white transition nav-link" href="javascript:void(0)" id="nav-coordination" onclick="switchView('coordination')">Coordination</a></nav>
 <div class="flex items-center gap-5">
 <button class="w-9 h-9 rounded-full border border-zinc-700 flex items-center justify-center text-zinc-400 hover:text-white hover:border-zinc-500 transition">
 <span class="material-symbols-outlined" style="font-size: 18px;">search</span>
@@ -123,7 +123,7 @@
 </div>
 </header>
 <!-- Main Content -->
-<main class="flex-1 flex gap-5 p-5 overflow-hidden"><div class="view-content active w-full h-full gap-5" id="view-priority">
+<main class="flex-1 flex gap-5 p-5 overflow-hidden"><div class="view-content w-full h-full gap-5" id="view-priority">
 <!-- Left Column (320px fixed width) -->
 <aside class="w-[340px] flex flex-col gap-5 overflow-y-auto pr-1">
 <!-- Today's Grievance Progress -->
@@ -425,8 +425,7 @@
 </div>
 </aside>
 </div>
-
-<div class="view-content w-full h-full flex-col gap-5" id="view-live">
+<div class="view-content w-full h-full flex-col gap-5 active" id="view-live">
 <!-- Top Section: Animation -->
 <div class="card p-8 h-40 relative flex items-center justify-between overflow-hidden bg-[#0A0A0A] border-[#262626]">
 <!-- Grid Background for tech feel -->
@@ -504,6 +503,7 @@
                 el.classList.remove('active');
             });
             document.getElementById('view-' + viewId).classList.add('active');
+        setTimeout(() => { window.dispatchEvent(new Event('resize')); }, 100);
             
             document.querySelectorAll('.nav-link').forEach(el => {
                 el.classList.remove('active');
