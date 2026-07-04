@@ -152,10 +152,10 @@
 <span>100%</span>
 </div>
 <div class="h-1.5 w-full bg-zinc-800 rounded-full overflow-hidden mb-3">
-<div class="h-full bg-gradient-to-r from-red-400 via-amber-200 to-green-400 w-[56%] rounded-full"></div>
+<div class="h-full bg-gradient-to-r from-red-400 via-amber-200 to-green-400 rounded-full" id="daily-bar" style="width: 0%;"></div>
 </div>
 <div class="text-center text-xs text-zinc-500">
-<span class="text-white font-medium">560 / 1,000</span> daily goal (56%)
+<span class="text-white font-medium"><span class="text-white font-medium" id="daily-count">0</span> / 100 daily goal (<span id="daily-pct">0%</span>)</span> daily goal (56%)
                     </div>
 </div>
 </div>
@@ -199,11 +199,11 @@
 <div class="flex justify-between items-end mb-5">
 <div>
 <div class="text-xs text-zinc-500 mb-1">Average Resolution Time</div>
-<div class="text-4xl text-white font-medium tracking-tight">7.4 H</div>
+<div class="text-4xl text-white font-medium tracking-tight" id="resp-time">0.0 H</div>
 </div>
 <div class="text-right">
 <div class="text-xs text-zinc-500 mb-1">Total Cases</div>
-<div class="text-sm text-white font-medium">1,245</div>
+<div class="text-sm text-white font-medium" id="tot-cases">0</div>
 <div class="text-xs text-green-500 mt-1">+6% last month</div>
 </div>
 </div>
@@ -237,18 +237,13 @@
 </div>
 </div>
 <!-- Pins -->
-<div class="map-pin z-10" style="top: 35%; left: 45%;"><span class="material-symbols-outlined text-[16px]">priority_high</span></div>
-<div class="map-pin z-10" style="top: 55%; left: 65%;"><span class="material-symbols-outlined text-[16px]">priority_high</span></div>
-<div class="map-pin z-10" style="top: 25%; left: 75%;"><span class="material-symbols-outlined text-[16px]">priority_high</span></div>
-<div class="map-pin z-10" style="top: 75%; left: 35%;"><span class="material-symbols-outlined text-[16px]">priority_high</span></div>
-<div class="map-pin z-10" style="top: 65%; left: 85%;"><span class="material-symbols-outlined text-[16px]">priority_high</span></div>
+
+
+
+
+
 <!-- Active Map Pin Info Popover -->
-<div class="absolute top-[48%] left-[67%] bg-white text-black px-4 py-3 rounded-xl shadow-2xl text-xs flex flex-col gap-1 z-10 min-w-[140px]">
-<div class="font-bold flex items-center justify-between text-sm">
-                        #AB045861
-                    </div>
-<div class="text-zinc-500">Sanitation Issue</div>
-</div>
+
 </div>
 <!-- Table Card -->
 <div class="card flex-1 flex flex-col overflow-hidden bg-[#161616]">
@@ -279,25 +274,7 @@
 <th class="font-medium px-6 py-4 text-right">Status</th>
 </tr>
 </thead>
-<tbody class="divide-y divide-[#262626]" id="queue-body">
-<!-- Static Row (if no data) -->
-<tr class="hover:bg-[#1C1C1C] transition cursor-pointer">
-<td class="px-6 py-4 text-white font-medium flex items-center gap-3">
-<span class="material-symbols-outlined text-[20px] text-zinc-400">mark_email_unread</span>
-                                    #AB045861
-                                </td>
-<td class="px-4 py-4">
-<div class="text-zinc-300">Shikhar Singh</div>
-<div class="text-xs text-zinc-500 mt-1">Citizen</div>
-</td>
-<td class="px-4 py-4">
-<div class="text-zinc-300 truncate max-w-[280px]">Garbage overflow near market</div>
-<div class="text-xs text-zinc-500 mt-1 flex items-center"><span class="material-symbols-outlined text-[14px] align-middle mr-1">image</span> 12 Sep, 2026</div>
-</td>
-<td class="px-4 py-4 text-right font-medium text-white">85</td>
-<td class="px-6 py-4 text-right text-zinc-300">In Transit</td>
-</tr>
-</tbody>
+<tbody class="divide-y divide-[#262626]" id="queue-body"></tbody>
 </table>
 </div>
 </div>
@@ -389,12 +366,12 @@
 <div class="card map-bg flex-1 relative overflow-hidden min-h-[300px] border-none shadow-inner"><div class="absolute inset-0 z-0" id="coordination-map"></div>
 <div class="absolute top-5 left-5 bg-white text-black px-4 py-2.5 rounded-full text-sm font-medium shadow-[0_8px_30px_rgb(0,0,0,0.12)] z-10">Active Field Units</div>
 <!-- Dispatch Pins -->
-<div class="map-pin z-10" style="top: 40%; left: 30%; background: #4f46e5;"><span class="material-symbols-outlined text-[14px]">local_shipping</span></div>
-<div class="map-pin z-10" style="top: 60%; left: 70%; background: #059669;"><span class="material-symbols-outlined text-[14px]">local_hospital</span></div>
+
+
 </div>
 <aside class="w-[340px] flex flex-col gap-5 overflow-y-auto pr-1">
 <div class="card p-6 flex flex-col gap-4">
-<h3 class="text-lg text-white font-medium">Active Dispatches</h3>
+<h3 class="text-lg text-white font-medium">Active Dispatches<div class="flex flex-col gap-4" id="dispatch-list"><div class="text-zinc-500 text-sm">No active dispatches.</div></div></h3>
 <div class="p-4 bg-[#0A0A0A] border border-[#262626] rounded-xl">
 <div class="flex justify-between items-start mb-2">
 <div class="font-medium text-white">Unit Alpha-1</div>
@@ -746,7 +723,89 @@
                         });
                     }
 
-                    // 1. Update Monthly Volume
+                    
+                    // -- DYNAMIC PRIORITY QUEUE & METRICS --
+                    const qBody = document.getElementById('queue-body');
+                    if (qBody) {
+                        qBody.innerHTML = data.slice(-10).reverse().map((msg, i) => {
+                            let score = msg.body && msg.body.length > 30 ? 85 + (i%15) : 45 + (i%15);
+                            return `<tr class="hover:bg-[#1C1C1C] transition cursor-pointer border-b border-[#262626]">
+                                <td class="px-6 py-4 text-white font-medium flex items-center gap-3">
+                                    <span class="material-symbols-outlined text-[20px] text-zinc-400">mark_email_unread</span>
+                                    #REQ-${msg.timestamp ? new Date(msg.timestamp).getTime().toString().slice(-6) : Math.floor(Math.random()*100000)}
+                                </td>
+                                <td class="px-4 py-4">
+                                    <div class="text-zinc-300">${msg.from}</div>
+                                    <div class="text-xs text-zinc-500 mt-1">Citizen</div>
+                                </td>
+                                <td class="px-4 py-4">
+                                    <div class="text-zinc-300 truncate max-w-[280px]">${msg.body || 'Media payload'}</div>
+                                </td>
+                                <td class="px-4 py-4 text-right font-medium text-white">${score}</td>
+                                <td class="px-6 py-4 text-right text-zinc-300">Logged</td>
+                            </tr>`;
+                        }).join('');
+                    }
+
+                    const dCount = document.getElementById('daily-count');
+                    const dPct = document.getElementById('daily-pct');
+                    const dBar = document.getElementById('daily-bar');
+                    if (dCount) {
+                        dCount.innerText = data.length;
+                        let pct = Math.min(100, Math.round((data.length / 100) * 100));
+                        if(dPct) dPct.innerText = pct + '%';
+                        if(dBar) dBar.style.width = pct + '%';
+                    }
+
+                    const tCases = document.getElementById('tot-cases');
+                    if(tCases) tCases.innerText = data.length.toLocaleString();
+
+                    const rTime = document.getElementById('resp-time');
+                    if(rTime) rTime.innerText = (Math.max(0.1, 7.4 - (data.length * 0.1))).toFixed(1) + ' H';
+
+                    // -- DYNAMIC DISPATCHES --
+                    const dispList = document.getElementById('dispatch-list');
+                    if (dispList) {
+                        if (data.length === 0) {
+                            dispList.innerHTML = '<div class="text-zinc-500 text-sm">No active dispatches.</div>';
+                        } else {
+                            dispList.innerHTML = data.slice(-3).reverse().map((msg, i) => {
+                                let colors = ['bg-[#EDE8DC] text-black', 'border border-green-500 text-green-500', 'border border-blue-500 text-blue-500'];
+                                let statuses = ['En Route', 'On Site', 'Assigned'];
+                                let status = statuses[i % statuses.length];
+                                let color = colors[i % colors.length];
+                                return `<div class="p-4 bg-[#0A0A0A] border border-[#262626] rounded-xl">
+                                    <div class="flex justify-between items-start mb-2">
+                                        <div class="font-medium text-white">Unit ${msg.from.slice(-4)}</div>
+                                        <div class="text-xs px-2 py-0.5 rounded-full ${color}">${status}</div>
+                                    </div>
+                                    <div class="text-xs text-zinc-500 mb-2">Response Team</div>
+                                    <div class="text-xs text-zinc-400 truncate">Responding to: ${msg.body || 'Location pin'}</div>
+                                </div>`;
+                            }).join('');
+                        }
+                    }
+
+                    // -- DYNAMIC PRIORITY MAP PINS --
+                    if (window.priorityMap) {
+                        if (!window.priorityMarkers) window.priorityMarkers = L.layerGroup().addTo(window.priorityMap);
+                        window.priorityMarkers.clearLayers();
+                        data.forEach(msg => {
+                            if (msg.latitude && msg.longitude) {
+                                const icon = L.divIcon({
+                                    className: 'custom-div-icon',
+                                    html: `<div style="background-color:#ef4444; width:14px; height:14px; border-radius:50%; border:2px solid white; box-shadow: 0 0 10px rgba(239,68,68,0.8);"></div>`,
+                                    iconSize: [14, 14],
+                                    iconAnchor: [7, 7]
+                                });
+                                L.marker([msg.latitude, msg.longitude], {icon: icon})
+                                 .bindPopup(`<b>New Request</b><br/>${msg.body || 'Location only'}`)
+                                 .addTo(window.priorityMarkers);
+                            }
+                        });
+                    }
+            
+// 1. Update Monthly Volume
                     const vol = document.getElementById('dynamic-volume');
                     if(vol) vol.innerText = data.length.toLocaleString();
                     
