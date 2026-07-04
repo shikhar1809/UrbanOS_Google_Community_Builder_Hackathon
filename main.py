@@ -1,7 +1,11 @@
 import os
 import httpx
 from datetime import datetime
-from fastapi import FastAPI, Request, HTTPException, Depends
+from fastapi import FastAPI, Request, HTTPException, Depends, BackgroundTasks
+from twilio.twiml.messaging_response import MessagingResponse
+from state import get_session, update_session, clear_session
+from worker import process_voice_note
+import json
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse, FileResponse
 from dotenv import load_dotenv
 from twilio.request_validator import RequestValidator
@@ -39,7 +43,11 @@ class Message(Base):
     sentiment = Column(String, nullable=True)
     extracted_location = Column(String, nullable=True)
     summary = Column(String, nullable=True)
+    reference_id = Column(String, nullable=True)
+    status = Column(String, default="Open")
 
+# Ensure all models including state are created
+import state
 Base.metadata.create_all(bind=engine)
 
 def get_db():
@@ -79,9 +87,10 @@ async def favicon():
     return FileResponse("favicon.svg", media_type="image/svg+xml")
 
 @app.post("/webhook/whatsapp")
-async def receive_whatsapp(request: Request, db: Session = Depends(get_db)):
+async def receive_whatsapp(request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     form_data = await request.form()
     
+    # Twilio security validation
     if twilio_validator:
         signature = request.headers.get("X-Twilio-Signature", "")
         url = str(request.url)
@@ -94,65 +103,177 @@ async def receive_whatsapp(request: Request, db: Session = Depends(get_db)):
         if not twilio_validator.validate(url, post_vars, signature):
             print(f"[SECURITY ALERT] Invalid Twilio signature from {request.client.host}. Dropping request.")
 
-    body = form_data.get("Body", "")
-    media_content_type = form_data.get("MediaContentType0")
+    sender = form_data.get("From", "")
+    body = form_data.get("Body", "").strip()
+    media_url = form_data.get("MediaUrl0")
+    media_type = form_data.get("MediaContentType0", "")
     lat_str = form_data.get("Latitude")
     lng_str = form_data.get("Longitude")
     
-    lat = float(lat_str) if lat_str else None
-    lng = float(lng_str) if lng_str else None
+    twiml = MessagingResponse()
     
-    location_source = "gps_pin" if (lat and lng) else ("needs_nlp_extraction" if body else None)
-    
-    # -- AI Triage Processing --
-    category = None
-    priority = None
-    sentiment = None
-    extracted_location = None
-    summary = None
-    
-    if gemini_client and body:
-        try:
-            prompt = f"Analyze this citizen grievance report from a Smart City WhatsApp tip-line. Extract the structured triage data.\n\nReport Text: {body}"
-            response = gemini_client.models.generate_content(
-                model='gemini-2.5-flash',
-                contents=prompt,
-                config={
-                    'response_mime_type': 'application/json',
-                    'response_schema': TriageResult,
-                },
-            )
-            triage = response.parsed
-            category = triage.category
-            priority = triage.priority
-            sentiment = triage.sentiment
-            extracted_location = triage.extracted_location
-            summary = triage.summary
+    # Check for commands
+    body_lower = body.lower()
+    if body_lower.startswith("status"):
+        if body_lower == "status":
+            # Lookup all active for this sender
+            reports = db.query(Message).filter(Message.sender == sender, Message.reference_id != None).order_by(Message.id.desc()).limit(3).all()
+            if not reports:
+                twiml.message("You have no active reports.")
+                return HTMLResponse(content=str(twiml), media_type="application/xml")
             
-            print(f"--- AI Triage Result ---\nCategory: {category}\nPriority: {priority}\nSummary: {summary}\n-----------------------")
-        except Exception as e:
-            print(f"[AI ERROR] Gemini Triage Failed: {e}")
+            msg = "Your Recent Reports:\n"
+            for r in reports:
+                msg += f"#{r.reference_id} - {r.category or 'General'}\nStatus: {r.status}\n\n"
+            twiml.message(msg.strip())
+            return HTMLResponse(content=str(twiml), media_type="application/xml")
+        else:
+            # Lookup specific ID
+            parts = body_lower.split()
+            if len(parts) > 1:
+                ref_id = parts[1].strip('#')
+                report = db.query(Message).filter(Message.reference_id == ref_id).first()
+                if report:
+                    twiml.message(f"Report #{report.reference_id}\nCategory: {report.category or 'General'}\nStatus: {report.status}\nSummary: {report.summary}")
+                else:
+                    twiml.message(f"Could not find report #{ref_id}.")
+                return HTMLResponse(content=str(twiml), media_type="application/xml")
 
-    new_message = Message(
-        timestamp=datetime.now().isoformat(),
-        sender=form_data.get("From", "Unknown"),
-        body=body,
-        media_url=form_data.get("MediaUrl0"),
-        media_content_type=media_content_type,
-        latitude=lat,
-        longitude=lng,
-        location_source=location_source,
-        category=category,
-        priority=priority,
-        sentiment=sentiment,
-        extracted_location=extracted_location,
-        summary=summary
-    )
+    if body_lower == "new report":
+        clear_session(db, sender)
+        twiml.message("Previous report discarded. New report started. What issue would you like to report? Please describe it in your own words.")
+        update_session(db, sender, "awaiting_description", {})
+        return HTMLResponse(content=str(twiml), media_type="application/xml")
+
+    # State Machine Logic
+    session = get_session(db, sender)
+    current_step = session.current_step if session else None
     
-    db.add(new_message)
-    db.commit()
-    
-    return HTMLResponse(content="", status_code=200)
+    if current_step is None:
+        # Start new report
+        twiml.message("New report started. What issue would you like to report? Please describe it in your own words. (You can also send a voice note!)")
+        update_session(db, sender, "awaiting_description", {})
+        return HTMLResponse(content=str(twiml), media_type="application/xml")
+        
+    elif current_step == "awaiting_description":
+        if "audio" in media_type and media_url:
+            twiml.message("Voice note received, processing your description now...")
+            background_tasks.add_task(process_voice_note, media_url, sender, db)
+            return HTMLResponse(content=str(twiml), media_type="application/xml")
+        
+        elif body:
+            update_session(db, sender, "awaiting_location", {"description": body})
+            twiml.message("Description saved. Now share your location — send a location pin, or type your area name.")
+            return HTMLResponse(content=str(twiml), media_type="application/xml")
+        else:
+            twiml.message("Please describe the issue in text or send a voice note.")
+            return HTMLResponse(content=str(twiml), media_type="application/xml")
+            
+    elif current_step == "awaiting_location":
+        location_data = None
+        source = None
+        if lat_str and lng_str:
+            location_data = f"{lat_str},{lng_str}"
+            source = "gps_pin"
+        elif body:
+            location_data = body
+            source = "text"
+            
+        if location_data:
+            update_session(db, sender, "awaiting_photo", {"location": location_data, "location_source": source})
+            twiml.message("Location saved. Would you like to attach a photo? Send it now, or reply 'skip' if not.")
+            return HTMLResponse(content=str(twiml), media_type="application/xml")
+        else:
+            twiml.message("Please send a location pin or type your area name.")
+            return HTMLResponse(content=str(twiml), media_type="application/xml")
+            
+    elif current_step == "awaiting_photo":
+        if "image" in media_type and media_url:
+            update_session(db, sender, "finalize", {"photo_url": media_url, "photo_type": media_type})
+            twiml.message("Photo received! Finalizing your report...")
+        elif body_lower == "skip":
+            update_session(db, sender, "finalize", {})
+            twiml.message("Finalizing your report...")
+        else:
+            twiml.message("Please send a photo or reply 'skip'.")
+            return HTMLResponse(content=str(twiml), media_type="application/xml")
+            
+    # Finalize Logic (Run if step moved to finalize above)
+    session = get_session(db, sender) # refresh session
+    if session and session.current_step == "finalize":
+        data = json.loads(session.collected_data)
+        
+        description = data.get("description", "")
+        location_raw = data.get("location", "")
+        loc_source = data.get("location_source", "")
+        photo_url = data.get("photo_url", "")
+        
+        lat = None
+        lng = None
+        if loc_source == "gps_pin" and "," in location_raw:
+            try:
+                lat = float(location_raw.split(",")[0])
+                lng = float(location_raw.split(",")[1])
+            except:
+                pass
+                
+        # Generate Reference ID
+        count = db.query(Message).count() + 1
+        ref_id = f"UO{count:04d}"
+        
+        # AI Triage
+        category = None
+        priority = None
+        sentiment = None
+        extracted_location = location_raw if loc_source == "text" else None
+        summary = None
+        
+        if gemini_client and description:
+            try:
+                prompt = f"Analyze this citizen grievance report from a Smart City WhatsApp tip-line. Extract the structured triage data.\n\nReport Text: {description}"
+                response = gemini_client.models.generate_content(
+                    model='gemini-2.5-flash',
+                    contents=prompt,
+                    config={
+                        'response_mime_type': 'application/json',
+                        'response_schema': TriageResult,
+                    },
+                )
+                triage = response.parsed
+                category = triage.category
+                priority = triage.priority
+                sentiment = triage.sentiment
+                if loc_source == "text":
+                    extracted_location = triage.extracted_location or location_raw
+                summary = triage.summary
+            except Exception as e:
+                print(f"[AI ERROR] Gemini Triage Failed: {e}")
+                
+        new_message = Message(
+            timestamp=datetime.now().isoformat(),
+            sender=sender,
+            body=description,
+            media_url=photo_url or data.get("voice_url"),
+            media_content_type=data.get("photo_type") or ("audio/ogg" if data.get("voice_url") else None),
+            latitude=lat,
+            longitude=lng,
+            location_source=loc_source,
+            category=category,
+            priority=priority,
+            sentiment=sentiment,
+            extracted_location=extracted_location,
+            summary=summary,
+            reference_id=ref_id,
+            status="Open"
+        )
+        
+        db.add(new_message)
+        clear_session(db, sender)
+        db.commit()
+        
+        # We append to the existing twiml response created above
+        twiml.message(f"Report submitted successfully. Reference ID: #{ref_id}. Your MP's office has received this and it will be reviewed shortly.")
+        return HTMLResponse(content=str(twiml), media_type="application/xml")
 
 @app.get("/messages")
 async def get_messages(db: Session = Depends(get_db)):
