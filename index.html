@@ -78,11 +78,11 @@
             background-color: #ffb4a8;
             border-radius: 50%;
             box-shadow: 0 0 10px 2px rgba(255,180,168,0.4);
-            animation: flyPacket 2s infinite ease-in-out;
+            
             z-index: 20;
         }
-        .packet-delay-1 { animation-delay: 0.6s; }
-        .packet-delay-2 { animation-delay: 1.2s; }
+        
+        
         
         .pulse-dot {
             width: 8px; height: 8px; background-color: #4ade80; border-radius: 50%;
@@ -93,6 +93,10 @@
             0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.7); }
             70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(74, 222, 128, 0); }
             100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(74, 222, 128, 0); }
+        }
+    
+        .fly-once {
+            animation: flyPacket 1.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
         }
     </style>
 <link crossorigin="" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" rel="stylesheet"/><script crossorigin="" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script></head>
@@ -427,7 +431,7 @@
 </div>
 <div class="view-content w-full h-full flex-col gap-5 active" id="view-live">
 <!-- Top Section: Animation -->
-<div class="card p-8 h-40 relative flex items-center justify-between overflow-hidden bg-[#0A0A0A] border-[#262626]">
+<div class="card p-8 h-40 relative flex items-center justify-between overflow-hidden bg-[#0A0A0A] border-[#262626]" id="animation-canvas">
 <!-- Grid Background for tech feel -->
 <div class="absolute inset-0 opacity-10" style="background-image: linear-gradient(#333 1px, transparent 1px), linear-gradient(90deg, #333 1px, transparent 1px); background-size: 20px 20px;"></div>
 <!-- WhatsApp Node -->
@@ -440,9 +444,9 @@
 <!-- Dashed Path -->
 <div class="absolute left-32 right-32 top-1/2 border-t-2 border-dashed border-zinc-700 -mt-px z-0"></div>
 <!-- The flying packets -->
-<div class="data-packet"></div>
-<div class="data-packet packet-delay-1"></div>
-<div class="data-packet packet-delay-2"></div>
+
+
+
 <!-- UrbanOS Node -->
 <div class="z-10 flex flex-col items-center gap-2 mr-8">
 <div class="w-16 h-16 rounded-2xl bg-[#161616] border border-[#333] flex items-center justify-center shadow-xl">
@@ -476,8 +480,8 @@
 <span class="material-symbols-outlined text-blue-400">sync</span>
 </div>
 <div>
-<div class="text-xs text-zinc-500 mb-1">Webhook Status</div>
-<div class="text-lg text-white font-medium">Active Polling</div>
+<div class="text-xs text-zinc-500 mb-1">Messages Processed</div>
+<div class="text-lg text-white font-medium" id="msg-counter">0</div>
 </div>
 </div>
 </div>
@@ -497,7 +501,8 @@
 </div>
 </div>
 </main>
-<script>
+<script>let lastMessageCount = -1;
+
         function switchView(viewId) {
             document.querySelectorAll('.view-content').forEach(el => {
                 el.classList.remove('active');
