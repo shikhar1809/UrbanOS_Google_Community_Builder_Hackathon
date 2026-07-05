@@ -244,6 +244,16 @@ TWILIO_WHATSAPP_NUMBER=whatsapp:+14155238886
 
 ---
 
+## FAQ & Defensibility (For Hackathon Judges)
+
+**Q: You are using the Twilio Sandbox. How do you scale past 50 users?**
+> **A:** Yes, the sandbox is just for this hackathon demo. For production deployment in a real constituency, we would apply for a verified WhatsApp Business API number through Meta. That approval process takes 2–4 weeks, at which point the 50-user limit is lifted and we can scale to millions.
+
+**Q: The problem statement mentioned letters, public meetings, and grievance portals. Why did you only build WhatsApp?**
+> **A:** We focused exclusively on WhatsApp because it removes the most friction. India has 530 million WhatsApp users. A grievance portal requires a citizen to navigate a website; a letter requires them to travel. By using voice notes on WhatsApp, we included the lowest-literacy, lowest-connectivity citizens first. We designed the backend to be channel-agnostic — adding an email or SMS ingestion layer is on our roadmap, but WhatsApp covers 90% of the population today.
+
+---
+
 ## Project Status
 
 This is a **working prototype** built for a civic-tech hackathon. The core feedback loop is fully functional and deployed at [urbanos.web.app](https://urbanos.web.app).
