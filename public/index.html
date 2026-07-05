@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 
-<html class="dark" lang="en">
+<html lang="en">
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
@@ -13,99 +13,337 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
 <script>
-    mermaid.initialize({ startOnLoad: false, theme: 'dark' });
+    mermaid.initialize({ startOnLoad: false, theme: 'neutral' });
 </script>
 <style>
-        body { font-family: 'Inter', sans-serif; background-color: #0A0A0A; color: #a1a1aa; }
-        h1, h2, h3, h4, .serif { font-family: 'Playfair Display', serif; color: #ffffff; letter-spacing: 0.02em; }
-        
-        .card {
-            background-color: #161616;
-            border: 1px solid #262626;
-            border-radius: 16px;
-        }
-        
-        /* Custom map styling */
-        .map-bg { background-color: #EDE8DC; }
-        .map-pin {
-            width: 28px; height: 28px; background: #111; color: white;
-            border-radius: 50%; display: flex; align-items: center; justify-content: center;
-            position: absolute; border: 2px solid white;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-        }
-        
-        /* Custom segmented progress bar */
-        .segmented-bar {
-            display: flex; gap: 2px; height: 12px; width: 100%;
-        }
-        .segment {
-            flex: 1; background: #333; border-radius: 1px;
-        }
-        .segment.active { background: #d4d4d8; }
-        
-        /* Chart line sparkline */
-        .sparkline {
-            width: 100%; height: 40px;
-            background: repeating-linear-gradient(90deg, #d4d4d8, #d4d4d8 2px, transparent 2px, transparent 4px);
-            opacity: 0.8;
-            mask-image: linear-gradient(to top, transparent, black);
-            -webkit-mask-image: linear-gradient(to top, transparent, black);
-        }
+    /* ── DESIGN TOKENS ──────────────────────────────── */
+    :root {
+        --bg-page:    #F0F2F5;
+        --bg-card:    #FFFFFF;
+        --bg-nav:     #0F172A;
+        --border:     #E2E8F0;
+        --text-primary:   #0F172A;
+        --text-secondary: #64748B;
+        --text-muted:     #94A3B8;
+        --blue:       #3B82F6;
+        --blue-dark:  #1D4ED8;
+        --radius:     12px;
+    }
 
-        /* Scrollbar */
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+    /* ── BASE ───────────────────────────────────────── */
+    * { box-sizing: border-box; }
+    html, body {
+        font-family: 'Inter', sans-serif;
+        background-color: var(--bg-page);
+        color: var(--text-primary);
+        margin: 0; padding: 0;
+    }
+    h1, h2, h3, h4 {
+        color: var(--text-primary);
+        font-family: 'Inter', sans-serif;
+        font-weight: 700;
+    }
+
+    /* ── NAVBAR — clean white like Google ───────────── */
+    header {
+        background: #FFFFFF !important;
+        border-bottom: 1px solid #E2E8F0 !important;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.06) !important;
+    }
+    /* Nav links */
+    .nav-link {
+        cursor: pointer;
+        color: #64748B !important;
+        font-size: 0.75rem !important;
+        font-weight: 500 !important;
+        letter-spacing: 0.08em !important;
+        text-transform: uppercase !important;
+        padding-bottom: 4px !important;
+        border-bottom: 2px solid transparent !important;
+        transition: color 0.2s, border-color 0.2s !important;
+    }
+    .nav-link:hover {
+        color: #0F172A !important;
+    }
+    .nav-link.active {
+        color: #1D4ED8 !important;
+        border-bottom-color: #3B82F6 !important;
+        font-weight: 600 !important;
+    }
+    /* Profile area in nav */
+    header .border-l { border-color: #E2E8F0 !important; }
+    header #user-profile-name { color: #0F172A !important; }
+    header #user-profile-role { color: #64748B !important; }
+    header .material-symbols-outlined { color: #64748B !important; }
+
+    /* ── LOGO IN NAV ────────────────────────────────── */
+    .nav-logo-box {
+        background: #EFF6FF !important;
+        border: 1.5px solid #BFDBFE !important;
+        border-radius: 10px !important;
+        box-shadow: none !important;
+    }
+
+    /* ── CARDS ──────────────────────────────────────── */
+    .card {
+        background: var(--bg-card) !important;
+        border: 1px solid var(--border) !important;
+        border-radius: var(--radius) !important;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04) !important;
+    }
+    .card:hover {
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08), 0 8px 24px rgba(0,0,0,0.06) !important;
+        transition: box-shadow 0.2s ease !important;
+    }
+
+    /* ── PAGE BACKGROUNDS ───────────────────────────── */
+    .view-content { display: none !important; }
+    .view-content.active { display: flex !important; }
+
+    /* ── INPUTS & FORMS ─────────────────────────────── */
+    input, textarea, select {
+        background: #F8FAFC !important;
+        border: 1px solid #CBD5E1 !important;
+        color: #0F172A !important;
+        border-radius: 8px !important;
+    }
+    input::placeholder, textarea::placeholder {
+        color: #94A3B8 !important;
+    }
+    input:focus, textarea:focus {
+        outline: none !important;
+        border-color: #3B82F6 !important;
+        box-shadow: 0 0 0 3px rgba(59,130,246,0.12) !important;
+    }
+
+    /* ── SECTION HEADINGS ───────────────────────────── */
+    .section-label {
+        font-size: 0.65rem !important;
+        font-weight: 600 !important;
+        letter-spacing: 0.1em !important;
+        text-transform: uppercase !important;
+        color: var(--text-muted) !important;
+    }
+
+    /* ── BADGES / PILLS ─────────────────────────────── */
+    .badge {
+        border-radius: 9999px !important;
+        padding: 2px 10px !important;
+        font-size: 0.65rem !important;
+        font-weight: 600 !important;
+        border: 1px solid currentColor !important;
+    }
+
+    /* ── TABLE ──────────────────────────────────────── */
+    table thead th {
+        background: #F8FAFC !important;
+        color: #64748B !important;
+        border-bottom: 1px solid #E2E8F0 !important;
+        font-size: 0.7rem !important;
+        font-weight: 600 !important;
+        letter-spacing: 0.06em !important;
+        text-transform: uppercase !important;
+    }
+    table tbody tr:hover { background: #F8FAFC !important; }
+    table tbody tr { border-bottom: 1px solid #F1F5F9 !important; }
+
+    /* ── SCROLLBAR ──────────────────────────────────── */
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+
+    /* ── LEAFLET MAP ────────────────────────────────── */
+    .leaflet-container {
+        background: #F2F2F2 !important;
+        border-radius: 10px !important;
+        font-family: 'Inter', 'SF Pro', 'Roboto', system-ui, sans-serif !important;
+    }
+    .leaflet-tile-pane { filter: saturate(0.6) contrast(0.9) brightness(1.05); }
+    .leaflet-control-zoom { display: none !important; }
+    .leaflet-control-attribution { display: none !important; }
     
-        .view-content { display: none !important; }
-        .view-content.active { display: flex !important; }
-        .nav-link { cursor: pointer; border-bottom: 2px solid transparent; padding-bottom: 4px; }
-        .nav-link.active { color: white !important; border-bottom-color: white !important; font-weight: 500; }
+    /* Teardrop pin — cyan blue */
+    .pin-teardrop {
+        position: relative;
+        width: 28px; height: 28px;
+        background: #29B6F6;
+        border-radius: 50% 50% 50% 0;
+        transform: rotate(-45deg);
+        box-shadow: 0 2px 8px rgba(41, 182, 246, 0.35);
+        display: flex; align-items: center; justify-content: center;
+    }
+    .pin-teardrop::after {
+        content: '';
+        width: 10px; height: 10px;
+        background: white;
+        border-radius: 50%;
+        position: absolute;
+        top: 50%; left: 50%;
+        transform: translate(-50%, -50%) rotate(45deg);
+    }
     
-        .leaflet-container { background: #EDE8DC; }
-        
-        /* Hide default leaflet controls to keep our custom UI clean */
-        .leaflet-control-zoom { display: none !important; }
-        .leaflet-control-attribution { display: none !important; }
+    /* Diamond destination marker — red/pink outlined */
+    .pin-diamond {
+        width: 22px; height: 22px;
+        background: white;
+        border: 3px solid #EF5477;
+        transform: rotate(45deg);
+        box-shadow: 0 2px 8px rgba(239, 84, 119, 0.3);
+    }
     
-        @keyframes flyPacket {
-            0% { transform: translateX(0) scale(1); opacity: 0; }
-            10% { opacity: 1; }
-            50% { transform: translateX(50vw) scale(1.2); opacity: 1; box-shadow: 0 0 20px 5px rgba(255,180,168,0.5); }
-            90% { opacity: 1; }
-            100% { transform: translateX(calc(100vw - 300px)) scale(1); opacity: 0; }
-        }
-        .data-packet {
-            position: absolute;
-            left: 100px;
-            top: 50%;
-            margin-top: -6px;
-            width: 12px;
-            height: 12px;
-            background-color: #ffb4a8;
-            border-radius: 50%;
-            box-shadow: 0 0 10px 2px rgba(255,180,168,0.4);
-            
-            z-index: 20;
-        }
-        
-        
-        
-        .pulse-dot {
-            width: 8px; height: 8px; background-color: #4ade80; border-radius: 50%;
-            box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.7);
-            animation: pulse-green 2s infinite;
-        }
-        @keyframes pulse-green {
-            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.7); }
-            70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(74, 222, 128, 0); }
-            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(74, 222, 128, 0); }
-        }
+    /* Small blue dot (coordination) */
+    .pin-dot {
+        width: 12px; height: 12px;
+        background: #29B6F6;
+        border-radius: 50%;
+        border: 2px solid white;
+        box-shadow: 0 0 10px rgba(41, 182, 246, 0.6);
+    }
     
-        .fly-once {
-            animation: flyPacket 1.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-        }
-    </style>
+    /* Pulse dot (new proposal arrival) */
+    .pin-pulse {
+        position: relative;
+        width: 28px; height: 28px;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .pin-pulse .ring {
+        position: absolute;
+        width: 100%; height: 100%;
+        border-radius: 50%;
+        background: rgba(41, 182, 246, 0.25);
+        animation: pinPulse 1.5s ease-out infinite;
+    }
+    .pin-pulse .core {
+        width: 14px; height: 14px;
+        background: #29B6F6;
+        border-radius: 50%;
+        border: 2px solid white;
+        box-shadow: 0 0 12px rgba(41, 182, 246, 0.8);
+        z-index: 1;
+    }
+    @keyframes pinPulse {
+        0%   { transform: scale(0.8); opacity: 1; }
+        100% { transform: scale(2.2); opacity: 0; }
+    }
+    
+    /* Route/journey card */
+    .route-card {
+        position: absolute;
+        top: 16px; right: 16px;
+        z-index: 1000;
+        background: white;
+        border-radius: 14px;
+        box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+        padding: 18px 20px;
+        min-width: 210px;
+        font-family: 'Inter', 'SF Pro', 'Roboto', system-ui, sans-serif;
+    }
+    .route-card .row {
+        display: flex; align-items: center; gap: 10px;
+        font-size: 13px; color: #6B7280;
+        padding: 4px 0;
+    }
+    .route-card .row .icon { font-size: 18px; color: #9CA3AF; line-height: 1; }
+    .route-card .divider {
+        height: 1px; background: #E5E7EB; margin: 8px 0;
+    }
+    .route-card .section-label {
+        font-size: 11px; font-weight: 600; color: #EF5477;
+        letter-spacing: 0.02em; text-transform: uppercase;
+        margin-bottom: 6px;
+    }
+    .route-card .duration {
+        font-size: 15px; font-weight: 700; color: #111827;
+    }
+    .route-card .dur-label {
+        font-size: 11px; color: #9CA3AF; font-weight: 400;
+    }
+    .route-indicator {
+        display: flex; flex-direction: column; align-items: center;
+        gap: 2px; margin-right: 4px;
+    }
+    .route-indicator .dot-top {
+        width: 10px; height: 10px;
+        border: 2px solid #EF5477; border-radius: 50%;
+        background: transparent;
+    }
+    .route-indicator .line {
+        width: 2px; height: 24px;
+        background: #EF5477; border-radius: 1px;
+    }
+    .route-indicator .dot-bottom {
+        width: 10px; height: 10px;
+        background: #EF5477; border-radius: 50%;
+    }
+
+    /* ── SPLASH SCREEN ──────────────────────────────── */
+    #splash-screen {
+        background: #F8FAFC !important;
+    }
+
+    /* ── PIN GATE / LOGIN ───────────────────────────── */
+    #pin-gate {
+        background: var(--bg-nav) !important;
+    }
+    #pin-gate h1 { color: #FFFFFF !important; }
+    #pin-gate p { color: #94A3B8 !important; }
+
+    /* ── MAP PIN (deprecated - using pin-teardrop) ── */
+
+    /* ── PULSE DOT ──────────────────────────────────── */
+    .pulse-dot {
+        width: 8px; height: 8px;
+        background-color: #4ade80;
+        border-radius: 50%;
+        box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.7);
+        animation: pulse-green 2s infinite;
+        display: inline-block;
+    }
+    @keyframes pulse-green {
+        0%   { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(74,222,128,0.7); }
+        70%  { transform: scale(1);    box-shadow: 0 0 0 6px rgba(74,222,128,0); }
+        100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(74,222,128,0); }
+    }
+
+    /* ── DATA PACKET ANIMATION ──────────────────────── */
+    @keyframes flyPacket {
+        0%   { transform: translateX(0) scale(1); opacity: 0; }
+        10%  { opacity: 1; }
+        50%  { transform: translateX(50vw) scale(1.2); opacity: 1; }
+        90%  { opacity: 1; }
+        100% { transform: translateX(calc(100vw - 300px)) scale(1); opacity: 0; }
+    }
+    .data-packet {
+        position: absolute; left: 100px; top: 50%; margin-top: -6px;
+        width: 12px; height: 12px;
+        background-color: #3B82F6;
+        border-radius: 50%;
+        box-shadow: 0 0 10px 2px rgba(59,130,246,0.4);
+        z-index: 20;
+    }
+    .fly-once { animation: flyPacket 1.5s cubic-bezier(0.4,0,0.2,1) forwards; }
+
+    /* ── SEGMENTED BAR ──────────────────────────────── */
+    .segmented-bar { display: flex; gap: 2px; height: 12px; width: 100%; }
+    .segment { flex: 1; background: #E2E8F0; border-radius: 1px; }
+    .segment.active { background: #94A3B8; }
+
+    /* ── MISC TEXT FIXES ────────────────────────────── */
+    .text-gray-900 { color: #0F172A !important; }
+    .text-gray-700 { color: #374151 !important; }
+    .text-gray-600 { color: #4B5563 !important; }
+    .text-gray-500 { color: #64748B !important; }
+    .text-gray-400 { color: #94A3B8 !important; }
+
+    /* Fix bg shades */
+    .bg-gray-50  { background-color: #F8FAFC !important; }
+    .bg-gray-100 { background-color: #F1F5F9 !important; }
+    .bg-gray-200 { background-color: #E2E8F0 !important; }
+    .bg-white     { background-color: #FFFFFF !important; }
+    .border-gray-200 { border-color: #E2E8F0 !important; }
+    .border-gray-300 { border-color: #CBD5E1 !important; }
+</style>
 <link crossorigin="" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" rel="stylesheet"/><script crossorigin="" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script><script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
 <!-- Firebase SDKs -->
@@ -115,22 +353,22 @@
 </head>
 <body class="h-screen flex flex-col overflow-hidden">
 <!-- ============================================================ -->
-<!-- ADMIN PIN GATE (Prototype Auth — replace with OAuth in prod) -->
+<!-- ADMIN AUTH GATE -->
 <!-- ============================================================ -->
-<div id="pin-gate" class="fixed inset-0 z-[99999] flex items-center justify-center bg-[#0A0A0A]">
+<div id="pin-gate" class="fixed inset-0 z-[99999] flex items-center justify-center bg-[#0F172A]">
     <div class="flex flex-col items-center gap-6 w-80">
         <div class="flex flex-col items-center gap-3">
-            <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-zinc-800 to-black border border-zinc-700/50 flex items-center justify-center shadow-[0_0_30px_rgba(255,255,255,0.05)]">
-                <svg class="w-10 h-10 text-blue-400" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M12 22s8-6 8-12.5a8 8 0 0 0-16 0C4 16 12 22 12 22z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                    <path d="M8 12v-3h2V6h4v4h2v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-50 to-gray-100 border border-gray-300/50 flex items-center justify-center shadow-md">
+                <svg class="w-10 h-10" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 22s8-6 8-12.5a8 8 0 0 0-16 0C4 16 12 22 12 22z" stroke="#3b82f6" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M8 12v-3h2V6h4v4h2v2" stroke="#3b82f6" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
             </div>
-            <h1 class="text-2xl font-bold text-white tracking-tight">UrbanOS<span class="text-blue-500">.</span></h1>
-            <p class="text-xs text-zinc-500 text-center">Admin access only. Please sign in to continue.</p>
+            <h1 class="text-2xl font-bold text-gray-900 tracking-tight">UrbanOS<span class="text-blue-500">.</span></h1>
+            <p class="text-xs text-gray-500 text-center">Admin access only. Please sign in to continue.</p>
         </div>
         <div class="w-full flex flex-col gap-3">
-            <button onclick="signInWithGoogle()" class="w-full py-3 bg-white hover:bg-gray-100 text-black font-bold rounded-xl transition flex items-center justify-center gap-3 text-sm shadow-[0_0_20px_rgba(255,255,255,0.1)]">
+            <button onclick="signInWithGoogle()" class="w-full py-3 bg-white hover:bg-gray-100 text-black font-bold rounded-xl transition flex items-center justify-center gap-3 text-sm shadow-sm">
                 <svg class="w-5 h-5" viewBox="0 0 24 24">
                     <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
                     <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
@@ -200,12 +438,12 @@
         }, 500);
     });
 </script>
-<div class="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#0A0A0A] transition-opacity duration-700" id="splash-screen">
+<div class="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-white transition-opacity duration-700" id="splash-screen">
     <div class="relative w-[550px] h-[550px] flex items-center justify-center">
         
         <!-- Rotating SVG dashed circle to represent the loop -->
         <svg class="absolute inset-0 w-full h-full animate-[spin_20s_linear_infinite]" viewBox="0 0 500 500">
-            <circle cx="250" cy="250" r="180" fill="none" stroke="#222" stroke-width="2" stroke-dasharray="10 10"/>
+            <circle cx="250" cy="250" r="180" fill="none" stroke="#E2E8F0" stroke-width="2" stroke-dasharray="10 10"/>
             <!-- Pulsing node 1 -->
             <circle cx="250" cy="70" r="5" fill="#3b82f6" class="animate-pulse" />
             <!-- Pulsing node 2 -->
@@ -221,59 +459,59 @@
         <!-- Steps around the circle -->
         <!-- Step 1: Top (WhatsApp) -->
         <div class="absolute top-[10px] left-1/2 -translate-x-1/2 flex flex-col items-center text-center w-48">
-            <div class="w-10 h-10 rounded-full bg-blue-500/10 text-blue-400 flex items-center justify-center border border-blue-500/20 mb-2 shadow-[0_0_15px_rgba(59,130,246,0.15)]">
+            <div class="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-200 mb-2 shadow-sm">
                 <span class="material-symbols-outlined text-[18px]">chat</span>
             </div>
-            <div class="text-xs font-bold text-white mb-0.5 tracking-wide">WhatsApp Received</div>
-            <div class="text-[10px] text-zinc-500 leading-tight">Citizen sends grievance/proposal</div>
+            <div class="text-xs font-bold text-gray-900 mb-0.5 tracking-wide">WhatsApp Received</div>
+            <div class="text-[10px] text-gray-500 leading-tight">Citizen sends grievance/proposal</div>
         </div>
 
         <!-- Step 2: Right Top (Categorized) -->
         <div class="absolute top-[145px] right-[-30px] flex flex-col items-center text-center w-48">
-            <div class="w-10 h-10 rounded-full bg-purple-500/10 text-purple-400 flex items-center justify-center border border-purple-500/20 mb-2 shadow-[0_0_15px_rgba(168,85,247,0.15)]">
+            <div class="w-10 h-10 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center border border-purple-200 mb-2 shadow-sm">
                 <span class="material-symbols-outlined text-[18px]">category</span>
             </div>
-            <div class="text-xs font-bold text-white mb-0.5 tracking-wide">Categorized & Analysed</div>
-            <div class="text-[10px] text-zinc-500 leading-tight">AI prioritizes & extracts details</div>
+            <div class="text-xs font-bold text-gray-900 mb-0.5 tracking-wide">Categorized & Analysed</div>
+            <div class="text-[10px] text-gray-500 leading-tight">AI prioritizes & extracts details</div>
         </div>
 
         <!-- Step 3: Right Bottom (Insights) -->
         <div class="absolute bottom-[90px] right-[0px] flex flex-col items-center text-center w-48">
-            <div class="w-10 h-10 rounded-full bg-emerald-500/10 text-emerald-400 flex items-center justify-center border border-emerald-500/20 mb-2 shadow-[0_0_15px_rgba(16,185,129,0.15)]">
+            <div class="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-200 mb-2 shadow-sm">
                 <span class="material-symbols-outlined text-[18px]">insights</span>
             </div>
-            <div class="text-xs font-bold text-white mb-0.5 tracking-wide">Insights Fetched</div>
-            <div class="text-[10px] text-zinc-500 leading-tight">Query past data & custom datasets</div>
+            <div class="text-xs font-bold text-gray-900 mb-0.5 tracking-wide">Insights Fetched</div>
+            <div class="text-[10px] text-gray-500 leading-tight">Query past data & custom datasets</div>
         </div>
 
         <!-- Step 4: Left Bottom (Planning) -->
         <div class="absolute bottom-[90px] left-[0px] flex flex-col items-center text-center w-48">
-            <div class="w-10 h-10 rounded-full bg-amber-500/10 text-amber-400 flex items-center justify-center border border-amber-500/20 mb-2 shadow-[0_0_15px_rgba(245,158,11,0.15)]">
+            <div class="w-10 h-10 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center border border-amber-200 mb-2 shadow-sm">
                 <span class="material-symbols-outlined text-[18px]">architecture</span>
             </div>
-            <div class="text-xs font-bold text-white mb-0.5 tracking-wide">Planning Steps</div>
-            <div class="text-[10px] text-zinc-500 leading-tight">AI creates actionable execution plans</div>
+            <div class="text-xs font-bold text-gray-900 mb-0.5 tracking-wide">Planning Steps</div>
+            <div class="text-[10px] text-gray-500 leading-tight">AI creates actionable execution plans</div>
         </div>
 
         <!-- Step 5: Left Top (Feedback Loop) -->
         <div class="absolute top-[145px] left-[-30px] flex flex-col items-center text-center w-48">
-            <div class="w-10 h-10 rounded-full bg-red-500/10 text-red-400 flex items-center justify-center border border-red-500/20 mb-2 shadow-[0_0_15px_rgba(239,68,68,0.15)]">
+            <div class="w-10 h-10 rounded-full bg-red-50 text-red-600 flex items-center justify-center border border-red-200 mb-2 shadow-sm">
                 <span class="material-symbols-outlined text-[18px]">laps</span>
             </div>
-            <div class="text-xs font-bold text-white mb-0.5 tracking-wide">Feedback Loop</div>
-            <div class="text-[10px] text-zinc-500 leading-tight">Launch targeted surveys to citizens</div>
+            <div class="text-xs font-bold text-gray-900 mb-0.5 tracking-wide">Feedback Loop</div>
+            <div class="text-[10px] text-gray-500 leading-tight">Launch targeted surveys to citizens</div>
         </div>
 
         <!-- Center: UrbanOS Logo -->
-        <div class="flex flex-col items-center justify-center z-10 bg-[#0A0A0A] p-8 rounded-full shadow-[0_0_80px_rgba(0,0,0,0.6)] border border-zinc-800/80">
-            <div class="relative flex items-center justify-center w-20 h-20 mb-5 rounded-3xl bg-gradient-to-br from-zinc-800 to-black border border-zinc-700/50 shadow-[0_0_40px_rgba(255,255,255,0.05)]">
-                <svg class="w-14 h-14 text-blue-400 drop-shadow-[0_0_15px_rgba(59,130,246,0.6)] animate-pulse" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M12 22s8-6 8-12.5a8 8 0 0 0-16 0C4 16 12 22 12 22z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                    <path d="M8 12v-3h2V6h4v4h2v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <div class="flex flex-col items-center justify-center z-10 bg-white p-8 rounded-full shadow-[0_20px_60px_rgba(0,0,0,0.06)] border border-gray-200">
+            <div class="relative flex items-center justify-center w-20 h-20 mb-5">
+                <svg class="w-16 h-16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 22s8-6 8-12.5a8 8 0 0 0-16 0C4 16 12 22 12 22z" stroke="#3b82f6" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M8 12v-3h2V6h4v4h2v2" stroke="#3b82f6" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
             </div>
-            <h1 class="text-5xl font-bold tracking-tighter text-transparent bg-clip-text bg-gradient-to-b from-white via-zinc-100 to-zinc-500">Urban<span class="text-zinc-200">OS</span><span class="text-blue-500">.</span></h1>
-            <div class="flex items-center gap-2 mt-4 text-zinc-500 font-mono text-[10px] tracking-[0.2em] uppercase" id="splash-text">
+            <h1 style="font-size:3.5rem;font-weight:800;letter-spacing:-0.04em;color:#0F172A;font-family:Inter,sans-serif;">Urban<span style="color:#0F172A;">OS</span><span style="color:#3B82F6;">.</span></h1>
+            <div class="flex items-center gap-2 mt-4 text-gray-500 font-mono text-[10px] tracking-[0.2em] uppercase" id="splash-text">
                 <div class="pulse-dot"></div> Initializing System
             </div>
         </div>
@@ -281,34 +519,34 @@
     </div>
 
     <!-- Progress Bar -->
-    <div class="absolute bottom-12 w-80 h-1 bg-[#161616] rounded-full overflow-hidden">
+    <div class="absolute bottom-12 w-80 h-1 bg-gray-50 rounded-full overflow-hidden">
         <div class="h-full bg-gradient-to-r from-blue-600 via-purple-500 to-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.5)] w-0 transition-all duration-300 ease-out" id="splash-progress"></div>
     </div>
 </div>
 
 <!-- Header -->
-<header class="flex items-center justify-between px-8 py-5 border-b border-[#262626]">
+<header class="flex items-center justify-between px-8 py-4 sticky top-0 z-50">
 <div class="flex items-center gap-3">
 <div class="flex items-center gap-3 group cursor-pointer">
-                <div class="relative flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-zinc-800 to-[#0A0A0A] border border-zinc-800 shadow-[0_0_15px_rgba(255,255,255,0.03)] group-hover:shadow-[0_0_20px_rgba(59,130,246,0.15)] transition-all duration-300">
-                    <svg class="w-7 h-7 text-blue-400 group-hover:text-blue-300 transition-colors duration-300 drop-shadow-[0_0_8px_rgba(59,130,246,0.4)]" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M12 22s8-6 8-12.5a8 8 0 0 0-16 0C4 16 12 22 12 22z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                        <path d="M8 12v-3h2V6h4v4h2v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                <div class="nav-logo-box relative flex items-center justify-center w-10 h-10 transition-all duration-300">
+                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="w-7 h-7">
+                        <path d="M12 22s8-6 8-12.5a8 8 0 0 0-16 0C4 16 12 22 12 22z" stroke="#3B82F6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M8 12v-3h2V6h4v4h2v2" stroke="#3B82F6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
                     </svg>
                 </div>
-                <span class="text-3xl font-bold tracking-tighter text-transparent bg-clip-text bg-gradient-to-b from-white to-zinc-400">Urban<span class="text-zinc-100">OS</span><span class="text-blue-500">.</span></span>
+                <span style="font-family:Inter,sans-serif;font-weight:800;font-size:1.35rem;letter-spacing:-0.03em;color:#0F172A;">Urban<span style="color:#0F172A;">OS</span><span style="color:#3B82F6;">.</span></span>
             </div>
 </div>
-<nav class="flex gap-8"><a class="text-sm hover:text-white transition nav-link active text-white" href="javascript:void(0)" id="nav-live" onclick="switchView('live')">RAW FEED</a><a class="text-sm text-zinc-500 hover:text-white transition nav-link" href="javascript:void(0)" id="nav-analysis" onclick="switchView('analysis')">ANALYSIS</a><a class="text-sm text-zinc-500 hover:text-white transition nav-link" href="javascript:void(0)" id="nav-insights" onclick="switchView('insights')">INSIGHTS</a><a class="text-sm text-zinc-500 hover:text-white transition nav-link" href="javascript:void(0)" id="nav-priority" onclick="switchView('priority')">PLANNING</a><a class="text-sm text-zinc-500 hover:text-white transition nav-link" href="javascript:void(0)" id="nav-coordination" onclick="switchView('coordination')">FEEDBACK</a></nav>
+<nav class="flex gap-8"><a class="text-sm hover:text-gray-900 transition nav-link active text-gray-900" href="javascript:void(0)" id="nav-live" onclick="switchView('live')">RAW FEED</a><a class="text-sm text-gray-500 hover:text-gray-900 transition nav-link" href="javascript:void(0)" id="nav-analysis" onclick="switchView('analysis')">ANALYSIS</a><a class="text-sm text-gray-500 hover:text-gray-900 transition nav-link" href="javascript:void(0)" id="nav-insights" onclick="switchView('insights')">INSIGHTS</a><a class="text-sm text-gray-500 hover:text-gray-900 transition nav-link" href="javascript:void(0)" id="nav-priority" onclick="switchView('priority')">PLANNING</a><a class="text-sm text-gray-500 hover:text-gray-900 transition nav-link" href="javascript:void(0)" id="nav-coordination" onclick="switchView('coordination')">FEEDBACK</a></nav>
 <div class="flex items-center gap-5">
 
-<div class="flex items-center gap-3 pl-5 border-l border-zinc-800 cursor-pointer">
-<img id="user-profile-img" class="w-9 h-9 rounded-full object-cover" src="https://ui-avatars.com/api/?name=Admin+User&background=333&color=fff"/>
+<div class="flex items-center gap-3 pl-5 border-l border-gray-200 cursor-pointer">
+<img id="user-profile-img" class="w-9 h-9 rounded-full object-cover border-2 border-gray-200" src="https://ui-avatars.com/api/?name=Admin+User&background=333&color=fff"/>
 <div class="text-xs">
-<div id="user-profile-name" class="text-white font-medium">Admin User</div>
-<div id="user-profile-role" class="text-zinc-500 mt-0.5">Dispatch Officer</div>
+<div id="user-profile-name" class="text-gray-900 font-medium">Admin User</div>
+<div id="user-profile-role" class="text-gray-500 mt-0.5">Dispatch Officer</div>
 </div>
-<span class="material-symbols-outlined text-zinc-500 text-[18px]">expand_more</span>
+<span class="material-symbols-outlined text-gray-500 text-[18px]">expand_more</span>
 </div>
 </div>
 </header>
@@ -316,67 +554,67 @@
 <div class="view-content w-full h-full gap-5 flex-col overflow-y-auto custom-scrollbar" id="view-priority">
     
     <!-- Budget Health Dashboard -->
-    <div class="card p-6 flex flex-col gap-4 shrink-0 bg-[#0A0A0A] border-blue-900/30 relative overflow-hidden">
+    <div class="card p-6 flex flex-col gap-4 shrink-0 bg-white border-blue-900/30 relative overflow-hidden">
         <div class="absolute -right-20 -top-20 w-64 h-64 bg-blue-600/10 rounded-full blur-3xl pointer-events-none"></div>
         <div class="flex justify-between items-end relative z-10">
             <div>
-                <h2 class="serif text-2xl text-white">Annual MPLADS Budget</h2>
-                <div class="text-sm text-zinc-400 mt-1">FY 2024-25 Allocation Status</div>
+                <h2 class="serif text-2xl text-gray-900">Annual MPLADS Budget</h2>
+                <div class="text-sm text-gray-500 mt-1">FY 2024-25 Allocation Status</div>
             </div>
             <div class="text-right">
-                <div class="text-[10px] uppercase tracking-wider text-zinc-500 font-bold mb-1">Total Unspent Balance</div>
+                <div class="text-[10px] uppercase tracking-wider text-gray-500 font-bold mb-1">Total Unspent Balance</div>
                 <div class="text-3xl text-green-400 font-medium font-mono" id="plan-unspent">₹5.00 Cr</div>
             </div>
         </div>
         
         <div class="relative z-10 mt-2">
-            <div class="flex justify-between text-xs text-zinc-500 font-medium mb-2">
+            <div class="flex justify-between text-xs text-gray-500 font-medium mb-2">
                 <span>Sanctioned: <span id="plan-sanc-amt" class="text-blue-400 font-mono">₹0</span></span>
-                <span>Total Budget: <span class="text-white font-mono">₹5.00 Cr</span></span>
+                <span>Total Budget: <span class="text-gray-900 font-mono">₹5.00 Cr</span></span>
             </div>
-            <div class="h-3 w-full bg-zinc-800 rounded-full overflow-hidden shadow-inner flex">
+            <div class="h-3 w-full bg-gray-100 rounded-full overflow-hidden shadow-inner flex">
                 <div id="plan-sanc-bar" class="h-full bg-gradient-to-r from-blue-600 to-blue-400 transition-all duration-1000" style="width: 0%"></div>
             </div>
         </div>
         
         <div class="flex gap-4 mt-2 relative z-10">
-            <div class="flex-1 p-3 bg-zinc-900/80 border border-zinc-800 rounded-lg">
-                <div class="text-[10px] text-zinc-500 uppercase tracking-wide">Projects Sanctioned</div>
-                <div class="text-xl text-white font-bold" id="plan-sanc-count">0</div>
+            <div class="flex-1 p-3 bg-gray-50/80 border border-gray-200 rounded-lg">
+                <div class="text-[10px] text-gray-500 uppercase tracking-wide">Projects Sanctioned</div>
+                <div class="text-xl text-gray-900 font-bold" id="plan-sanc-count">0</div>
             </div>
-            <div class="flex-1 p-3 bg-zinc-900/80 border border-zinc-800 rounded-lg">
-                <div class="text-[10px] text-zinc-500 uppercase tracking-wide">Pipeline Requested</div>
-                <div class="text-xl text-white font-bold font-mono" id="plan-req-amt">₹0</div>
+            <div class="flex-1 p-3 bg-gray-50/80 border border-gray-200 rounded-lg">
+                <div class="text-[10px] text-gray-500 uppercase tracking-wide">Pipeline Requested</div>
+                <div class="text-xl text-gray-900 font-bold font-mono" id="plan-req-amt">₹0</div>
             </div>
         </div>
     </div>
 
     <!-- AI Project Pipeline Table -->
     <div class="card flex-1 flex flex-col overflow-hidden">
-        <div class="p-5 border-b border-[#262626] flex justify-between items-center shrink-0 bg-zinc-900">
+        <div class="p-5 border-b border-gray-200 flex justify-between items-center shrink-0 bg-gray-50">
             <div>
-                <h3 class="serif text-xl text-white">AI Projects Ranking</h3>
-                <span class="text-xs text-zinc-500">Proposals prioritized by community demand and impact score</span>
+                <h3 class="serif text-xl text-gray-900">AI Projects Ranking</h3>
+                <span class="text-xs text-gray-500">Proposals prioritized by community demand and impact score</span>
             </div>
             <button class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2">
                 <span class="material-symbols-outlined text-[18px]">add</span> New Proposal
             </button>
         </div>
-        <div class="flex-1 overflow-auto custom-scrollbar bg-[#0A0A0A]">
+        <div class="flex-1 overflow-auto custom-scrollbar bg-white">
             <table class="w-full text-left text-sm whitespace-nowrap">
-                <thead class="bg-zinc-900/80 sticky top-0 z-10 text-xs uppercase tracking-wider text-zinc-500">
+                <thead class="bg-gray-50/80 sticky top-0 z-10 text-xs uppercase tracking-wider text-gray-500">
                     <tr>
-                        <th class="px-6 py-4 font-medium border-b border-zinc-800">Project Details</th>
-                        <th class="px-4 py-4 font-medium border-b border-zinc-800 text-center">Score</th>
-                        <th class="px-4 py-4 font-medium border-b border-zinc-800 text-center">Status</th>
-                        <th class="px-6 py-4 font-medium border-b border-zinc-800 text-right">Est. Budget</th>
-                        <th class="px-6 py-4 font-medium border-b border-zinc-800 text-center">Action</th>
+                        <th class="px-6 py-4 font-medium border-b border-gray-200">Project Details</th>
+                        <th class="px-4 py-4 font-medium border-b border-gray-200 text-center">Score</th>
+                        <th class="px-4 py-4 font-medium border-b border-gray-200 text-center">Status</th>
+                        <th class="px-6 py-4 font-medium border-b border-gray-200 text-right">Est. Budget</th>
+                        <th class="px-6 py-4 font-medium border-b border-gray-200 text-center">Action</th>
                     </tr>
                 </thead>
                 <tbody id="plan-pipeline-body" class="divide-y divide-zinc-800/50">
                     <!-- JS Injected Rows -->
                     <tr>
-                        <td colspan="5" class="px-6 py-8 text-center text-zinc-500 text-xs italic">Loading prioritized pipeline...</td>
+                        <td colspan="5" class="px-6 py-8 text-center text-gray-500 text-xs italic">Loading prioritized pipeline...</td>
                     </tr>
                 </tbody>
             </table>
@@ -388,23 +626,23 @@
   <!-- KPI Row -->
   <div class="grid grid-cols-4 gap-4 shrink-0">
     <div class="card p-5 border-l-4 border-l-blue-500 flex flex-col gap-1">
-      <div class="text-xs text-zinc-500 uppercase tracking-wider">Total Proposals</div>
-      <div class="text-3xl text-white font-bold" id="ana-total">0</div>
-      <div class="text-xs text-zinc-500">All time</div>
+      <div class="text-xs text-gray-500 uppercase tracking-wider">Total Proposals</div>
+      <div class="text-3xl text-gray-900 font-bold" id="ana-total">0</div>
+      <div class="text-xs text-gray-500">All time</div>
     </div>
     <div class="card p-5 border-l-4 border-l-red-500 flex flex-col gap-1">
-      <div class="text-xs text-zinc-500 uppercase tracking-wider">Critical Priority</div>
-      <div class="text-3xl text-white font-bold" id="ana-critical">0</div>
+      <div class="text-xs text-gray-500 uppercase tracking-wider">Critical Priority</div>
+      <div class="text-3xl text-gray-900 font-bold" id="ana-critical">0</div>
       <div class="text-xs text-red-400">Needs immediate attention</div>
     </div>
     <div class="card p-5 border-l-4 border-l-amber-500 flex flex-col gap-1">
-      <div class="text-xs text-zinc-500 uppercase tracking-wider">This Week</div>
-      <div class="text-3xl text-white font-bold" id="ana-week">0</div>
-      <div class="text-xs text-zinc-500">New proposals (7d)</div>
+      <div class="text-xs text-gray-500 uppercase tracking-wider">This Week</div>
+      <div class="text-3xl text-gray-900 font-bold" id="ana-week">0</div>
+      <div class="text-xs text-gray-500">New proposals (7d)</div>
     </div>
     <div class="card p-5 border-l-4 border-l-green-500 flex flex-col gap-1">
-      <div class="text-xs text-zinc-500 uppercase tracking-wider">Sanctioned</div>
-      <div class="text-3xl text-white font-bold" id="ana-sanctioned">0</div>
+      <div class="text-xs text-gray-500 uppercase tracking-wider">Sanctioned</div>
+      <div class="text-3xl text-gray-900 font-bold" id="ana-sanctioned">0</div>
       <div class="text-xs text-green-400">Approved for action</div>
     </div>
   </div>
@@ -413,7 +651,7 @@
   <div class="grid grid-cols-3 gap-4 shrink-0" style="height:260px">
     <!-- Priority Donut -->
     <div class="card p-5 flex flex-col gap-3">
-      <div class="text-sm font-semibold text-white">Priority Breakdown</div>
+      <div class="text-sm font-semibold text-gray-900">Priority Breakdown</div>
       <div class="flex-1 flex items-center justify-center relative">
         <canvas id="priorityDonut" style="max-height:180px"></canvas>
       </div>
@@ -421,7 +659,7 @@
 
     <!-- Zone Bar Chart -->
     <div class="card p-5 flex flex-col gap-3">
-      <div class="text-sm font-semibold text-white">Proposals by Zone</div>
+      <div class="text-sm font-semibold text-gray-900">Proposals by Zone</div>
       <div class="flex-1 flex items-center">
         <canvas id="zoneBarChart" style="max-height:190px;width:100%"></canvas>
       </div>
@@ -429,9 +667,9 @@
 
     <!-- Language Distribution -->
     <div class="card p-5 flex flex-col gap-3">
-      <div class="text-sm font-semibold text-white">Language Distribution</div>
+      <div class="text-sm font-semibold text-gray-900">Language Distribution</div>
       <div class="flex-1 flex flex-col gap-2 justify-center" id="lang-dist-bars">
-        <div class="text-xs text-zinc-600 italic">Loading...</div>
+        <div class="text-xs text-gray-500 italic">Loading...</div>
       </div>
     </div>
   </div>
@@ -440,54 +678,54 @@
   <div class="grid grid-cols-3 gap-4 shrink-0 pb-6">
     <!-- Status Pipeline -->
     <div class="card p-5 flex flex-col gap-4">
-      <div class="text-sm font-semibold text-white">Proposal Status Pipeline</div>
+      <div class="text-sm font-semibold text-gray-900">Proposal Status Pipeline</div>
       <div class="flex flex-col gap-3">
         <div class="flex items-center gap-3">
-          <div class="w-2.5 h-2.5 rounded-full bg-zinc-400 shrink-0"></div>
-          <div class="flex-1 text-xs text-zinc-300">Open</div>
-          <div class="font-bold text-white text-sm" id="pipe-open">0</div>
-          <div class="w-24 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
-            <div class="h-full bg-zinc-400 rounded-full transition-all" id="pipe-open-bar" style="width:0%"></div>
+          <div class="w-2.5 h-2.5 rounded-full bg-gray-300 shrink-0"></div>
+          <div class="flex-1 text-xs text-gray-600">Open</div>
+          <div class="font-bold text-gray-900 text-sm" id="pipe-open">0</div>
+          <div class="w-24 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+            <div class="h-full bg-gray-300 rounded-full transition-all" id="pipe-open-bar" style="width:0%"></div>
           </div>
         </div>
         <div class="flex items-center gap-3">
           <div class="w-2.5 h-2.5 rounded-full bg-amber-400 shrink-0"></div>
-          <div class="flex-1 text-xs text-zinc-300">In Review</div>
-          <div class="font-bold text-white text-sm" id="pipe-review">0</div>
-          <div class="w-24 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+          <div class="flex-1 text-xs text-gray-600">In Review</div>
+          <div class="font-bold text-gray-900 text-sm" id="pipe-review">0</div>
+          <div class="w-24 h-1.5 bg-gray-100 rounded-full overflow-hidden">
             <div class="h-full bg-amber-400 rounded-full transition-all" id="pipe-review-bar" style="width:0%"></div>
           </div>
         </div>
         <div class="flex items-center gap-3">
           <div class="w-2.5 h-2.5 rounded-full bg-green-400 shrink-0"></div>
-          <div class="flex-1 text-xs text-zinc-300">Sanctioned</div>
-          <div class="font-bold text-white text-sm" id="pipe-sanc">0</div>
-          <div class="w-24 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+          <div class="flex-1 text-xs text-gray-600">Sanctioned</div>
+          <div class="font-bold text-gray-900 text-sm" id="pipe-sanc">0</div>
+          <div class="w-24 h-1.5 bg-gray-100 rounded-full overflow-hidden">
             <div class="h-full bg-green-400 rounded-full transition-all" id="pipe-sanc-bar" style="width:0%"></div>
           </div>
         </div>
         <div class="flex items-center gap-3">
           <div class="w-2.5 h-2.5 rounded-full bg-blue-400 shrink-0"></div>
-          <div class="flex-1 text-xs text-zinc-300">Completed</div>
-          <div class="font-bold text-white text-sm" id="pipe-done">0</div>
-          <div class="w-24 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+          <div class="flex-1 text-xs text-gray-600">Completed</div>
+          <div class="font-bold text-gray-900 text-sm" id="pipe-done">0</div>
+          <div class="w-24 h-1.5 bg-gray-100 rounded-full overflow-hidden">
             <div class="h-full bg-blue-400 rounded-full transition-all" id="pipe-done-bar" style="width:0%"></div>
           </div>
         </div>
       </div>
-      <div class="mt-2 pt-3 border-t border-zinc-800">
-        <div class="text-xs text-zinc-500">Resolution rate</div>
+      <div class="mt-2 pt-3 border-t border-gray-200">
+        <div class="text-xs text-gray-500">Resolution rate</div>
         <div class="text-lg font-bold text-green-400" id="pipe-rate">0%</div>
       </div>
     </div>
 
     <!-- Category Table -->
     <div class="card col-span-2 flex flex-col overflow-hidden">
-      <div class="p-4 border-b border-zinc-800 text-sm font-semibold text-white">Category Breakdown</div>
+      <div class="p-4 border-b border-gray-200 text-sm font-semibold text-gray-900">Category Breakdown</div>
       <div class="flex-1 overflow-y-auto">
         <table class="w-full text-xs">
           <thead>
-            <tr class="border-b border-zinc-800 text-zinc-500 uppercase">
+            <tr class="border-b border-gray-200 text-gray-500 uppercase">
               <th class="px-4 py-2 text-left">Category</th>
               <th class="px-4 py-2 text-center">Count</th>
               <th class="px-4 py-2 text-center">Critical</th>
@@ -496,7 +734,7 @@
             </tr>
           </thead>
           <tbody id="cat-table-body">
-            <tr><td colspan="5" class="px-4 py-6 text-center text-zinc-600 italic">Loading proposals...</td></tr>
+            <tr><td colspan="5" class="px-4 py-6 text-center text-gray-500 italic">Loading proposals...</td></tr>
           </tbody>
         </table>
       </div>
@@ -507,24 +745,24 @@
 
 <div class="view-content w-full h-full flex flex-col gap-5" id="view-insights">
   <!-- AI Database Assistant (Full Screen) -->
-  <div class="flex-1 flex flex-col gap-4 bg-[#111] border border-[#222] rounded-xl p-6 relative">
-      <div class="flex justify-between items-center shrink-0 border-b border-[#222] pb-4">
+  <div class="flex-1 flex flex-col gap-4 bg-gray-50 border border-gray-200 rounded-xl p-6 relative">
+      <div class="flex justify-between items-center shrink-0 border-b border-gray-200 pb-4">
           <div>
-              <h2 class="text-2xl font-bold text-white flex items-center gap-3">
+              <h2 class="text-2xl font-bold text-gray-900 flex items-center gap-3">
                   <span class="material-symbols-outlined text-purple-400 text-[28px]">smart_toy</span>
                   UrbanOS RAG AI Agent
               </h2>
-              <div class="text-xs text-zinc-500 flex gap-2 mt-2 items-center">
+              <div class="text-xs text-gray-500 flex gap-2 mt-2 items-center">
                   <div class="pulse-dot"></div> Connected Context: 
-                  <span class="bg-zinc-800 text-zinc-300 px-2 py-0.5 rounded border border-zinc-700">Citizen Proposals</span> 
-                  <span class="bg-zinc-800 text-zinc-300 px-2 py-0.5 rounded border border-zinc-700">Sanctioned Projects</span>
+                  <span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded border border-gray-300">Citizen Proposals</span> 
+                  <span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded border border-gray-300">Sanctioned Projects</span>
                   <span class="bg-purple-900/40 text-purple-300 px-2 py-0.5 rounded border border-purple-700/50">Custom Datasets</span>
               </div>
           </div>
           <!-- Dataset Upload -->
           <div class="flex items-center gap-3">
               <input type="file" id="dataset-upload" class="hidden" accept=".csv,.txt" onchange="handleDatasetUpload(event)">
-              <button onclick="document.getElementById('dataset-upload').click()" class="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-bold rounded-lg transition border border-zinc-600 flex items-center gap-2">
+              <button onclick="document.getElementById('dataset-upload').click()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-900 text-xs font-bold rounded-lg transition border border-gray-300 flex items-center gap-2">
                   <span class="material-symbols-outlined text-[16px]">upload_file</span>
                   Add Dataset
               </button>
@@ -534,20 +772,30 @@
       <!-- Chat History -->
       <div id="ai-chat-history" class="flex-1 overflow-y-auto flex flex-col gap-5 pr-2 custom-scrollbar">
           <div class="flex flex-col gap-1 items-start">
-              <div class="text-xs text-zinc-500 uppercase tracking-wider font-bold ml-1">UrbanOS AI</div>
-              <div class="bg-[#1C1C1C] border border-[#333] text-sm text-zinc-300 px-5 py-4 rounded-2xl rounded-tl-sm max-w-[85%] leading-relaxed shadow-sm">
+              <div class="text-xs text-gray-500 uppercase tracking-wider font-bold ml-1">UrbanOS AI</div>
+              <div class="bg-white border border-gray-300 text-sm text-gray-600 px-5 py-4 rounded-2xl rounded-tl-sm max-w-[85%] leading-relaxed shadow-sm">
                   Hello! I am connected to the UrbanOS data warehouse. I can help you analyze grievances, sanctioned projects, or any custom dataset you upload. I can also generate Mermaid charts or structured tables (which you can download as Excel/CSV). What would you like to explore?
               </div>
           </div>
       </div>
       
       <!-- Chat Input -->
-      <div class="mt-auto shrink-0 relative flex items-center gap-3 pt-3 border-t border-[#222]">
-          <input type="text" id="ai-chat-input" class="w-full bg-[#1C1C1C] border border-[#333] rounded-full px-5 py-3 pr-14 text-sm text-white focus:outline-none focus:border-purple-500 transition shadow-inner" placeholder="Ask UrbanOS AI to analyze data, plot a chart, or summarize feedback..." onkeypress="if(event.key === 'Enter') sendAIChatMessage()">
-          <button onclick="sendAIChatMessage()" class="absolute right-2 w-10 h-10 flex items-center justify-center bg-purple-600 hover:bg-purple-500 text-white rounded-full transition shadow-[0_0_15px_rgba(147,51,234,0.3)]">
-              <span class="material-symbols-outlined text-[20px]">send</span>
-          </button>
+      <div class="mt-auto shrink-0 relative flex flex-col gap-2 pt-3 border-t border-gray-200">
+          <!-- Grounded example queries -->
+          <div class="flex flex-wrap gap-2 px-1">
+              <button onclick="document.getElementById('ai-chat-input').value = this.innerText; sendAIChatMessage()" class="bg-gray-200 hover:bg-gray-200 border border-gray-300 text-xs text-gray-600 py-1.5 px-3 rounded-full transition shadow-sm cursor-pointer whitespace-nowrap">GIVE ME A STRUCTURED REPORT ON LUCKNOW'S RURAL DEVELOPMENT</button>
+              <button onclick="document.getElementById('ai-chat-input').value = this.innerText; sendAIChatMessage()" class="bg-gray-200 hover:bg-gray-200 border border-gray-300 text-xs text-gray-600 py-1.5 px-3 rounded-full transition shadow-sm cursor-pointer whitespace-nowrap">GENERATE A PIE CHART OF CRITICAL ISSUES</button>
+              <button onclick="document.getElementById('ai-chat-input').value = this.innerText; sendAIChatMessage()" class="bg-gray-200 hover:bg-gray-200 border border-gray-300 text-xs text-gray-600 py-1.5 px-3 rounded-full transition shadow-sm cursor-pointer whitespace-nowrap">SUMMARIZE RECENT COMPLAINTS IN GOMTI NAGAR</button>
+              <button onclick="document.getElementById('ai-chat-input').value = this.innerText; sendAIChatMessage()" class="bg-gray-200 hover:bg-gray-200 border border-gray-300 text-xs text-gray-600 py-1.5 px-3 rounded-full transition shadow-sm cursor-pointer whitespace-nowrap">EXPORT A CSV OF SANCTIONED PROJECTS</button>
+          </div>
+          <div class="relative flex items-center gap-3 w-full">
+              <input type="text" id="ai-chat-input" class="w-full bg-white border border-gray-300 rounded-full px-5 py-3 pr-14 text-sm text-gray-900 focus:outline-none focus:border-purple-500 transition shadow-inner" placeholder="Ask UrbanOS AI to analyze data, plot a chart, or summarize feedback..." onkeypress="if(event.key === 'Enter') sendAIChatMessage()">
+              <button onclick="sendAIChatMessage()" class="absolute right-2 w-10 h-10 flex items-center justify-center bg-purple-600 hover:bg-purple-500 text-gray-900 rounded-full transition shadow-[0_0_15px_rgba(147,51,234,0.3)]">
+                  <span class="material-symbols-outlined text-[20px]">send</span>
+              </button>
+          </div>
       </div>
+
   </div>
 </div>
 
@@ -555,44 +803,44 @@
   <!-- Feedback & Analysis (Survey Manager) -->
   <div class="flex-1 flex gap-5">
       <!-- Left: Active Surveys List -->
-      <div class="flex-[2] flex flex-col gap-4 bg-[#111] border border-[#222] rounded-xl p-5 overflow-y-auto custom-scrollbar">
-          <div class="flex justify-between items-center shrink-0 border-b border-[#222] pb-3">
+      <div class="flex-[2] flex flex-col gap-4 bg-gray-50 border border-gray-200 rounded-xl p-5 overflow-y-auto custom-scrollbar">
+          <div class="flex justify-between items-center shrink-0 border-b border-gray-200 pb-3">
               <div>
-                  <h2 class="text-xl font-bold text-white flex items-center gap-2">
+                  <h2 class="text-xl font-bold text-gray-900 flex items-center gap-2">
                       <span class="material-symbols-outlined text-blue-500">poll</span> 
                       Citizen Surveys & Feedback
                   </h2>
-                  <div class="text-xs text-zinc-500 mt-1">Real-time WhatsApp polling results and sentiment analysis</div>
+                  <div class="text-xs text-gray-500 mt-1">Real-time WhatsApp polling results and sentiment analysis</div>
               </div>
-              <button onclick="loadSurveys()" class="text-xs px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg transition border border-zinc-700 flex items-center gap-1">
+              <button onclick="loadSurveys()" class="text-xs px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-900 rounded-lg transition border border-gray-300 flex items-center gap-1">
                   <span class="material-symbols-outlined text-[14px]">refresh</span> Refresh
               </button>
           </div>
           
           <div id="survey-list" class="flex flex-col gap-4 flex-1 overflow-y-auto pr-2 custom-scrollbar">
-              <div class="text-xs text-zinc-500 text-center py-10 italic">Loading active surveys...</div>
+              <div class="text-xs text-gray-500 text-center py-10 italic">Loading active surveys...</div>
           </div>
       </div>
 
       <!-- Right: Survey Creator Panel -->
-      <div class="flex-1 flex flex-col gap-4 bg-[#111] border border-[#222] rounded-xl p-5 shrink-0">
-          <h3 class="text-lg font-bold text-white border-b border-[#222] pb-3">Create New Survey</h3>
+      <div class="flex-1 flex flex-col gap-4 bg-gray-50 border border-gray-200 rounded-xl p-5 shrink-0">
+          <h3 class="text-lg font-bold text-gray-900 border-b border-gray-200 pb-3">Create New Survey</h3>
           <div class="flex flex-col gap-4 pt-2">
               <div class="flex flex-col gap-2">
-                  <label class="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Question / Prompt</label>
-                  <textarea id="survey-q" rows="3" class="bg-[#1C1C1C] border border-[#333] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 resize-none" placeholder="e.g. Rate the quality of the new Aliganj streetlights."></textarea>
+                  <label class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Question / Prompt</label>
+                  <textarea id="survey-q" rows="3" class="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-blue-500 resize-none" placeholder="e.g. Rate the quality of the new Aliganj streetlights."></textarea>
               </div>
               <div class="flex flex-col gap-2">
-                  <label class="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Options (Comma separated)</label>
-                  <input type="text" id="survey-opt" class="bg-[#1C1C1C] border border-[#333] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500" placeholder="Excellent, Good, Poor">
+                  <label class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Options (Comma separated)</label>
+                  <input type="text" id="survey-opt" class="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-blue-500" placeholder="Excellent, Good, Poor">
               </div>
               
-              <div class="bg-blue-900/20 border border-blue-800/30 rounded-lg p-3 mt-2">
-                  <div class="text-xs text-blue-300 mb-1 font-bold">Audience Targeting</div>
-                  <div class="text-[10px] text-blue-400/70">Survey will be broadcasted to all citizens who have interacted with UrbanOS WhatsApp.</div>
+              <div class="bg-indigo-50 border border-indigo-200 rounded-lg p-3 mt-2 shadow-sm">
+                  <div class="text-xs text-indigo-700 mb-1 font-bold">Audience Targeting</div>
+                  <div class="text-[10px] text-indigo-600">Survey will be broadcasted to all citizens who have interacted with UrbanOS WhatsApp.</div>
               </div>
 
-              <button onclick="createSurvey()" class="w-full mt-2 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg transition text-sm shadow-[0_0_15px_rgba(37,99,235,0.4)] flex items-center justify-center gap-2">
+              <button onclick="createSurvey()" class="w-full mt-2 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg transition text-sm shadow-[0_4px_12px_rgba(16,185,129,0.3)] flex items-center justify-center gap-2">
                   <span class="material-symbols-outlined text-[18px]">send</span>
                   Create & Launch via WhatsApp
               </button>
@@ -609,6 +857,43 @@
 <span class="material-symbols-outlined text-red-500 text-[18px]">local_fire_department</span>
                 Lucknow Live Hotspots
             </div>
+<!-- Route Card -->
+<div class="route-card">
+    <div class="row">
+        <span class="material-symbols-outlined icon">chevron_left</span>
+        <span>Current location</span>
+    </div>
+    <div class="row">
+        <span class="material-symbols-outlined icon">chevron_left</span>
+        <span>Target location</span>
+    </div>
+    <div class="divider"></div>
+    <div class="section-label">Estimated Journey Duration</div>
+    <div class="row" style="justify-content:space-between">
+        <div class="route-indicator">
+            <div class="dot-top"></div>
+            <div class="line"></div>
+            <div class="dot-bottom"></div>
+        </div>
+        <div style="flex:1; display:flex; align-items:center; gap:8px">
+            <span class="material-symbols-outlined icon">directions_car</span>
+            <div>
+                <div class="dur-label">Time</div>
+                <div class="duration">19 minutes</div>
+            </div>
+        </div>
+    </div>
+    <div class="row" style="justify-content:space-between; margin-top:4px">
+        <div style="width:26px"></div>
+        <div style="flex:1; display:flex; align-items:center; gap:8px">
+            <span class="material-symbols-outlined icon">directions_walk</span>
+            <div>
+                <div class="dur-label">Time</div>
+                <div class="duration">1 hour 2 minutes</div>
+            </div>
+        </div>
+    </div>
+</div>
 <!-- Map controls -->
 <div class="absolute top-5 right-5 flex flex-col gap-3 z-10">
 <button class="w-11 h-11 bg-white text-black rounded-full shadow-[0_8px_30px_rgb(0,0,0,0.12)] flex items-center justify-center hover:bg-gray-50 transition">
@@ -616,68 +901,68 @@
 </button>
 </div>
 </div>
-<aside class="w-[400px] flex flex-col gap-0 card overflow-hidden bg-[#161616] border-[#262626]">
-<div class="p-4 border-b border-[#262626] flex items-center justify-between bg-[#111]">
-<span class="text-sm font-medium text-white flex items-center gap-2">
+<aside class="w-[400px] flex flex-col gap-0 card overflow-hidden bg-gray-50 border-gray-200">
+<div class="p-4 border-b border-gray-200 flex items-center justify-between bg-gray-50">
+<span class="text-sm font-medium text-gray-900 flex items-center gap-2">
 <span class="pulse-dot"></span> Live Webhook Payload
                     </span>
-<span class="text-[10px] text-zinc-500 font-mono">application/json</span>
+<span class="text-[10px] text-gray-500 font-mono">application/json</span>
 </div>
-<div class="flex-1 overflow-y-auto p-4 flex flex-col gap-3 font-mono text-[11px] text-zinc-400 leading-relaxed" id="raw-feed-container">
-<div class="text-center text-zinc-600 my-10 italic">Listening for incoming webhooks...</div>
+<div class="flex-1 overflow-y-auto p-4 flex flex-col gap-3 font-mono text-[11px] text-gray-500 leading-relaxed" id="raw-feed-container">
+<div class="text-center text-gray-500 my-10 italic">Listening for incoming webhooks...</div>
 </div>
 </aside>
 </div>
 <!-- Middle Section: Telemetry Bar -->
 <div class="flex gap-5">
-<div class="card flex-1 p-5 flex items-center gap-4 bg-[#161616]">
-<div class="w-12 h-12 rounded-full bg-[#0A0A0A] border border-[#262626] flex items-center justify-center">
+<div class="card flex-1 p-5 flex items-center gap-4 bg-gray-50">
+<div class="w-12 h-12 rounded-full bg-white border border-gray-200 flex items-center justify-center">
 <div class="pulse-dot"></div>
 </div>
 <div>
-<div class="text-xs text-zinc-500 mb-1">System Health</div>
-<div class="text-lg text-white font-medium">Status: <span class="text-sm text-green-400 ml-1" id="sys-health">Awaiting Data</span></div>
+<div class="text-xs text-gray-500 mb-1">System Health</div>
+<div class="text-lg text-gray-900 font-medium">Status: <span class="text-sm text-green-400 ml-1" id="sys-health">Awaiting Data</span></div>
 </div>
 </div>
-<div class="card flex-1 p-5 flex items-center gap-4 bg-[#161616]">
-<div class="w-12 h-12 rounded-full bg-[#0A0A0A] border border-[#262626] flex items-center justify-center">
-<span class="material-symbols-outlined text-zinc-400">speed</span>
+<div class="card flex-1 p-5 flex items-center gap-4 bg-gray-50">
+<div class="w-12 h-12 rounded-full bg-white border border-gray-200 flex items-center justify-center">
+<span class="material-symbols-outlined text-gray-500">speed</span>
 </div>
 <div>
-<div class="text-xs text-zinc-500 mb-1">Ingestion Latency</div>
-<div class="text-lg text-white font-medium"><span id="sys-latency">0 ms </span><span class="text-sm text-zinc-400 ml-1">(Live)</span></div>
+<div class="text-xs text-gray-500 mb-1">Ingestion Latency</div>
+<div class="text-lg text-gray-900 font-medium"><span id="sys-latency">0 ms </span><span class="text-sm text-gray-500 ml-1">(Live)</span></div>
 </div>
 </div>
-<div class="card flex-1 p-5 flex items-center gap-4 bg-[#161616]">
-<div class="w-12 h-12 rounded-full bg-[#0A0A0A] border border-[#262626] flex items-center justify-center">
+<div class="card flex-1 p-5 flex items-center gap-4 bg-gray-50">
+<div class="w-12 h-12 rounded-full bg-white border border-gray-200 flex items-center justify-center">
 <span class="material-symbols-outlined text-blue-400">sync</span>
 </div>
 <div>
-<div class="text-xs text-zinc-500 mb-1">Messages Processed</div>
-<div class="text-lg text-white font-medium" id="msg-counter">0</div>
+<div class="text-xs text-gray-500 mb-1">Messages Processed</div>
+<div class="text-lg text-gray-900 font-medium" id="msg-counter">0</div>
 </div>
 </div>
 </div>
 <!-- Bottom Section: Animation -->
-<div class="card p-8 flex-1 min-h-[160px] relative flex items-center justify-between overflow-hidden bg-[#0A0A0A] border-[#262626]" id="animation-canvas">
+<div class="card p-8 flex-1 min-h-[160px] relative flex items-center justify-between overflow-hidden bg-white border-gray-200" id="animation-canvas">
 <!-- Grid Background for tech feel -->
-<div class="absolute inset-0 opacity-10" style="background-image: linear-gradient(#333 1px, transparent 1px), linear-gradient(90deg, #333 1px, transparent 1px); background-size: 20px 20px;"></div>
+<div class="absolute inset-0 opacity-10" style="background-image: linear-gradient(#e5e7eb 1px, transparent 1px), linear-gradient(90deg, #e5e7eb 1px, transparent 1px); background-size: 20px 20px;"></div>
 <!-- WhatsApp Node -->
 <div class="z-10 flex flex-col items-center gap-2 ml-8">
 <div class="w-16 h-16 rounded-2xl bg-[#25D366] flex items-center justify-center shadow-[0_0_20px_rgba(37,211,102,0.3)]">
-<span class="material-symbols-outlined text-white text-[32px]">forum</span>
+<span class="material-symbols-outlined text-gray-900 text-[32px]">forum</span>
 </div>
-<span class="text-xs text-zinc-400 font-medium tracking-widest uppercase">WhatsApp API</span>
+<span class="text-xs text-gray-500 font-medium tracking-widest uppercase">WhatsApp API</span>
 </div>
 <!-- Dashed Path -->
-<div class="absolute left-32 right-32 top-1/2 border-t-2 border-dashed border-zinc-700 -mt-px z-0"></div>
+<div class="absolute left-32 right-32 top-1/2 border-t-2 border-dashed border-gray-300 -mt-px z-0"></div>
 <!-- The flying packets -->
 <!-- UrbanOS Node -->
 <div class="z-10 flex flex-col items-center gap-2 mr-8">
-<div class="w-16 h-16 rounded-2xl bg-[#161616] border border-[#333] flex items-center justify-center shadow-xl">
-<svg class="w-8 h-8 text-blue-400 drop-shadow-[0_0_8px_rgba(59,130,246,0.8)]" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 22s8-6 8-12.5a8 8 0 0 0-16 0C4 16 12 22 12 22z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 12v-3h2V6h4v4h2v2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+<div class="w-16 h-16 rounded-2xl bg-gray-50 border border-gray-300 flex items-center justify-center shadow-xl">
+<svg class="w-8 h-8 text-blue-400 drop-shadow-[0_0_8px_rgba(59,130,246,0.8)]" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 22s8-6 8-12.5a8 8 0 0 0-16 0C4 16 12 22 12 22z" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 12v-3h2V6h4v4h2v2" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
 </div>
-<span class="text-xs text-white font-medium tracking-widest uppercase">UrbanOS Engine</span>
+<span class="text-xs text-gray-900 font-medium tracking-widest uppercase">UrbanOS Engine</span>
 </div>
 </div>
 </div>
@@ -690,6 +975,8 @@
             });
             document.getElementById('view-' + viewId).classList.add('active');
         setTimeout(() => { window.dispatchEvent(new Event('resize')); }, 100);
+            // Init maps if they haven't been created yet (lazy render)
+            setTimeout(() => { if(window.initMaps) window.initMaps(); }, 150);
             setTimeout(() => {
                 if(window.priorityMap) window.priorityMap.invalidateSize();
                 if(window.coordMap) window.coordMap.invalidateSize();
@@ -704,15 +991,15 @@
             
             document.querySelectorAll('.nav-link').forEach(el => {
                 el.classList.remove('active');
-                el.classList.remove('text-white');
-                el.classList.add('text-zinc-500');
+                el.classList.remove('text-gray-900');
+                el.classList.add('text-gray-500');
             });
             
             const activeLink = document.getElementById('nav-' + viewId);
             if(activeLink) {
                 activeLink.classList.add('active');
-                activeLink.classList.add('text-white');
-                activeLink.classList.remove('text-zinc-500');
+                activeLink.classList.add('text-gray-900');
+                activeLink.classList.remove('text-gray-500');
             }
             if(viewId === 'coordination') {
                 loadSurveys();
@@ -846,7 +1133,7 @@
                                     }
                                     const rawMsg = data[lastMessageCount + i];
                                     const div = document.createElement('div');
-                                    div.className = 'p-3 bg-[#0A0A0A] border border-[#262626] rounded-md shadow-sm break-words';
+                                    div.className = 'p-3 bg-white border border-gray-200 rounded-md shadow-sm break-words';
                                     const cat = rawMsg.category || 'Uncategorized';
                                     const loc = rawMsg.location || rawMsg.extracted_location || 'Unknown Location';
                                     const lang = rawMsg.original_language || '';
@@ -856,12 +1143,12 @@
                                          <div class="text-green-400 text-xs font-mono">▼ NEW PROPOSAL · ${ts}</div>
                                          ${langFlag(lang)}
                                        </div>
-                                       <div class="text-white font-medium text-sm mb-1">${rawMsg.summary || cat}</div>
-                                       <div class="text-zinc-400 text-xs mb-1 truncate">${rawMsg.raw_body || rawMsg.body || ''}</div>
+                                       <div class="text-gray-900 font-medium text-sm mb-1">${rawMsg.summary || cat}</div>
+                                       <div class="text-gray-500 text-xs mb-1 truncate">${rawMsg.raw_body || rawMsg.body || ''}</div>
                                        <div class="flex gap-2 flex-wrap mt-1">
-                                         <span class="text-[10px] bg-zinc-800 px-2 py-0.5 rounded text-zinc-400">${cat}</span>
-                                         <span class="text-[10px] bg-zinc-800 px-2 py-0.5 rounded text-zinc-400">📍 ${loc}</span>
-                                         <span class="text-[10px] font-bold ${rawMsg.priority === 'Critical' ? 'text-red-400' : rawMsg.priority === 'High' ? 'text-amber-400' : 'text-zinc-400'}">${rawMsg.priority || ''}</span>
+                                         <span class="text-[10px] bg-gray-100 px-2 py-0.5 rounded text-gray-500">${cat}</span>
+                                         <span class="text-[10px] bg-gray-100 px-2 py-0.5 rounded text-gray-500">📍 ${loc}</span>
+                                         <span class="text-[10px] font-bold ${rawMsg.priority === 'Critical' ? 'text-red-400' : rawMsg.priority === 'High' ? 'text-amber-400' : 'text-gray-500'}">${rawMsg.priority || ''}</span>
                                        </div>`;
                                     rawContainer.prepend(div);
                                     
@@ -869,9 +1156,9 @@
                                     if (window.liveMap && rawMsg.latitude && rawMsg.longitude) {
                                         const pulseIcon = L.divIcon({
                                             className: 'custom-div-icon',
-                                            html: `<div class="relative flex items-center justify-center w-6 h-6"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75"></span><span class="relative inline-flex rounded-full h-4 w-4 bg-red-500 border-2 border-white shadow-[0_0_10px_rgba(239,68,68,0.8)]"></span></div>`,
-                                            iconSize: [24, 24],
-                                            iconAnchor: [12, 12]
+                                            html: `<div class="pin-pulse"><div class="ring"></div><div class="core"></div></div>`,
+                                            iconSize: [28, 28],
+                                            iconAnchor: [14, 14]
                                         });
                                         const marker = L.marker([rawMsg.latitude, rawMsg.longitude], {icon: pulseIcon}).addTo(window.liveMap);
                                         setTimeout(() => {
@@ -896,23 +1183,23 @@
                         rawContainer.innerHTML = ''; // clear placeholder
                         data.forEach(m => {
                             const div = document.createElement('div');
-                            div.className = 'p-3 bg-[#0A0A0A] border border-[#262626] rounded-md shadow-sm break-words';
+                            div.className = 'p-3 bg-white border border-gray-200 rounded-md shadow-sm break-words';
                             const cat = m.category || 'Uncategorized';
                             const loc = m.location || m.extracted_location || 'Unknown';
                             const lang = m.original_language || '';
                             const ts = m.timestamp ? new Date(m.timestamp).toLocaleTimeString() : '';
                             div.innerHTML = `
                                <div class="flex items-center justify-between mb-2">
-                                 <div class="text-zinc-500 text-xs font-mono">▼ PROPOSAL · ${ts}</div>
+                                 <div class="text-gray-500 text-xs font-mono">▼ PROPOSAL · ${ts}</div>
                                  ${langFlag(lang)}
                                </div>
-                               <div class="text-white font-medium text-sm mb-1">${m.summary || cat}</div>
-                               <div class="text-zinc-400 text-xs mb-1 truncate">${m.raw_body || m.body || ''}</div>
+                               <div class="text-gray-900 font-medium text-sm mb-1">${m.summary || cat}</div>
+                               <div class="text-gray-500 text-xs mb-1 truncate">${m.raw_body || m.body || ''}</div>
                                <div class="flex gap-2 flex-wrap mt-1">
-                                 <span class="text-[10px] bg-zinc-800 px-2 py-0.5 rounded text-zinc-400">${cat}</span>
-                                 <span class="text-[10px] bg-zinc-800 px-2 py-0.5 rounded text-zinc-400">📍 ${loc}</span>
-                                 <span class="text-[10px] font-bold ${m.priority === 'Critical' ? 'text-red-400' : m.priority === 'High' ? 'text-amber-400' : 'text-zinc-400'}">${m.priority || ''}</span>
-                                 <span class="text-[10px] ${m.status === 'Sanctioned' ? 'text-green-400' : m.status === 'In Review' ? 'text-amber-400' : 'text-zinc-500'}">${m.status || 'Open'}</span>
+                                 <span class="text-[10px] bg-gray-100 px-2 py-0.5 rounded text-gray-500">${cat}</span>
+                                 <span class="text-[10px] bg-gray-100 px-2 py-0.5 rounded text-gray-500">📍 ${loc}</span>
+                                 <span class="text-[10px] font-bold ${m.priority === 'Critical' ? 'text-red-400' : m.priority === 'High' ? 'text-amber-400' : 'text-gray-500'}">${m.priority || ''}</span>
+                                 <span class="text-[10px] ${m.status === 'Sanctioned' ? 'text-green-400' : m.status === 'In Review' ? 'text-amber-400' : 'text-gray-500'}">${m.status || 'Open'}</span>
                                </div>`;
                             rawContainer.prepend(div);
                         });
@@ -992,7 +1279,9 @@
                     const z = m.constituency_zone || 'Unknown';
                     zoneMap[z] = (zoneMap[z] || 0) + 1;
 
-                    const l = m.original_language || 'English';
+                    let l = m.original_language || 'English';
+                    if (l === 'en') l = 'English';
+                    if (l === 'hi') l = 'Hindi';
                     langMap[l] = (langMap[l] || 0) + 1;
 
                     const c = m.category || 'General';
@@ -1037,19 +1326,21 @@
                         data: {
                             labels: ['Critical', 'High', 'Medium', 'Low'],
                             datasets: [{ data: [prio.Critical, prio.High, prio.Medium, prio.Low],
-                                backgroundColor: ['#ef4444','#f59e0b','#3b82f6','#71717a'],
+                                backgroundColor: ['#ef4444','#f59e0b','#3b82f6','#6b7280'],
                                 borderWidth: 0, hoverOffset: 4 }]
                         },
                         options: { responsive: true, maintainAspectRatio: true, cutout: '65%',
-                            plugins: { legend: { position: 'bottom', labels: { color: '#a1a1aa', font: { size: 10 }, padding: 8, boxWidth: 10 } } } }
+                            plugins: { legend: { position: 'bottom', labels: { color: '#374151', font: { size: 10 }, padding: 8, boxWidth: 10 } } } }
                     });
                 }
 
                 // Zone Bar Chart
-                const zones = ['North','South','East','West','Central'];
+                let zones = Object.keys(zoneMap).sort((a,b) => zoneMap[b] - zoneMap[a]).slice(0, 5);
+                if (zones.length === 0) zones = ['North','South','East','West','Central'];
                 const zoneCounts = zones.map(z => zoneMap[z] || 0);
                 const zoneColors = ['#3b82f6','#10b981','#f59e0b','#a855f7','#f43f5e'];
                 if (window.zoneBarChartInst) {
+                    window.zoneBarChartInst.data.labels = zones;
                     window.zoneBarChartInst.data.datasets[0].data = zoneCounts;
                     window.zoneBarChartInst.update();
                 } else if (document.getElementById('zoneBarChart')) {
@@ -1062,8 +1353,8 @@
                         options: { responsive: true, maintainAspectRatio: false,
                             plugins: { legend: { display: false } },
                             scales: {
-                                x: { grid: { color: '#27272a' }, ticks: { color: '#71717a', font: { size: 10 } } },
-                                y: { grid: { color: '#27272a' }, ticks: { color: '#71717a', font: { size: 10 } }, beginAtZero: true }
+                                x: { grid: { color: '#27272a' }, ticks: { color: '#6b7280', font: { size: 10 } } },
+                                y: { grid: { color: '#27272a' }, ticks: { color: '#6b7280', font: { size: 10 } }, beginAtZero: true }
                             }
                         }
                     });
@@ -1077,11 +1368,11 @@
                     const langColors = { Hindi:'bg-amber-500', English:'bg-blue-500', Urdu:'bg-purple-500', Tamil:'bg-rose-500', Telugu:'bg-green-500' };
                     langEl.innerHTML = langs.map(([l,c]) => `
                         <div class="flex items-center gap-2">
-                            <div class="text-[10px] text-zinc-400 w-14 truncate">${l}</div>
-                            <div class="flex-1 h-2 bg-zinc-800 rounded-full overflow-hidden">
-                                <div class="h-full ${langColors[l]||'bg-zinc-500'} rounded-full transition-all" style="width:${Math.round((c/maxL)*100)}%"></div>
+                            <div class="text-[10px] text-gray-500 w-14 truncate">${l}</div>
+                            <div class="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                                <div class="h-full ${langColors[l]||'bg-gray-400'} rounded-full transition-all" style="width:${Math.round((c/maxL)*100)}%"></div>
                             </div>
-                            <div class="text-[10px] text-zinc-400 w-5 text-right">${c}</div>
+                            <div class="text-[10px] text-gray-500 w-5 text-right">${c}</div>
                         </div>`).join('');
                 }
 
@@ -1093,12 +1384,12 @@
                     catTableEl.innerHTML = cats.map(([cat, v]) => {
                         const shareW = Math.round((v.count/maxCat)*100);
                         const budStr = v.budget >= 10000000 ? '₹' + (v.budget/10000000).toFixed(1)+'Cr' : '₹' + (v.budget/100000).toFixed(1)+'L';
-                        return `<tr class="border-b border-zinc-900 hover:bg-zinc-900/50 transition">
-                            <td class="px-4 py-2.5 text-zinc-200 font-medium">${cat}</td>
-                            <td class="px-4 py-2.5 text-center text-white font-bold">${v.count}</td>
-                            <td class="px-4 py-2.5 text-center ${v.critical > 0 ? 'text-red-400 font-bold' : 'text-zinc-600'}">${v.critical || '-'}</td>
-                            <td class="px-4 py-2.5 text-right font-mono text-zinc-300">${budStr}</td>
-                            <td class="px-4 py-2.5"><div class="h-1.5 bg-zinc-800 rounded-full w-full"><div class="h-full bg-blue-500 rounded-full" style="width:${shareW}%"></div></div></td>
+                        return `<tr class="border-b border-gray-100 hover:bg-gray-50/50 transition">
+                            <td class="px-4 py-2.5 text-gray-700 font-medium">${cat}</td>
+                            <td class="px-4 py-2.5 text-center text-gray-900 font-bold">${v.count}</td>
+                            <td class="px-4 py-2.5 text-center ${v.critical > 0 ? 'text-red-400 font-bold' : 'text-gray-500'}">${v.critical || '-'}</td>
+                            <td class="px-4 py-2.5 text-right font-mono text-gray-600">${budStr}</td>
+                            <td class="px-4 py-2.5"><div class="h-1.5 bg-gray-100 rounded-full w-full"><div class="h-full bg-blue-500 rounded-full" style="width:${shareW}%"></div></div></td>
                         </tr>`;
                     }).join('');
                 }
@@ -1110,17 +1401,17 @@
                 setEl('coord-pending', critMsgs.length);
                 if (coordAlerts && critMsgs.length > 0) {
                     coordAlerts.innerHTML = critMsgs.map(m => `
-                        <div class="p-3 bg-zinc-900 border ${m.priority==='Critical'?'border-red-800/50':'border-amber-800/30'} rounded-xl">
+                        <div class="p-3 bg-gray-50 border ${m.priority==='Critical'?'border-red-800/50':'border-amber-800/30'} rounded-xl">
                             <div class="flex justify-between items-center mb-1">
                                 <div class="text-[10px] font-bold ${m.priority==='Critical'?'text-red-400':'text-amber-400'}">${m.priority}</div>
-                                <div class="text-[10px] text-zinc-600">${m.constituency_zone || 'Unknown'} Zone</div>
+                                <div class="text-[10px] text-gray-500">${m.constituency_zone || 'Unknown'} Zone</div>
                             </div>
-                            <div class="text-xs text-white font-medium">${m.summary || m.category || 'Proposal'}</div>
-                            <div class="text-[10px] text-zinc-500 mt-0.5">📍 ${m.extracted_location || 'Unknown'}</div>
-                            <button class="mt-2 w-full py-1 text-[10px] font-bold border border-zinc-700 text-zinc-300 rounded hover:border-zinc-500 hover:text-white transition">Dispatch Unit</button>
+                            <div class="text-xs text-gray-900 font-medium">${m.summary || m.category || 'Proposal'}</div>
+                            <div class="text-[10px] text-gray-500 mt-0.5">📍 ${m.extracted_location || 'Unknown'}</div>
+                            <button class="mt-2 w-full py-1 text-[10px] font-bold border border-gray-300 text-gray-600 rounded hover:border-gray-400 hover:text-gray-900 transition">Dispatch Unit</button>
                         </div>`).join('');
                 } else if (coordAlerts) {
-                    coordAlerts.innerHTML = '<div class="text-xs text-zinc-600 italic">No critical proposals at this time.</div>';
+                    coordAlerts.innerHTML = '<div class="text-xs text-gray-500 italic">No critical proposals at this time.</div>';
                 }
 
                 // =============================================
@@ -1294,7 +1585,7 @@
                                 // Draw a blue dispatch pin representing a response unit sent to the coordinate
                                 const icon = L.divIcon({
                                     className: 'custom-div-icon',
-                                    html: `<div style="background-color:#3b82f6; width:12px; height:12px; border-radius:50%; border:2px solid white; box-shadow: 0 0 10px rgba(59,130,246,0.8);"></div>`,
+                                    html: `<div class="pin-dot"></div>`,
                                     iconSize: [12, 12],
                                     iconAnchor: [6, 6]
                                 });
@@ -1327,7 +1618,7 @@
                     const dispList = document.getElementById('dispatch-list');
                     if (dispList) {
                         if (data.length === 0) {
-                            dispList.innerHTML = '<div class="text-zinc-500 text-sm">No active dispatches.</div>';
+                            dispList.innerHTML = '<div class="text-gray-500 text-sm">No active dispatches.</div>';
                         } else {
                             dispList.innerHTML = data.slice(-3).reverse().map((msg, i) => {
                                 let colors = ['bg-[#EDE8DC] text-black', 'border border-green-500 text-green-500', 'border border-blue-500 text-blue-500'];
@@ -1335,13 +1626,13 @@
                                 let status = statuses[i % statuses.length];
                                 let color = colors[i % colors.length];
                                 const senderShort = (msg.from || '0000').slice(-4);
-                                return `<div class="p-4 bg-[#0A0A0A] border border-[#262626] rounded-xl">
+                                return `<div class="p-4 bg-white border border-gray-200 rounded-xl">
                                     <div class="flex justify-between items-start mb-2">
-                                        <div class="font-medium text-white">Unit ${senderShort}</div>
+                                        <div class="font-medium text-gray-900">Unit ${senderShort}</div>
                                         <div class="text-xs px-2 py-0.5 rounded-full ${color}">${status}</div>
                                     </div>
-                                    <div class="text-xs text-zinc-500 mb-2">Response Team</div>
-                                    <div class="text-xs text-zinc-400 truncate">Responding to: ${msg.body || 'Location pin'}</div>
+                                    <div class="text-xs text-gray-500 mb-2">Response Team</div>
+                                    <div class="text-xs text-gray-500 truncate">Responding to: ${msg.body || 'Location pin'}</div>
                                 </div>`;
                             }).join('');
                         }
@@ -1355,9 +1646,9 @@
                             if (msg.latitude && msg.longitude) {
                                 const icon = L.divIcon({
                                     className: 'custom-div-icon',
-                                    html: `<div style="background-color:#ef4444; width:14px; height:14px; border-radius:50%; border:2px solid white; box-shadow: 0 0 10px rgba(239,68,68,0.8);"></div>`,
-                                    iconSize: [14, 14],
-                                    iconAnchor: [7, 7]
+                                    html: `<div class="pin-teardrop"></div>`,
+                                    iconSize: [28, 28],
+                                    iconAnchor: [14, 14]
                                 });
                                 L.marker([msg.latitude, msg.longitude], {icon: icon})
                                  .bindPopup(`<b>New Request</b><br/>${msg.body || 'Location only'}`)
@@ -1384,24 +1675,17 @@
                         survBody.innerHTML = data.slice(-5).reverse().map(msg => {
                             let score = msg.body && msg.body.length > 30 ? 85 : 45;
                             let rating = score > 80 ? '⭐⭐⭐' : '⭐⭐';
-                            return `<tr class="border-b border-[#262626]">
-                                <td class="px-6 py-4 text-white font-medium">${msg.from}</td>
-                                <td class="px-4 py-4 text-zinc-400">${msg.body || 'Media'}</td>
+                            return `<tr class="border-b border-gray-200">
+                                <td class="px-6 py-4 text-gray-900 font-medium">${msg.from}</td>
+                                <td class="px-4 py-4 text-gray-500">${msg.body || 'Media'}</td>
                                 <td class="px-4 py-4 text-right">${rating}</td>
                             </tr>`;
                         }).join('');
                     }
                     
                     // 4. Update Live Map Pins / Heatmap
-                    if (window.liveHeatLayer) {
-                        // clear existing
-                        window.liveHeatLayer.setLatLngs([]);
-                        data.forEach(msg => {
-                            if (msg.latitude && msg.longitude) {
-                                window.liveHeatLayer.addLatLng([msg.latitude, msg.longitude, 1.0]);
-                            }
-                        });
-                    }
+                    // Place live markers and heatmap via global function
+                    placeLiveMarkers(data);
             
                     const newRows = data.map((msg, index) => {
                         const date = new Date(msg.timestamp).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -1413,21 +1697,21 @@
                         if(msg.latitude) media += '<span class="material-symbols-outlined text-[14px] align-middle mr-1">location_on</span>';
                         
                         return `
-                            <tr class="hover:bg-[#1C1C1C] transition cursor-pointer group">
-                                <td class="px-6 py-4 text-white font-medium flex items-center gap-3">
-                                    <span class="material-symbols-outlined text-[20px] text-zinc-500 group-hover:text-white transition">mark_email_unread</span>
+                            <tr class="hover:bg-gray-100 transition cursor-pointer group">
+                                <td class="px-6 py-4 text-gray-900 font-medium flex items-center gap-3">
+                                    <span class="material-symbols-outlined text-[20px] text-gray-500 group-hover:text-gray-900 transition">mark_email_unread</span>
                                     #AB${1000 + data.length - index}
                                 </td>
                                 <td class="px-4 py-4">
-                                    <div class="text-zinc-300">${msg.from}</div>
-                                    <div class="text-xs text-zinc-500 mt-1">Citizen</div>
+                                    <div class="text-gray-600">${msg.from}</div>
+                                    <div class="text-xs text-gray-500 mt-1">Citizen</div>
                                 </td>
                                 <td class="px-4 py-4">
-                                    <div class="text-zinc-300 truncate max-w-[280px]">${msg.body || 'Media payload attached'}</div>
-                                    <div class="text-xs text-zinc-500 mt-1 flex items-center">${media} ${date}</div>
+                                    <div class="text-gray-600 truncate max-w-[280px]">${msg.body || 'Media payload attached'}</div>
+                                    <div class="text-xs text-gray-500 mt-1 flex items-center">${media} ${date}</div>
                                 </td>
-                                <td class="px-4 py-4 text-right font-medium text-white">${score}</td>
-                                <td class="px-6 py-4 text-right text-zinc-300">${status}</td>
+                                <td class="px-4 py-4 text-right font-medium text-gray-900">${score}</td>
+                                <td class="px-6 py-4 text-right text-gray-600">${status}</td>
                             </tr>
                         `;
                     }).join('');
@@ -1442,43 +1726,106 @@
         }
         
         // fetchMessages and polling are started inside DOMContentLoaded after splash screen
+        // ─── Global marker placement functions ─────────────────────────
+        function placeRankedMarkers() {
+            if (!window.rankedProjectsData) return;
+            const redDiamond = L.divIcon({
+                className: 'custom-diamond',
+                html: `<div style="width:14px;height:14px;background-color:#f43f5e;transform:rotate(45deg);border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3);"></div>`,
+                iconSize: [14,14],
+                iconAnchor: [7,7]
+            });
+            if (window.priorityMap) {
+                if(window.priorityMarkers) window.priorityMarkers.forEach(m => window.priorityMap.removeLayer(m));
+                window.priorityMarkers = [];
+                window.rankedProjectsData.forEach(p => {
+                    if (p.latitude && p.longitude) {
+                        const marker = L.marker([p.latitude, p.longitude], {icon: redDiamond})
+                            .bindTooltip(p.title, {direction:'top', className:'leaflet-tooltip-custom'})
+                            .addTo(window.priorityMap);
+                        window.priorityMarkers.push(marker);
+                    }
+                });
+            }
+            if (window.coordMap) {
+                if(window.coordMarkers) window.coordMarkers.forEach(m => window.coordMap.removeLayer(m));
+                window.coordMarkers = [];
+                window.rankedProjectsData.forEach(p => {
+                    if (p.latitude && p.longitude) {
+                        const marker = L.marker([p.latitude, p.longitude], {icon: redDiamond})
+                            .bindTooltip(p.title, {direction:'top', className:'leaflet-tooltip-custom'})
+                            .addTo(window.coordMap);
+                        window.coordMarkers.push(marker);
+                    }
+                });
+            }
+        }
+
+        function placeLiveMarkers(messages) {
+            if (!window.liveMap) return;
+            const bluePin = L.divIcon({
+                className: 'custom-pin',
+                html: `<div style="width:12px;height:12px;background-color:#38bdf8;border-radius:50%;border:2px solid white;box-shadow:0 2px 5px rgba(0,0,0,0.25);"></div>`,
+                iconSize: [12,12],
+                iconAnchor: [6,6]
+            });
+            if(window.liveMarkers) window.liveMarkers.forEach(m => window.liveMap.removeLayer(m));
+            window.liveMarkers = [];
+            if(window.liveHeatLayer) window.liveHeatLayer.setLatLngs([]);
+            messages.forEach(msg => {
+                if (msg.latitude && msg.longitude) {
+                    const m = L.marker([msg.latitude, msg.longitude], {icon: bluePin})
+                        .bindTooltip(msg.summary || msg.category || 'Complaint', {direction:'top'})
+                        .addTo(window.liveMap);
+                    window.liveMarkers.push(m);
+                    if(window.liveHeatLayer) window.liveHeatLayer.addLatLng([msg.latitude, msg.longitude, 1.0]);
+                }
+            });
+            // Store for replay
+            window.liveMessagesData = messages;
+        }
+        // ────────────────────────────────────────────────────────────────
+
         // Initialize Open Source Maps (Leaflet + CartoDB Positron)
-        setTimeout(() => {
-            if(document.getElementById('priority-map')) {
+        function initMaps() {
+            if(document.getElementById('priority-map') && !window.priorityMap) {
                 window.priorityMap = L.map('priority-map', { zoomControl: false, attributionControl: false }).setView([26.8467, 80.9462], 12);
                 applyLucknowGridAndLock(window.priorityMap, false);
-                L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                    maxZoom: 19
+                L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+                    maxZoom: 19, subdomains: 'abcd', attribution: ''
                 }).addTo(window.priorityMap);
+                setTimeout(placeRankedMarkers, 300);
             }
-            if(document.getElementById('coordination-map')) {
+            if(document.getElementById('coordination-map') && !window.coordMap) {
                 window.coordMap = L.map('coordination-map', { zoomControl: false, attributionControl: false }).setView([26.8467, 80.9462], 12);
                 applyLucknowGridAndLock(window.coordMap, true);
-                L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
                     maxZoom: 19, subdomains: 'abcd'
                 }).addTo(window.coordMap);
+                setTimeout(placeRankedMarkers, 300);
             }
-        }, 1000);
-    
-        // Initialize Lucknow Heatmap
-        setTimeout(() => {
-            if(document.getElementById('live-heatmap')) {
+            if(document.getElementById('live-heatmap') && !window.liveMap) {
                 window.liveMap = L.map('live-heatmap', { zoomControl: false, attributionControl: false }).setView([26.8467, 80.9462], 12);
                 applyLucknowGridAndLock(window.liveMap, true);
-                L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                    maxZoom: 19
+                L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+                    maxZoom: 19, subdomains: 'abcd', attribution: ''
                 }).addTo(window.liveMap);
                 
                 if(typeof L.heatLayer !== 'undefined') {
                     window.liveHeatLayer = L.heatLayer([], {
-                        radius: 20,
-                        blur: 15,
+                        radius: 25,
+                        blur: 20,
                         maxZoom: 14,
-                        gradient: {0.4: '#3b82f6', 0.6: '#10b981', 0.8: '#f59e0b', 1.0: '#ef4444'}
+                        gradient: {0.3: '#38bdf8', 0.6: '#f59e0b', 0.85: '#ef4444', 1.0: '#dc2626'}
                     }).addTo(window.liveMap);
                 }
+                // Replay live markers if we already have data
+                setTimeout(() => { if(window.liveMessagesData) placeLiveMarkers(window.liveMessagesData); }, 300);
             }
-        }, 1000);
+        }
+        setTimeout(initMaps, 1000);
+        // Also init on tab switch to catch lazy-rendered maps
+        window.initMaps = initMaps;
     
         // --- Splash Screen & Service Worker Logic ---
         if ('serviceWorker' in navigator) {
@@ -1495,7 +1842,7 @@
                 const r = await authFetch('/projects/ranked');
                 const ranked = await r.json();
                 const fmtCr = val => val >= 10000000 ? '₹' + (val/10000000).toFixed(1) + ' Cr' : '₹' + (val/100000).toFixed(1) + ' L';
-                const zoneColors = {North:'text-blue-400', South:'text-emerald-400', East:'text-amber-400', West:'text-purple-400', Central:'text-rose-400'};
+                const zoneColors = {North:'text-blue-700 bg-blue-50 border border-blue-200', South:'text-emerald-700 bg-emerald-50 border border-emerald-200', East:'text-amber-700 bg-amber-50 border border-amber-200', West:'text-purple-700 bg-purple-50 border border-purple-200', Central:'text-rose-700 bg-rose-50 border border-rose-200'};
                 
                 let totalReq = 0, sancAmt = 0, sancCount = 0;
                 ranked.forEach(p => {
@@ -1511,33 +1858,42 @@
                 const bar = document.getElementById('plan-sanc-bar');
                 if (bar) bar.style.width = Math.min(100, Math.round((sancAmt / 50000000) * 100)) + '%';
 
+                // Store ranked data globally so markers can be placed when maps are ready
+                window.rankedProjectsData = ranked;
+                placeRankedMarkers();
+
+
                 const htmlRows = ranked.map((p, i) => {
-                    const impactColor = p.impact_score > 100 ? 'text-red-400' : (p.impact_score > 50 ? 'text-amber-400' : 'text-green-400');
-                    const zoneColor = zoneColors[p.zone] || 'text-zinc-400';
+                    const impactColor = p.impact_score > 100 ? 'text-red-600 font-bold' : (p.impact_score > 50 ? 'text-orange-600 font-bold' : 'text-emerald-600 font-bold');
+                    const zoneColor = zoneColors[p.zone] || 'text-gray-500';
                     const isAlreadySanctioned = (p.status === 'Sanctioned');
                     const sanctionBtn = isAlreadySanctioned
-                        ? `<span class="px-4 py-1.5 bg-green-500/10 border border-green-500/30 text-green-400 text-[11px] uppercase tracking-wider font-bold rounded-md inline-flex items-center justify-center w-[110px]">✓ Sanctioned</span>`
-                        : `<button onclick="sanctionProject('${p.id}','${p.title.replace(/'/g,"\\'").replace(/"/g,"&quot;")}','${p.zone}','${p.category}',${JSON.stringify(p.senders).replace(/"/g, '&quot;')})" class="px-4 py-1.5 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white text-[11px] uppercase tracking-wider font-bold rounded-md transition-all duration-300 shadow-[0_0_15px_rgba(79,70,229,0.3)] hover:shadow-[0_0_20px_rgba(79,70,229,0.5)] border border-indigo-400/20 inline-flex items-center justify-center gap-1.5 w-[110px]">⚡ Sanction</button>`;
+                        ? `<span class="px-4 py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 text-[11px] uppercase tracking-wider font-bold rounded-md inline-flex items-center justify-center w-[110px] shadow-sm">✓ Sanctioned</span>`
+                        : `<button onclick="sanctionProject('${p.id}','${p.title.replace(/'/g,"\\'").replace(/"/g,"&quot;")}','${p.zone}','${p.category}',${JSON.stringify(p.senders).replace(/"/g, '&quot;')})" class="px-4 py-1.5 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white text-[11px] uppercase tracking-wider font-bold rounded-md transition-all duration-300 shadow-[0_0_15px_rgba(79,70,229,0.3)] hover:shadow-[0_0_20px_rgba(79,70,229,0.5)] border border-indigo-400/20 inline-flex items-center justify-center gap-1.5 w-[110px]"><span class="material-symbols-outlined text-[14px] text-orange-300 drop-shadow-sm">bolt</span> Sanction</button>`;
                     
-                    const statColor = isAlreadySanctioned ? 'text-green-400' : 'text-yellow-400';
+                    const statColor = isAlreadySanctioned ? 'text-emerald-600 font-semibold' : 'text-amber-500 font-semibold';
+                    const gap = p.evidence && p.evidence.gap_signal ? p.evidence.gap_signal : null;
+                    const evidenceLine = gap ? `${gap.label}: ${gap.value}${gap.unit} - ${gap.source}` : 'Evidence source pending';
+                    const displayJustification = `${p.justification || 'AI analysis pending...'} Evidence: ${evidenceLine}`;
+                    p.justification = displayJustification;
                     
-                    return `<tr class="hover:bg-[#1C1C1C] transition border-b border-[#262626]">
+                    return `<tr class="hover:bg-gray-100 transition border-b border-gray-200">
                         <td class="px-6 py-4 whitespace-normal min-w-[340px]">
-                            <div class="text-white font-semibold flex items-center gap-2 mb-1">
-                                <span class="text-[11px] font-bold ${zoneColor} bg-zinc-800 px-2 py-0.5 rounded">${p.zone.toUpperCase()}</span>
+                            <div class="text-gray-900 font-semibold flex items-center gap-2 mb-1">
+                                <span class="text-[11px] font-bold ${zoneColor} px-2 py-0.5 rounded shadow-sm">${p.zone.toUpperCase()}</span>
                                 ${p.title}
                             </div>
-                            <div class="text-[11px] text-amber-400/90 italic whitespace-normal max-w-md mb-1 leading-relaxed">
+                            <div class="text-[11px] text-gray-600 italic whitespace-normal max-w-md mb-1 leading-relaxed">
                                 🤖 ${p.justification || 'AI analysis pending...'}
                             </div>
-                            <div class="text-xs text-zinc-500">${p.demand_count} citizen proposals · ${p.unique_senders} unique voices</div>
+                            <div class="text-xs text-gray-500">${p.demand_count} citizen proposals · ${p.unique_senders} unique voices</div>
                         </td>
                         <td class="px-4 py-4 text-center">
                             <div class="font-bold text-lg ${impactColor}">${p.impact_score}</div>
-                            <div class="text-[10px] text-zinc-500">Impact Score</div>
+                            <div class="text-[10px] text-gray-500">Impact Score</div>
                         </td>
                         <td class="px-4 py-4 text-center font-medium ${statColor}">${p.status || 'Open'}</td>
-                        <td class="px-6 py-4 text-right font-mono text-white text-sm">${fmtCr(p.estimated_budget)}</td>
+                        <td class="px-6 py-4 text-right font-mono text-gray-900 text-sm">${fmtCr(p.estimated_budget)}</td>
                         <td class="px-6 py-4 text-center">${sanctionBtn}</td>
                     </tr>`;
                 }).join('');
@@ -1570,7 +1926,7 @@
                     btn.outerHTML = `<span class="px-3 py-1.5 bg-green-900/40 border border-green-700 text-green-400 text-xs font-bold rounded-lg">✓ Sanctioned · ${data.citizens_notified} notified</span>`;
                     // Flash success
                     const toast = document.createElement('div');
-                    toast.className = 'fixed bottom-6 right-6 z-[9999] bg-green-600 text-white px-6 py-3 rounded-xl shadow-lg font-medium text-sm';
+                    toast.className = 'fixed bottom-6 right-6 z-[9999] bg-green-600 text-gray-900 px-6 py-3 rounded-xl shadow-lg font-medium text-sm';
                     toast.textContent = `✓ "${title}" sanctioned! ${data.citizens_notified} citizens notified via WhatsApp.`;
                     document.body.appendChild(toast);
                     setTimeout(() => toast.remove(), 4000);
@@ -1579,7 +1935,7 @@
                 }
             } catch(e) {
                 btn.disabled = false;
-                btn.textContent = '⚡ Sanction';
+                btn.innerHTML = '<span class="material-symbols-outlined text-[14px] text-orange-300 drop-shadow-sm">bolt</span> Sanction';
                 alert('Error: ' + e.message);
             }
         }
@@ -1590,7 +1946,7 @@
             Bengali: '🇮🇳', Marathi: '🇮🇳', Gujarati: '🇮🇳', Punjabi: '🇮🇳'
         };
         function langFlag(lang) {
-            return lang ? `<span class="text-[10px] font-medium bg-zinc-800 px-1.5 py-0.5 rounded text-zinc-300">${LANG_FLAGS[lang] || '🌐'} ${lang}</span>` : '';
+            return lang ? `<span class="text-[10px] font-medium bg-gray-100 px-1.5 py-0.5 rounded text-gray-600">${LANG_FLAGS[lang] || '🌐'} ${lang}</span>` : '';
         }
 
         let splashStarted = false;
@@ -1637,14 +1993,14 @@
 
 <!-- Survey Modal -->
 <!-- Projects Modal -->
-<div id="projects-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] hidden flex items-center justify-center p-4">
-    <div class="bg-[#161616] border border-[#262626] rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl">
-        <div class="p-6 border-b border-[#262626] flex justify-between items-center bg-[#111]">
+<div id="projects-modal" class="fixed inset-0 bg-white/80 backdrop-blur-sm z-[100] hidden flex items-center justify-center p-4">
+    <div class="bg-gray-50 border border-gray-200 rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl">
+        <div class="p-6 border-b border-gray-200 flex justify-between items-center bg-gray-50">
             <div>
-                <h2 class="text-xl font-bold text-white serif">Active Projects Directory</h2>
-                <p class="text-xs text-zinc-500 mt-1">Manage and track all municipal projects.</p>
+                <h2 class="text-xl font-bold text-gray-900 serif">Active Projects Directory</h2>
+                <p class="text-xs text-gray-500 mt-1">Manage and track all municipal projects.</p>
             </div>
-            <button onclick="document.getElementById('projects-modal').classList.add('hidden')" class="text-zinc-500 hover:text-white transition"><span class="material-symbols-outlined">close</span></button>
+            <button onclick="document.getElementById('projects-modal').classList.add('hidden')" class="text-gray-500 hover:text-gray-900 transition"><span class="material-symbols-outlined">close</span></button>
         </div>
         <div class="p-6 flex-1 overflow-y-auto">
             <div class="grid grid-cols-1 gap-4">
@@ -1653,18 +2009,18 @@
                     <div class="flex justify-between items-start mb-3">
                         <div>
                             <span class="px-2 py-0.5 bg-blue-500/20 text-blue-400 border border-blue-500/50 rounded text-[10px] uppercase font-bold tracking-wider">Execution Phase</span>
-                            <h3 class="text-lg text-white font-medium mt-2">Central Hub Paving</h3>
-                            <p class="text-sm text-zinc-400">Road infrastructure upgrade in Ward 1.</p>
+                            <h3 class="text-lg text-gray-900 font-medium mt-2">Central Hub Paving</h3>
+                            <p class="text-sm text-gray-500">Road infrastructure upgrade in Ward 1.</p>
                         </div>
                         <div class="text-right">
-                            <div class="text-sm text-white font-medium">₹2.4 Cr</div>
-                            <div class="text-xs text-zinc-500">Allocated Budget</div>
+                            <div class="text-sm text-gray-900 font-medium">₹2.4 Cr</div>
+                            <div class="text-xs text-gray-500">Allocated Budget</div>
                         </div>
                     </div>
-                    <div class="w-full bg-[#0A0A0A] rounded-full h-1.5 mb-1 border border-[#262626]">
+                    <div class="w-full bg-white rounded-full h-1.5 mb-1 border border-gray-200">
                       <div class="bg-blue-500 h-1.5 rounded-full" style="width: 45%"></div>
                     </div>
-                    <div class="flex justify-between text-xs text-zinc-500">
+                    <div class="flex justify-between text-xs text-gray-500">
                         <span>45% Complete</span>
                         <span>Est. Completion: Nov 2024</span>
                     </div>
@@ -1675,18 +2031,18 @@
                     <div class="flex justify-between items-start mb-3">
                         <div>
                             <span class="px-2 py-0.5 bg-amber-500/20 text-amber-400 border border-amber-500/50 rounded text-[10px] uppercase font-bold tracking-wider">Tendering</span>
-                            <h3 class="text-lg text-white font-medium mt-2">Ward 4 School Rehab</h3>
-                            <p class="text-sm text-zinc-400">Rehabilitation of primary school buildings.</p>
+                            <h3 class="text-lg text-gray-900 font-medium mt-2">Ward 4 School Rehab</h3>
+                            <p class="text-sm text-gray-500">Rehabilitation of primary school buildings.</p>
                         </div>
                         <div class="text-right">
-                            <div class="text-sm text-white font-medium">₹85 L</div>
-                            <div class="text-xs text-zinc-500">Allocated Budget</div>
+                            <div class="text-sm text-gray-900 font-medium">₹85 L</div>
+                            <div class="text-xs text-gray-500">Allocated Budget</div>
                         </div>
                     </div>
-                    <div class="w-full bg-[#0A0A0A] rounded-full h-1.5 mb-1 border border-[#262626]">
+                    <div class="w-full bg-white rounded-full h-1.5 mb-1 border border-gray-200">
                       <div class="bg-amber-500 h-1.5 rounded-full" style="width: 15%"></div>
                     </div>
-                    <div class="flex justify-between text-xs text-zinc-500">
+                    <div class="flex justify-between text-xs text-gray-500">
                         <span>15% Complete</span>
                         <span>Est. Completion: Mar 2025</span>
                     </div>
@@ -1697,18 +2053,18 @@
                     <div class="flex justify-between items-start mb-3">
                         <div>
                             <span class="px-2 py-0.5 bg-green-500/20 text-green-400 border border-green-500/50 rounded text-[10px] uppercase font-bold tracking-wider">Planning</span>
-                            <h3 class="text-lg text-white font-medium mt-2">South Zone Drainage</h3>
-                            <p class="text-sm text-zinc-400">Stormwater drainage system overhaul.</p>
+                            <h3 class="text-lg text-gray-900 font-medium mt-2">South Zone Drainage</h3>
+                            <p class="text-sm text-gray-500">Stormwater drainage system overhaul.</p>
                         </div>
                         <div class="text-right">
-                            <div class="text-sm text-white font-medium">₹1.2 Cr</div>
-                            <div class="text-xs text-zinc-500">Allocated Budget</div>
+                            <div class="text-sm text-gray-900 font-medium">₹1.2 Cr</div>
+                            <div class="text-xs text-gray-500">Allocated Budget</div>
                         </div>
                     </div>
-                    <div class="w-full bg-[#0A0A0A] rounded-full h-1.5 mb-1 border border-[#262626]">
+                    <div class="w-full bg-white rounded-full h-1.5 mb-1 border border-gray-200">
                       <div class="bg-green-500 h-1.5 rounded-full" style="width: 5%"></div>
                     </div>
-                    <div class="flex justify-between text-xs text-zinc-500">
+                    <div class="flex justify-between text-xs text-gray-500">
                         <span>5% Complete</span>
                         <span>Est. Completion: Jun 2025</span>
                     </div>
@@ -1730,32 +2086,32 @@
                 let activeBadge = s.is_active ? `<span class="px-2 py-0.5 bg-green-500/20 text-green-400 border border-green-500/50 rounded text-[10px] uppercase font-bold">Active</span>` : '';
                 let actionBtns = s.is_active 
                     ? `<div class="flex gap-2 mt-2">
-                        <button onclick="broadcastSurvey('${s.id}')" class="flex-1 px-3 py-1 bg-blue-600 hover:bg-blue-500 rounded text-xs text-white transition font-bold flex items-center justify-center gap-1"><span class="material-symbols-outlined" style="font-size:14px;">send</span> Broadcast</button>
+                        <button onclick="broadcastSurvey('${s.id}')" class="flex-1 px-3 py-1 bg-blue-600 hover:bg-blue-500 rounded text-xs text-gray-900 transition font-bold flex items-center justify-center gap-1"><span class="material-symbols-outlined" style="font-size:14px;">send</span> Broadcast</button>
                         <button onclick="stopSurvey('${s.id}')" class="px-3 py-1 bg-amber-600/30 hover:bg-amber-600/50 border border-amber-600/50 rounded text-xs text-amber-400 transition font-bold flex items-center justify-center gap-1"><span class="material-symbols-outlined" style="font-size:14px;">stop_circle</span> Stop</button>
                         <button onclick="deleteSurvey('${s.id}')" class="px-3 py-1 bg-red-600/20 hover:bg-red-600/40 border border-red-600/40 rounded text-xs text-red-400 transition font-bold flex items-center justify-center gap-1"><span class="material-symbols-outlined" style="font-size:14px;">delete</span></button>
                       </div>`
                     : `<div class="flex gap-2 mt-2">
-                        <button onclick="activateSurvey('${s.id}')" class="flex-1 px-3 py-1 bg-[#262626] hover:bg-[#333] rounded text-xs text-white transition border border-zinc-700">Set Active</button>
+                        <button onclick="activateSurvey('${s.id}')" class="flex-1 px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded text-xs text-gray-900 transition border border-gray-300">Set Active</button>
                         <button onclick="deleteSurvey('${s.id}')" class="px-3 py-1 bg-red-600/20 hover:bg-red-600/40 border border-red-600/40 rounded text-xs text-red-400 transition font-bold flex items-center justify-center gap-1"><span class="material-symbols-outlined" style="font-size:14px;">delete</span></button>
                       </div>`;
                 
                 let resHtml = '';
                 for(let opt in s.results) {
-                    resHtml += `<div class="flex justify-between text-xs mt-1 text-zinc-400"><span>${opt}</span> <span class="font-bold text-white">${s.results[opt]}</span></div>`;
+                    resHtml += `<div class="flex justify-between text-xs mt-1 text-gray-500"><span>${opt}</span> <span class="font-bold text-gray-900">${s.results[opt]}</span></div>`;
                 }
                 
                 html += `
-                <div class="p-3 bg-[#1C1C1C] rounded-lg border ${s.is_active ? 'border-green-500/30' : 'border-[#333]'} flex flex-col gap-2">
+                <div class="p-3 bg-gray-100 rounded-lg border ${s.is_active ? 'border-green-500/30' : 'border-gray-300'} flex flex-col gap-2">
                     <div class="flex justify-between items-start">
-                        <div class="text-sm font-medium text-white pr-2">${s.question}</div>
+                        <div class="text-sm font-medium text-gray-900 pr-2">${s.question}</div>
                         ${activeBadge}
                     </div>
                     <div class="flex flex-wrap gap-1 mt-1 mb-1">
-                        ${s.options.map(o => `<span class="px-1.5 py-0.5 bg-[#262626] rounded text-[10px] text-zinc-400 border border-zinc-800">${o}</span>`).join('')}
+                        ${s.options.map(o => `<span class="px-1.5 py-0.5 bg-gray-100 rounded text-[10px] text-gray-500 border border-gray-200">${o}</span>`).join('')}
                     </div>
-                    <div class="bg-black/30 rounded p-2 mb-1">
-                        <div class="text-[10px] text-zinc-500 font-bold uppercase mb-1">Responses</div>
-                        ${resHtml || '<div class="text-[10px] text-zinc-600 italic">No responses yet</div>'}
+                    <div class="bg-white/30 rounded p-2 mb-1">
+                        <div class="text-[10px] text-gray-500 font-bold uppercase mb-1">Responses</div>
+                        ${resHtml || '<div class="text-[10px] text-gray-500 italic">No responses yet</div>'}
                     </div>
                     ${actionBtns}
                 </div>`;
@@ -1864,7 +2220,7 @@
         
         historyContainer.insertAdjacentHTML('beforeend', `
             <div class="flex flex-col gap-1 items-end mb-2">
-                <div class="text-[10px] text-zinc-500 uppercase tracking-wider font-bold mr-1">You</div>
+                <div class="text-[10px] text-gray-500 uppercase tracking-wider font-bold mr-1">You</div>
                 <div class="bg-purple-600/20 border border-purple-500/30 text-sm text-purple-100 px-4 py-2.5 rounded-2xl rounded-tr-sm max-w-[85%]">
                     ${text}
                 </div>
@@ -1876,14 +2232,14 @@
         const typingId = 'typing-' + Date.now();
         historyContainer.insertAdjacentHTML('beforeend', `
             <div id="${typingId}" class="flex flex-col gap-1 items-start mb-2">
-                <div class="text-[10px] text-zinc-500 uppercase tracking-wider font-bold ml-1">UrbanOS AI</div>
-                <div class="bg-[#1C1C1C] border border-[#333] px-5 py-4 rounded-2xl rounded-tl-sm flex items-center gap-2 shadow-sm">
+                <div class="text-[10px] text-gray-500 uppercase tracking-wider font-bold ml-1">UrbanOS AI</div>
+                <div class="bg-white border border-gray-300 px-5 py-4 rounded-2xl rounded-tl-sm flex items-center gap-2 shadow-sm">
                     <div class="flex gap-1 items-center">
                         <span class="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce" style="animation-delay:0ms"></span>
                         <span class="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce" style="animation-delay:150ms"></span>
                         <span class="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce" style="animation-delay:300ms"></span>
                     </div>
-                    <span class="text-xs text-zinc-500">thinking...</span>
+                    <span class="text-xs text-gray-500">thinking...</span>
                 </div>
             </div>
         `);
@@ -1911,8 +2267,8 @@
             const msgId = 'msg-' + Date.now();
             historyContainer.insertAdjacentHTML('beforeend', `
                 <div class="flex flex-col gap-1 items-start mb-2 w-full">
-                    <div class="text-[10px] text-zinc-500 uppercase tracking-wider font-bold ml-1">UrbanOS AI</div>
-                    <div id="${msgId}" class="bg-[#1C1C1C] border border-[#333] text-sm text-zinc-300 px-5 py-4 rounded-2xl rounded-tl-sm w-full max-w-3xl leading-relaxed markdown-body shadow-sm overflow-x-auto">
+                    <div class="text-[10px] text-gray-500 uppercase tracking-wider font-bold ml-1">UrbanOS AI</div>
+                    <div id="${msgId}" class="bg-white border border-gray-300 text-sm text-gray-600 px-5 py-4 rounded-2xl rounded-tl-sm w-full max-w-3xl leading-relaxed markdown-body shadow-sm overflow-x-auto">
                         ${safeHtml}
                     </div>
                 </div>
@@ -1929,8 +2285,8 @@
             const tables = document.querySelectorAll('#' + msgId + ' table');
             tables.forEach((table, idx) => {
                 table.classList.add('w-full', 'text-left', 'border-collapse', 'my-3');
-                table.querySelectorAll('th, td').forEach(cell => cell.classList.add('border', 'border-zinc-700', 'px-3', 'py-1.5'));
-                table.querySelectorAll('th').forEach(cell => cell.classList.add('bg-zinc-800'));
+                table.querySelectorAll('th, td').forEach(cell => cell.classList.add('border', 'border-gray-300', 'px-3', 'py-1.5'));
+                table.querySelectorAll('th').forEach(cell => cell.classList.add('bg-gray-100'));
                 
                 const btn = document.createElement('button');
                 btn.className = 'mt-2 mb-4 px-3 py-1.5 bg-green-900/30 text-green-400 hover:bg-green-900/50 border border-green-700/50 rounded-lg text-[10px] font-bold uppercase tracking-widest transition flex items-center gap-1';
@@ -1978,7 +2334,7 @@
         const historyContainer = document.getElementById('ai-chat-history');
         historyContainer.insertAdjacentHTML('beforeend', `
             <div class="flex flex-col gap-1 items-end mb-2 w-full">
-                <div class="text-[10px] text-zinc-500 uppercase tracking-wider font-bold mr-1">System</div>
+                <div class="text-[10px] text-gray-500 uppercase tracking-wider font-bold mr-1">System</div>
                 <div class="bg-blue-600/20 border border-blue-500/30 text-sm text-blue-100 px-4 py-2.5 rounded-2xl rounded-tr-sm">
                     Uploading dataset: ${file.name}...
                 </div>
@@ -1998,8 +2354,8 @@
             if(data.status === 'success') {
                 historyContainer.insertAdjacentHTML('beforeend', `
                     <div class="flex flex-col gap-1 items-start mb-2 w-full">
-                        <div class="text-[10px] text-zinc-500 uppercase tracking-wider font-bold ml-1">UrbanOS AI</div>
-                        <div class="bg-[#1C1C1C] border border-[#333] text-sm text-zinc-300 px-5 py-4 rounded-2xl rounded-tl-sm max-w-[85%] leading-relaxed shadow-sm">
+                        <div class="text-[10px] text-gray-500 uppercase tracking-wider font-bold ml-1">UrbanOS AI</div>
+                        <div class="bg-white border border-gray-300 text-sm text-gray-600 px-5 py-4 rounded-2xl rounded-tl-sm max-w-[85%] leading-relaxed shadow-sm">
                             ✅ Dataset <strong>${file.name}</strong> successfully processed and embedded into my knowledge base. You can now ask me questions about it!
                         </div>
                     </div>

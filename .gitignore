@@ -30,6 +30,7 @@ report_analysis_update.py
 final_mock_sweep.py
 db_migration.py
 test.js
+/test_*.py
 test_api.py
 test_func.py
 

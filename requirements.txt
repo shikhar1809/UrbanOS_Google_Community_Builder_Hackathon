@@ -9,3 +9,5 @@ pydantic
 httpx
 a2wsgi
 python-multipart
+pytest
+requests

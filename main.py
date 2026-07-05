@@ -1,4 +1,4 @@
-import os
+﻿import os
 import httpx
 import time
 import uuid
@@ -19,6 +19,7 @@ from twilio.request_validator import RequestValidator
 
 
 from google import genai
+from google.genai import types
 from pydantic import BaseModel, Field
 from typing import Literal
 
@@ -41,7 +42,13 @@ def verify_admin(credentials: HTTPAuthorizationCredentials = Depends(security)):
     try:
         token = credentials.credentials
         decoded_token = auth.verify_id_token(token)
+        allowed_admins = [email.strip().lower() for email in os.getenv("ADMIN_EMAILS", "").split(",") if email.strip()]
+        user_email = (decoded_token.get("email") or "").lower()
+        if allowed_admins and user_email not in allowed_admins:
+            raise HTTPException(status_code=403, detail="Authenticated user is not an UrbanOS admin.")
         return decoded_token
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=401, detail=f"Invalid authentication credentials: {str(e)}")
 
@@ -100,26 +107,27 @@ class TriageResult(BaseModel):
     semantic_tag: str = Field(
         description=(
             "A normalized snake_case topic tag (2-3 words) that semantically groups this proposal "
-            "with similar ones regardless of phrasing. Be CONSISTENT — the same real-world issue "
+            "with similar ones regardless of phrasing. Be CONSISTENT â€” the same real-world issue "
             "must always produce the same tag. Examples: 'road_repair', 'school_construction', "
             "'water_supply', 'street_lighting', 'drainage_improvement', 'park_development', "
             "'hospital_upgrade', 'bridge_construction', 'sanitation_works', 'electricity_supply'. "
             "Two proposals about 'MG Road is dark' and 'need streetlights on main road' must share 'street_lighting'."
         )
     )
+    visual_evidence: str = Field(default="", description="If a photo was provided, describe the visible civic evidence in 6-12 words. Empty string if no photo or not relevant.")
 
 # ---------------------------------------------------------------------------
 # MULTILINGUAL SUPPORT
 # ---------------------------------------------------------------------------
 # Detects language via Unicode script ranges (no API call needed).
 # Covers the 6 most common Indian WhatsApp languages.
-# Supported: Hindi, Urdu, Bengali, Tamil, Telugu, Kannada → fallback: English
+# Supported: Hindi, Urdu, Bengali, Tamil, Telugu, Kannada â†’ fallback: English
 # ---------------------------------------------------------------------------
 
 REPLY_TEMPLATES = {
     "English": {
         "welcome":        "What development project or community upgrade would you like to propose for your area? Please describe your idea. (You can also send a voice note!)",
-        "ask_location":   "Description saved. Now share your location — send a location pin, or type your area name.",
+        "ask_location":   "Description saved. Now share your location â€” send a location pin, or type your area name.",
         "ask_photo":      "Location saved. Would you like to attach a photo? Send it now, or reply 'skip' if not.",
         "finalizing":     "Finalizing your report...",
         "photo_received": "Photo received! Finalizing your report...",
@@ -134,68 +142,68 @@ REPLY_TEMPLATES = {
         "no_reports":     "You have no active reports.",
     },
     "Hindi": {
-        "welcome":        "आप अपने क्षेत्र के लिए कौन सा विकास कार्य या सामुदायिक सुधार प्रस्तावित करना चाहते हैं? कृपया अपना विचार बताएं। (आप वॉइस नोट भी भेज सकते हैं!)",
-        "ask_location":   "विवरण सहेज लिया गया। अब अपना स्थान साझा करें — लोकेशन पिन भेजें, या अपने क्षेत्र का नाम लिखें।",
-        "ask_photo":      "स्थान सहेज लिया गया। क्या आप कोई फोटो भेजना चाहते हैं? अभी भेजें, या 'skip' लिखें।",
-        "finalizing":     "आपकी रिपोर्ट तैयार हो रही है...",
-        "photo_received": "फोटो मिल गई! आपकी रिपोर्ट तैयार हो रही है...",
-        "skip_prompt":    "कृपया फोटो भेजें या 'skip' लिखें।",
-        "location_prompt":"कृपया लोकेशन पिन भेजें या अपने क्षेत्र का नाम लिखें।",
-        "text_or_voice":  "कृपया समस्या को टेक्स्ट में बताएं या वॉइस नोट भेजें।",
-        "survey_thanks":  "आपके फीडबैक के लिए धन्यवाद! आपके सांसद का कार्यालय इस पर विचार करेगा।",
-        "new_prompt":     "कोई नया प्रस्ताव देने के लिए कभी भी 'new proposal' लिखें।",
-        "invalid_option": "कृपया 1 से {n} के बीच कोई नंबर भेजें।",
-        "voice_ack":      "वॉइस नोट मिल गया, आपका विवरण प्रोसेस हो रहा है...",
-        "discarded":      "पिछला प्रस्ताव हटा दिया गया। आप अपने क्षेत्र के लिए कौन सा विकास कार्य प्रस्तावित करना चाहते हैं?",
-        "no_reports":     "आपकी कोई सक्रिय रिपोर्ट नहीं है।",
+        "welcome":        "à¤†à¤ª à¤…à¤ªà¤¨à¥‡ à¤•à¥à¤·à¥‡à¤¤à¥à¤° à¤•à¥‡ à¤²à¤¿à¤ à¤•à¥Œà¤¨ à¤¸à¤¾ à¤µà¤¿à¤•à¤¾à¤¸ à¤•à¤¾à¤°à¥à¤¯ à¤¯à¤¾ à¤¸à¤¾à¤®à¥à¤¦à¤¾à¤¯à¤¿à¤• à¤¸à¥à¤§à¤¾à¤° à¤ªà¥à¤°à¤¸à¥à¤¤à¤¾à¤µà¤¿à¤¤ à¤•à¤°à¤¨à¤¾ à¤šà¤¾à¤¹à¤¤à¥‡ à¤¹à¥ˆà¤‚? à¤•à¥ƒà¤ªà¤¯à¤¾ à¤…à¤ªà¤¨à¤¾ à¤µà¤¿à¤šà¤¾à¤° à¤¬à¤¤à¤¾à¤à¤‚à¥¤ (à¤†à¤ª à¤µà¥‰à¤‡à¤¸ à¤¨à¥‹à¤Ÿ à¤­à¥€ à¤­à¥‡à¤œ à¤¸à¤•à¤¤à¥‡ à¤¹à¥ˆà¤‚!)",
+        "ask_location":   "à¤µà¤¿à¤µà¤°à¤£ à¤¸à¤¹à¥‡à¤œ à¤²à¤¿à¤¯à¤¾ à¤—à¤¯à¤¾à¥¤ à¤…à¤¬ à¤…à¤ªà¤¨à¤¾ à¤¸à¥à¤¥à¤¾à¤¨ à¤¸à¤¾à¤à¤¾ à¤•à¤°à¥‡à¤‚ â€” à¤²à¥‹à¤•à¥‡à¤¶à¤¨ à¤ªà¤¿à¤¨ à¤­à¥‡à¤œà¥‡à¤‚, à¤¯à¤¾ à¤…à¤ªà¤¨à¥‡ à¤•à¥à¤·à¥‡à¤¤à¥à¤° à¤•à¤¾ à¤¨à¤¾à¤® à¤²à¤¿à¤–à¥‡à¤‚à¥¤",
+        "ask_photo":      "à¤¸à¥à¤¥à¤¾à¤¨ à¤¸à¤¹à¥‡à¤œ à¤²à¤¿à¤¯à¤¾ à¤—à¤¯à¤¾à¥¤ à¤•à¥à¤¯à¤¾ à¤†à¤ª à¤•à¥‹à¤ˆ à¤«à¥‹à¤Ÿà¥‹ à¤­à¥‡à¤œà¤¨à¤¾ à¤šà¤¾à¤¹à¤¤à¥‡ à¤¹à¥ˆà¤‚? à¤…à¤­à¥€ à¤­à¥‡à¤œà¥‡à¤‚, à¤¯à¤¾ 'skip' à¤²à¤¿à¤–à¥‡à¤‚à¥¤",
+        "finalizing":     "à¤†à¤ªà¤•à¥€ à¤°à¤¿à¤ªà¥‹à¤°à¥à¤Ÿ à¤¤à¥ˆà¤¯à¤¾à¤° à¤¹à¥‹ à¤°à¤¹à¥€ à¤¹à¥ˆ...",
+        "photo_received": "à¤«à¥‹à¤Ÿà¥‹ à¤®à¤¿à¤² à¤—à¤ˆ! à¤†à¤ªà¤•à¥€ à¤°à¤¿à¤ªà¥‹à¤°à¥à¤Ÿ à¤¤à¥ˆà¤¯à¤¾à¤° à¤¹à¥‹ à¤°à¤¹à¥€ à¤¹à¥ˆ...",
+        "skip_prompt":    "à¤•à¥ƒà¤ªà¤¯à¤¾ à¤«à¥‹à¤Ÿà¥‹ à¤­à¥‡à¤œà¥‡à¤‚ à¤¯à¤¾ 'skip' à¤²à¤¿à¤–à¥‡à¤‚à¥¤",
+        "location_prompt":"à¤•à¥ƒà¤ªà¤¯à¤¾ à¤²à¥‹à¤•à¥‡à¤¶à¤¨ à¤ªà¤¿à¤¨ à¤­à¥‡à¤œà¥‡à¤‚ à¤¯à¤¾ à¤…à¤ªà¤¨à¥‡ à¤•à¥à¤·à¥‡à¤¤à¥à¤° à¤•à¤¾ à¤¨à¤¾à¤® à¤²à¤¿à¤–à¥‡à¤‚à¥¤",
+        "text_or_voice":  "à¤•à¥ƒà¤ªà¤¯à¤¾ à¤¸à¤®à¤¸à¥à¤¯à¤¾ à¤•à¥‹ à¤Ÿà¥‡à¤•à¥à¤¸à¥à¤Ÿ à¤®à¥‡à¤‚ à¤¬à¤¤à¤¾à¤à¤‚ à¤¯à¤¾ à¤µà¥‰à¤‡à¤¸ à¤¨à¥‹à¤Ÿ à¤­à¥‡à¤œà¥‡à¤‚à¥¤",
+        "survey_thanks":  "à¤†à¤ªà¤•à¥‡ à¤«à¥€à¤¡à¤¬à¥ˆà¤• à¤•à¥‡ à¤²à¤¿à¤ à¤§à¤¨à¥à¤¯à¤µà¤¾à¤¦! à¤†à¤ªà¤•à¥‡ à¤¸à¤¾à¤‚à¤¸à¤¦ à¤•à¤¾ à¤•à¤¾à¤°à¥à¤¯à¤¾à¤²à¤¯ à¤‡à¤¸ à¤ªà¤° à¤µà¤¿à¤šà¤¾à¤° à¤•à¤°à¥‡à¤—à¤¾à¥¤",
+        "new_prompt":     "à¤•à¥‹à¤ˆ à¤¨à¤¯à¤¾ à¤ªà¥à¤°à¤¸à¥à¤¤à¤¾à¤µ à¤¦à¥‡à¤¨à¥‡ à¤•à¥‡ à¤²à¤¿à¤ à¤•à¤­à¥€ à¤­à¥€ 'new proposal' à¤²à¤¿à¤–à¥‡à¤‚à¥¤",
+        "invalid_option": "à¤•à¥ƒà¤ªà¤¯à¤¾ 1 à¤¸à¥‡ {n} à¤•à¥‡ à¤¬à¥€à¤š à¤•à¥‹à¤ˆ à¤¨à¤‚à¤¬à¤° à¤­à¥‡à¤œà¥‡à¤‚à¥¤",
+        "voice_ack":      "à¤µà¥‰à¤‡à¤¸ à¤¨à¥‹à¤Ÿ à¤®à¤¿à¤² à¤—à¤¯à¤¾, à¤†à¤ªà¤•à¤¾ à¤µà¤¿à¤µà¤°à¤£ à¤ªà¥à¤°à¥‹à¤¸à¥‡à¤¸ à¤¹à¥‹ à¤°à¤¹à¤¾ à¤¹à¥ˆ...",
+        "discarded":      "à¤ªà¤¿à¤›à¤²à¤¾ à¤ªà¥à¤°à¤¸à¥à¤¤à¤¾à¤µ à¤¹à¤Ÿà¤¾ à¤¦à¤¿à¤¯à¤¾ à¤—à¤¯à¤¾à¥¤ à¤†à¤ª à¤…à¤ªà¤¨à¥‡ à¤•à¥à¤·à¥‡à¤¤à¥à¤° à¤•à¥‡ à¤²à¤¿à¤ à¤•à¥Œà¤¨ à¤¸à¤¾ à¤µà¤¿à¤•à¤¾à¤¸ à¤•à¤¾à¤°à¥à¤¯ à¤ªà¥à¤°à¤¸à¥à¤¤à¤¾à¤µà¤¿à¤¤ à¤•à¤°à¤¨à¤¾ à¤šà¤¾à¤¹à¤¤à¥‡ à¤¹à¥ˆà¤‚?",
+        "no_reports":     "à¤†à¤ªà¤•à¥€ à¤•à¥‹à¤ˆ à¤¸à¤•à¥à¤°à¤¿à¤¯ à¤°à¤¿à¤ªà¥‹à¤°à¥à¤Ÿ à¤¨à¤¹à¥€à¤‚ à¤¹à¥ˆà¥¤",
     },
     "Urdu": {
-        "welcome":        "آپ اپنے علاقے کے لیے کون سا ترقیاتی منصوبہ تجویز کرنا چاہتے ہیں؟ براہ کرم اپنا خیال بیان کریں۔ (آپ وائس نوٹ بھی بھیج سکتے ہیں!)",
-        "ask_location":   "تفصیل محفوظ ہو گئی۔ اب اپنا مقام شیئر کریں — لوکیشن پن بھیجیں یا اپنے علاقے کا نام لکھیں۔",
-        "ask_photo":      "مقام محفوظ ہو گیا۔ کیا آپ تصویر بھیجنا چاہتے ہیں؟ ابھی بھیجیں، یا 'skip' لکھیں۔",
-        "finalizing":     "آپ کی رپورٹ تیار ہو رہی ہے...",
-        "photo_received": "تصویر مل گئی! آپ کی رپورٹ تیار ہو رہی ہے...",
-        "skip_prompt":    "براہ کرم تصویر بھیجیں یا 'skip' لکھیں۔",
-        "location_prompt":"براہ کرم لوکیشن پن بھیجیں یا اپنے علاقے کا نام لکھیں۔",
-        "text_or_voice":  "براہ کرم مسئلہ متن میں بیان کریں یا وائس نوٹ بھیجیں۔",
-        "survey_thanks":  "آپ کے تاثرات کا شکریہ! آپ کے رکن پارلیمنٹ کا دفتر اس پر غور کرے گا۔",
-        "new_prompt":     "کوئی نئی تجویز دینے کے لیے کبھی بھی 'new proposal' لکھیں۔",
-        "invalid_option": "براہ کرم 1 سے {n} کے درمیان کوئی نمبر بھیجیں۔",
-        "voice_ack":      "وائس نوٹ مل گیا، آپ کی تفصیل پروسیس ہو رہی ہے...",
-        "discarded":      "پچھلی تجویز ہٹا دی گئی۔ آپ اپنے علاقے کے لیے کون سا ترقیاتی منصوبہ تجویز کرنا چاہتے ہیں؟",
-        "no_reports":     "آپ کی کوئی فعال رپورٹ نہیں ہے۔",
+        "welcome":        "Ø¢Ù¾ Ø§Ù¾Ù†Û’ Ø¹Ù„Ø§Ù‚Û’ Ú©Û’ Ù„ÛŒÛ’ Ú©ÙˆÙ† Ø³Ø§ ØªØ±Ù‚ÛŒØ§ØªÛŒ Ù…Ù†ØµÙˆØ¨Û ØªØ¬ÙˆÛŒØ² Ú©Ø±Ù†Ø§ Ú†Ø§ÛØªÛ’ ÛÛŒÚºØŸ Ø¨Ø±Ø§Û Ú©Ø±Ù… Ø§Ù¾Ù†Ø§ Ø®ÛŒØ§Ù„ Ø¨ÛŒØ§Ù† Ú©Ø±ÛŒÚºÛ” (Ø¢Ù¾ ÙˆØ§Ø¦Ø³ Ù†ÙˆÙ¹ Ø¨Ú¾ÛŒ Ø¨Ú¾ÛŒØ¬ Ø³Ú©ØªÛ’ ÛÛŒÚº!)",
+        "ask_location":   "ØªÙØµÛŒÙ„ Ù…Ø­ÙÙˆØ¸ ÛÙˆ Ú¯Ø¦ÛŒÛ” Ø§Ø¨ Ø§Ù¾Ù†Ø§ Ù…Ù‚Ø§Ù… Ø´ÛŒØ¦Ø± Ú©Ø±ÛŒÚº â€” Ù„ÙˆÚ©ÛŒØ´Ù† Ù¾Ù† Ø¨Ú¾ÛŒØ¬ÛŒÚº ÛŒØ§ Ø§Ù¾Ù†Û’ Ø¹Ù„Ø§Ù‚Û’ Ú©Ø§ Ù†Ø§Ù… Ù„Ú©Ú¾ÛŒÚºÛ”",
+        "ask_photo":      "Ù…Ù‚Ø§Ù… Ù…Ø­ÙÙˆØ¸ ÛÙˆ Ú¯ÛŒØ§Û” Ú©ÛŒØ§ Ø¢Ù¾ ØªØµÙˆÛŒØ± Ø¨Ú¾ÛŒØ¬Ù†Ø§ Ú†Ø§ÛØªÛ’ ÛÛŒÚºØŸ Ø§Ø¨Ú¾ÛŒ Ø¨Ú¾ÛŒØ¬ÛŒÚºØŒ ÛŒØ§ 'skip' Ù„Ú©Ú¾ÛŒÚºÛ”",
+        "finalizing":     "Ø¢Ù¾ Ú©ÛŒ Ø±Ù¾ÙˆØ±Ù¹ ØªÛŒØ§Ø± ÛÙˆ Ø±ÛÛŒ ÛÛ’...",
+        "photo_received": "ØªØµÙˆÛŒØ± Ù…Ù„ Ú¯Ø¦ÛŒ! Ø¢Ù¾ Ú©ÛŒ Ø±Ù¾ÙˆØ±Ù¹ ØªÛŒØ§Ø± ÛÙˆ Ø±ÛÛŒ ÛÛ’...",
+        "skip_prompt":    "Ø¨Ø±Ø§Û Ú©Ø±Ù… ØªØµÙˆÛŒØ± Ø¨Ú¾ÛŒØ¬ÛŒÚº ÛŒØ§ 'skip' Ù„Ú©Ú¾ÛŒÚºÛ”",
+        "location_prompt":"Ø¨Ø±Ø§Û Ú©Ø±Ù… Ù„ÙˆÚ©ÛŒØ´Ù† Ù¾Ù† Ø¨Ú¾ÛŒØ¬ÛŒÚº ÛŒØ§ Ø§Ù¾Ù†Û’ Ø¹Ù„Ø§Ù‚Û’ Ú©Ø§ Ù†Ø§Ù… Ù„Ú©Ú¾ÛŒÚºÛ”",
+        "text_or_voice":  "Ø¨Ø±Ø§Û Ú©Ø±Ù… Ù…Ø³Ø¦Ù„Û Ù…ØªÙ† Ù…ÛŒÚº Ø¨ÛŒØ§Ù† Ú©Ø±ÛŒÚº ÛŒØ§ ÙˆØ§Ø¦Ø³ Ù†ÙˆÙ¹ Ø¨Ú¾ÛŒØ¬ÛŒÚºÛ”",
+        "survey_thanks":  "Ø¢Ù¾ Ú©Û’ ØªØ§Ø«Ø±Ø§Øª Ú©Ø§ Ø´Ú©Ø±ÛŒÛ! Ø¢Ù¾ Ú©Û’ Ø±Ú©Ù† Ù¾Ø§Ø±Ù„ÛŒÙ…Ù†Ù¹ Ú©Ø§ Ø¯ÙØªØ± Ø§Ø³ Ù¾Ø± ØºÙˆØ± Ú©Ø±Û’ Ú¯Ø§Û”",
+        "new_prompt":     "Ú©ÙˆØ¦ÛŒ Ù†Ø¦ÛŒ ØªØ¬ÙˆÛŒØ² Ø¯ÛŒÙ†Û’ Ú©Û’ Ù„ÛŒÛ’ Ú©Ø¨Ú¾ÛŒ Ø¨Ú¾ÛŒ 'new proposal' Ù„Ú©Ú¾ÛŒÚºÛ”",
+        "invalid_option": "Ø¨Ø±Ø§Û Ú©Ø±Ù… 1 Ø³Û’ {n} Ú©Û’ Ø¯Ø±Ù…ÛŒØ§Ù† Ú©ÙˆØ¦ÛŒ Ù†Ù…Ø¨Ø± Ø¨Ú¾ÛŒØ¬ÛŒÚºÛ”",
+        "voice_ack":      "ÙˆØ§Ø¦Ø³ Ù†ÙˆÙ¹ Ù…Ù„ Ú¯ÛŒØ§ØŒ Ø¢Ù¾ Ú©ÛŒ ØªÙØµÛŒÙ„ Ù¾Ø±ÙˆØ³ÛŒØ³ ÛÙˆ Ø±ÛÛŒ ÛÛ’...",
+        "discarded":      "Ù¾Ú†Ú¾Ù„ÛŒ ØªØ¬ÙˆÛŒØ² ÛÙ¹Ø§ Ø¯ÛŒ Ú¯Ø¦ÛŒÛ” Ø¢Ù¾ Ø§Ù¾Ù†Û’ Ø¹Ù„Ø§Ù‚Û’ Ú©Û’ Ù„ÛŒÛ’ Ú©ÙˆÙ† Ø³Ø§ ØªØ±Ù‚ÛŒØ§ØªÛŒ Ù…Ù†ØµÙˆØ¨Û ØªØ¬ÙˆÛŒØ² Ú©Ø±Ù†Ø§ Ú†Ø§ÛØªÛ’ ÛÛŒÚºØŸ",
+        "no_reports":     "Ø¢Ù¾ Ú©ÛŒ Ú©ÙˆØ¦ÛŒ ÙØ¹Ø§Ù„ Ø±Ù¾ÙˆØ±Ù¹ Ù†ÛÛŒÚº ÛÛ’Û”",
     },
     "Tamil": {
-        "welcome":        "உங்கள் பகுதிக்கு என்ன வளர்ச்சி திட்டம் அல்லது சமுதாய மேம்பாட்டை நீங்கள் முன்மொழிய விரும்புகிறீர்கள்? உங்கள் கருத்தை விவரிக்கவும். (குரல் குறிப்பும் அனுப்பலாம்!)",
-        "ask_location":   "விளக்கம் சேமிக்கப்பட்டது. இப்போது உங்கள் இருப்பிடத்தை பகிரவும் — இருப்பிட பின் அனுப்பவும் அல்லது உங்கள் பகுதியின் பெயரை தட்டச்சு செய்யவும்.",
-        "ask_photo":      "இருப்பிடம் சேமிக்கப்பட்டது. புகைப்படம் இணைக்க விரும்புகிறீர்களா? இப்போது அனுப்பவும் அல்லது 'skip' என்று பதிலளிக்கவும்.",
-        "finalizing":     "உங்கள் அறிக்கை தயாரிக்கப்படுகிறது...",
-        "photo_received": "புகைப்படம் பெறப்பட்டது! உங்கள் அறிக்கை தயாரிக்கப்படுகிறது...",
-        "skip_prompt":    "புகைப்படம் அனுப்பவும் அல்லது 'skip' என்று பதிலளிக்கவும்.",
-        "location_prompt":"இருப்பிட பின் அனுப்பவும் அல்லது உங்கள் பகுதியின் பெயரை தட்டச்சு செய்யவும்.",
-        "text_or_voice":  "உரையில் சிக்கலை விவரிக்கவும் அல்லது குரல் குறிப்பை அனுப்பவும்.",
-        "survey_thanks":  "உங்கள் கருத்துக்கு நன்றி! உங்கள் நாடாளுமன்ற உறுப்பினரின் அலுவலகம் இதை பரிசீலிக்கும்.",
-        "new_prompt":     "மற்றொரு வளர்ச்சி யோசனையை சமர்ப்பிக்க எப்போது வேண்டுமானாலும் 'new proposal' என்று தட்டச்சு செய்யவும்.",
-        "invalid_option": "1 முதல் {n} வரை ஒரு எண்ணை பதிலளிக்கவும்.",
-        "voice_ack":      "குரல் குறிப்பு பெறப்பட்டது, உங்கள் விளக்கம் செயலாக்கப்படுகிறது...",
-        "discarded":      "முந்தைய முன்மொழிவு நீக்கப்பட்டது. உங்கள் பகுதிக்கு என்ன வளர்ச்சி திட்டம் முன்மொழிய விரும்புகிறீர்கள்?",
-        "no_reports":     "உங்களுக்கு செயலில் உள்ள அறிக்கைகள் இல்லை.",
+        "welcome":        "à®‰à®™à¯à®•à®³à¯ à®ªà®•à¯à®¤à®¿à®•à¯à®•à¯ à®Žà®©à¯à®© à®µà®³à®°à¯à®šà¯à®šà®¿ à®¤à®¿à®Ÿà¯à®Ÿà®®à¯ à®…à®²à¯à®²à®¤à¯ à®šà®®à¯à®¤à®¾à®¯ à®®à¯‡à®®à¯à®ªà®¾à®Ÿà¯à®Ÿà¯ˆ à®¨à¯€à®™à¯à®•à®³à¯ à®®à¯à®©à¯à®®à¯Šà®´à®¿à®¯ à®µà®¿à®°à¯à®®à¯à®ªà¯à®•à®¿à®±à¯€à®°à¯à®•à®³à¯? à®‰à®™à¯à®•à®³à¯ à®•à®°à¯à®¤à¯à®¤à¯ˆ à®µà®¿à®µà®°à®¿à®•à¯à®•à®µà¯à®®à¯. (à®•à¯à®°à®²à¯ à®•à¯à®±à®¿à®ªà¯à®ªà¯à®®à¯ à®…à®©à¯à®ªà¯à®ªà®²à®¾à®®à¯!)",
+        "ask_location":   "à®µà®¿à®³à®•à¯à®•à®®à¯ à®šà¯‡à®®à®¿à®•à¯à®•à®ªà¯à®ªà®Ÿà¯à®Ÿà®¤à¯. à®‡à®ªà¯à®ªà¯‹à®¤à¯ à®‰à®™à¯à®•à®³à¯ à®‡à®°à¯à®ªà¯à®ªà®¿à®Ÿà®¤à¯à®¤à¯ˆ à®ªà®•à®¿à®°à®µà¯à®®à¯ â€” à®‡à®°à¯à®ªà¯à®ªà®¿à®Ÿ à®ªà®¿à®©à¯ à®…à®©à¯à®ªà¯à®ªà®µà¯à®®à¯ à®…à®²à¯à®²à®¤à¯ à®‰à®™à¯à®•à®³à¯ à®ªà®•à¯à®¤à®¿à®¯à®¿à®©à¯ à®ªà¯†à®¯à®°à¯ˆ à®¤à®Ÿà¯à®Ÿà®šà¯à®šà¯ à®šà¯†à®¯à¯à®¯à®µà¯à®®à¯.",
+        "ask_photo":      "à®‡à®°à¯à®ªà¯à®ªà®¿à®Ÿà®®à¯ à®šà¯‡à®®à®¿à®•à¯à®•à®ªà¯à®ªà®Ÿà¯à®Ÿà®¤à¯. à®ªà¯à®•à¯ˆà®ªà¯à®ªà®Ÿà®®à¯ à®‡à®£à¯ˆà®•à¯à®• à®µà®¿à®°à¯à®®à¯à®ªà¯à®•à®¿à®±à¯€à®°à¯à®•à®³à®¾? à®‡à®ªà¯à®ªà¯‹à®¤à¯ à®…à®©à¯à®ªà¯à®ªà®µà¯à®®à¯ à®…à®²à¯à®²à®¤à¯ 'skip' à®Žà®©à¯à®±à¯ à®ªà®¤à®¿à®²à®³à®¿à®•à¯à®•à®µà¯à®®à¯.",
+        "finalizing":     "à®‰à®™à¯à®•à®³à¯ à®…à®±à®¿à®•à¯à®•à¯ˆ à®¤à®¯à®¾à®°à®¿à®•à¯à®•à®ªà¯à®ªà®Ÿà¯à®•à®¿à®±à®¤à¯...",
+        "photo_received": "à®ªà¯à®•à¯ˆà®ªà¯à®ªà®Ÿà®®à¯ à®ªà¯†à®±à®ªà¯à®ªà®Ÿà¯à®Ÿà®¤à¯! à®‰à®™à¯à®•à®³à¯ à®…à®±à®¿à®•à¯à®•à¯ˆ à®¤à®¯à®¾à®°à®¿à®•à¯à®•à®ªà¯à®ªà®Ÿà¯à®•à®¿à®±à®¤à¯...",
+        "skip_prompt":    "à®ªà¯à®•à¯ˆà®ªà¯à®ªà®Ÿà®®à¯ à®…à®©à¯à®ªà¯à®ªà®µà¯à®®à¯ à®…à®²à¯à®²à®¤à¯ 'skip' à®Žà®©à¯à®±à¯ à®ªà®¤à®¿à®²à®³à®¿à®•à¯à®•à®µà¯à®®à¯.",
+        "location_prompt":"à®‡à®°à¯à®ªà¯à®ªà®¿à®Ÿ à®ªà®¿à®©à¯ à®…à®©à¯à®ªà¯à®ªà®µà¯à®®à¯ à®…à®²à¯à®²à®¤à¯ à®‰à®™à¯à®•à®³à¯ à®ªà®•à¯à®¤à®¿à®¯à®¿à®©à¯ à®ªà¯†à®¯à®°à¯ˆ à®¤à®Ÿà¯à®Ÿà®šà¯à®šà¯ à®šà¯†à®¯à¯à®¯à®µà¯à®®à¯.",
+        "text_or_voice":  "à®‰à®°à¯ˆà®¯à®¿à®²à¯ à®šà®¿à®•à¯à®•à®²à¯ˆ à®µà®¿à®µà®°à®¿à®•à¯à®•à®µà¯à®®à¯ à®…à®²à¯à®²à®¤à¯ à®•à¯à®°à®²à¯ à®•à¯à®±à®¿à®ªà¯à®ªà¯ˆ à®…à®©à¯à®ªà¯à®ªà®µà¯à®®à¯.",
+        "survey_thanks":  "à®‰à®™à¯à®•à®³à¯ à®•à®°à¯à®¤à¯à®¤à¯à®•à¯à®•à¯ à®¨à®©à¯à®±à®¿! à®‰à®™à¯à®•à®³à¯ à®¨à®¾à®Ÿà®¾à®³à¯à®®à®©à¯à®± à®‰à®±à¯à®ªà¯à®ªà®¿à®©à®°à®¿à®©à¯ à®…à®²à¯à®µà®²à®•à®®à¯ à®‡à®¤à¯ˆ à®ªà®°à®¿à®šà¯€à®²à®¿à®•à¯à®•à¯à®®à¯.",
+        "new_prompt":     "à®®à®±à¯à®±à¯Šà®°à¯ à®µà®³à®°à¯à®šà¯à®šà®¿ à®¯à¯‹à®šà®©à¯ˆà®¯à¯ˆ à®šà®®à®°à¯à®ªà¯à®ªà®¿à®•à¯à®• à®Žà®ªà¯à®ªà¯‹à®¤à¯ à®µà¯‡à®£à¯à®Ÿà¯à®®à®¾à®©à®¾à®²à¯à®®à¯ 'new proposal' à®Žà®©à¯à®±à¯ à®¤à®Ÿà¯à®Ÿà®šà¯à®šà¯ à®šà¯†à®¯à¯à®¯à®µà¯à®®à¯.",
+        "invalid_option": "1 à®®à¯à®¤à®²à¯ {n} à®µà®°à¯ˆ à®’à®°à¯ à®Žà®£à¯à®£à¯ˆ à®ªà®¤à®¿à®²à®³à®¿à®•à¯à®•à®µà¯à®®à¯.",
+        "voice_ack":      "à®•à¯à®°à®²à¯ à®•à¯à®±à®¿à®ªà¯à®ªà¯ à®ªà¯†à®±à®ªà¯à®ªà®Ÿà¯à®Ÿà®¤à¯, à®‰à®™à¯à®•à®³à¯ à®µà®¿à®³à®•à¯à®•à®®à¯ à®šà¯†à®¯à®²à®¾à®•à¯à®•à®ªà¯à®ªà®Ÿà¯à®•à®¿à®±à®¤à¯...",
+        "discarded":      "à®®à¯à®¨à¯à®¤à¯ˆà®¯ à®®à¯à®©à¯à®®à¯Šà®´à®¿à®µà¯ à®¨à¯€à®•à¯à®•à®ªà¯à®ªà®Ÿà¯à®Ÿà®¤à¯. à®‰à®™à¯à®•à®³à¯ à®ªà®•à¯à®¤à®¿à®•à¯à®•à¯ à®Žà®©à¯à®© à®µà®³à®°à¯à®šà¯à®šà®¿ à®¤à®¿à®Ÿà¯à®Ÿà®®à¯ à®®à¯à®©à¯à®®à¯Šà®´à®¿à®¯ à®µà®¿à®°à¯à®®à¯à®ªà¯à®•à®¿à®±à¯€à®°à¯à®•à®³à¯?",
+        "no_reports":     "à®‰à®™à¯à®•à®³à¯à®•à¯à®•à¯ à®šà¯†à®¯à®²à®¿à®²à¯ à®‰à®³à¯à®³ à®…à®±à®¿à®•à¯à®•à¯ˆà®•à®³à¯ à®‡à®²à¯à®²à¯ˆ.",
     },
     "Telugu": {
-        "welcome":        "మీ ప్రాంతానికి ఏ అభివృద్ధి ప్రాజెక్టు లేదా సామాజిక మెరుగుదలను మీరు ప్రతిపాదించాలనుకుంటున్నారు? మీ ఆలోచనను వివరించండి. (వాయిస్ నోట్ కూడా పంపవచ్చు!)",
-        "ask_location":   "వివరణ సేవ్ చేయబడింది. ఇప్పుడు మీ స్థానాన్ని షేర్ చేయండి — లొకేషన్ పిన్ పంపండి లేదా మీ ప్రాంతం పేరు టైప్ చేయండి.",
-        "ask_photo":      "స్థానం సేవ్ చేయబడింది. మీరు ఫోటో జతచేయాలనుకుంటున్నారా? ఇప్పుడు పంపండి లేదా 'skip' అని రిప్లై చేయండి.",
-        "finalizing":     "మీ నివేదిక తయారవుతోంది...",
-        "photo_received": "ఫోటో అందింది! మీ నివేదిక తయారవుతోంది...",
-        "skip_prompt":    "దయచేసి ఫోటో పంపండి లేదా 'skip' అని రిప్లై చేయండి.",
-        "location_prompt":"దయచేసి లొకేషన్ పిన్ పంపండి లేదా మీ ప్రాంతం పేరు టైప్ చేయండి.",
-        "text_or_voice":  "దయచేసి సమస్యను టెక్స్ట్‌లో వివరించండి లేదా వాయిస్ నోట్ పంపండి.",
-        "survey_thanks":  "మీ అభిప్రాయానికి ధన్యవాదాలు! మీ ఎంపీ కార్యాలయం దీన్ని పరిగణిస్తుంది.",
-        "new_prompt":     "మరొక అభివృద్ధి ఆలోచనను సమర్పించడానికి ఎప్పుడైనా 'new proposal' అని టైప్ చేయండి.",
-        "invalid_option": "దయచేసి 1 నుండి {n} మధ్య ఒక నంబర్‌తో రిప్లై చేయండి.",
-        "voice_ack":      "వాయిస్ నోట్ అందింది, మీ వివరణ ప్రాసెస్ అవుతోంది...",
-        "discarded":      "మునుపటి ప్రతిపాదన తొలగించబడింది. మీ ప్రాంతానికి ఏ అభివృద్ధి ప్రాజెక్టు ప్రతిపాదించాలనుకుంటున్నారు?",
-        "no_reports":     "మీకు సక్రియ నివేదికలు లేవు.",
+        "welcome":        "à°®à±€ à°ªà±à°°à°¾à°‚à°¤à°¾à°¨à°¿à°•à°¿ à° à°…à°­à°¿à°µà±ƒà°¦à±à°§à°¿ à°ªà±à°°à°¾à°œà±†à°•à±à°Ÿà± à°²à±‡à°¦à°¾ à°¸à°¾à°®à°¾à°œà°¿à°• à°®à±†à°°à±à°—à±à°¦à°²à°¨à± à°®à±€à°°à± à°ªà±à°°à°¤à°¿à°ªà°¾à°¦à°¿à°‚à°šà°¾à°²à°¨à±à°•à±à°‚à°Ÿà±à°¨à±à°¨à°¾à°°à±? à°®à±€ à°†à°²à±‹à°šà°¨à°¨à± à°µà°¿à°µà°°à°¿à°‚à°šà°‚à°¡à°¿. (à°µà°¾à°¯à°¿à°¸à± à°¨à±‹à°Ÿà± à°•à±‚à°¡à°¾ à°ªà°‚à°ªà°µà°šà±à°šà±!)",
+        "ask_location":   "à°µà°¿à°µà°°à°£ à°¸à±‡à°µà± à°šà±‡à°¯à°¬à°¡à°¿à°‚à°¦à°¿. à°‡à°ªà±à°ªà±à°¡à± à°®à±€ à°¸à±à°¥à°¾à°¨à°¾à°¨à±à°¨à°¿ à°·à±‡à°°à± à°šà±‡à°¯à°‚à°¡à°¿ â€” à°²à±Šà°•à±‡à°·à°¨à± à°ªà°¿à°¨à± à°ªà°‚à°ªà°‚à°¡à°¿ à°²à±‡à°¦à°¾ à°®à±€ à°ªà±à°°à°¾à°‚à°¤à°‚ à°ªà±‡à°°à± à°Ÿà±ˆà°ªà± à°šà±‡à°¯à°‚à°¡à°¿.",
+        "ask_photo":      "à°¸à±à°¥à°¾à°¨à°‚ à°¸à±‡à°µà± à°šà±‡à°¯à°¬à°¡à°¿à°‚à°¦à°¿. à°®à±€à°°à± à°«à±‹à°Ÿà±‹ à°œà°¤à°šà±‡à°¯à°¾à°²à°¨à±à°•à±à°‚à°Ÿà±à°¨à±à°¨à°¾à°°à°¾? à°‡à°ªà±à°ªà±à°¡à± à°ªà°‚à°ªà°‚à°¡à°¿ à°²à±‡à°¦à°¾ 'skip' à°…à°¨à°¿ à°°à°¿à°ªà±à°²à±ˆ à°šà±‡à°¯à°‚à°¡à°¿.",
+        "finalizing":     "à°®à±€ à°¨à°¿à°µà±‡à°¦à°¿à°• à°¤à°¯à°¾à°°à°µà±à°¤à±‹à°‚à°¦à°¿...",
+        "photo_received": "à°«à±‹à°Ÿà±‹ à°…à°‚à°¦à°¿à°‚à°¦à°¿! à°®à±€ à°¨à°¿à°µà±‡à°¦à°¿à°• à°¤à°¯à°¾à°°à°µà±à°¤à±‹à°‚à°¦à°¿...",
+        "skip_prompt":    "à°¦à°¯à°šà±‡à°¸à°¿ à°«à±‹à°Ÿà±‹ à°ªà°‚à°ªà°‚à°¡à°¿ à°²à±‡à°¦à°¾ 'skip' à°…à°¨à°¿ à°°à°¿à°ªà±à°²à±ˆ à°šà±‡à°¯à°‚à°¡à°¿.",
+        "location_prompt":"à°¦à°¯à°šà±‡à°¸à°¿ à°²à±Šà°•à±‡à°·à°¨à± à°ªà°¿à°¨à± à°ªà°‚à°ªà°‚à°¡à°¿ à°²à±‡à°¦à°¾ à°®à±€ à°ªà±à°°à°¾à°‚à°¤à°‚ à°ªà±‡à°°à± à°Ÿà±ˆà°ªà± à°šà±‡à°¯à°‚à°¡à°¿.",
+        "text_or_voice":  "à°¦à°¯à°šà±‡à°¸à°¿ à°¸à°®à°¸à±à°¯à°¨à± à°Ÿà±†à°•à±à°¸à±à°Ÿà±â€Œà°²à±‹ à°µà°¿à°µà°°à°¿à°‚à°šà°‚à°¡à°¿ à°²à±‡à°¦à°¾ à°µà°¾à°¯à°¿à°¸à± à°¨à±‹à°Ÿà± à°ªà°‚à°ªà°‚à°¡à°¿.",
+        "survey_thanks":  "à°®à±€ à°…à°­à°¿à°ªà±à°°à°¾à°¯à°¾à°¨à°¿à°•à°¿ à°§à°¨à±à°¯à°µà°¾à°¦à°¾à°²à±! à°®à±€ à°Žà°‚à°ªà±€ à°•à°¾à°°à±à°¯à°¾à°²à°¯à°‚ à°¦à±€à°¨à±à°¨à°¿ à°ªà°°à°¿à°—à°£à°¿à°¸à±à°¤à±à°‚à°¦à°¿.",
+        "new_prompt":     "à°®à°°à±Šà°• à°…à°­à°¿à°µà±ƒà°¦à±à°§à°¿ à°†à°²à±‹à°šà°¨à°¨à± à°¸à°®à°°à±à°ªà°¿à°‚à°šà°¡à°¾à°¨à°¿à°•à°¿ à°Žà°ªà±à°ªà±à°¡à±ˆà°¨à°¾ 'new proposal' à°…à°¨à°¿ à°Ÿà±ˆà°ªà± à°šà±‡à°¯à°‚à°¡à°¿.",
+        "invalid_option": "à°¦à°¯à°šà±‡à°¸à°¿ 1 à°¨à±à°‚à°¡à°¿ {n} à°®à°§à±à°¯ à°’à°• à°¨à°‚à°¬à°°à±â€Œà°¤à±‹ à°°à°¿à°ªà±à°²à±ˆ à°šà±‡à°¯à°‚à°¡à°¿.",
+        "voice_ack":      "à°µà°¾à°¯à°¿à°¸à± à°¨à±‹à°Ÿà± à°…à°‚à°¦à°¿à°‚à°¦à°¿, à°®à±€ à°µà°¿à°µà°°à°£ à°ªà±à°°à°¾à°¸à±†à°¸à± à°…à°µà±à°¤à±‹à°‚à°¦à°¿...",
+        "discarded":      "à°®à±à°¨à±à°ªà°Ÿà°¿ à°ªà±à°°à°¤à°¿à°ªà°¾à°¦à°¨ à°¤à±Šà°²à°—à°¿à°‚à°šà°¬à°¡à°¿à°‚à°¦à°¿. à°®à±€ à°ªà±à°°à°¾à°‚à°¤à°¾à°¨à°¿à°•à°¿ à° à°…à°­à°¿à°µà±ƒà°¦à±à°§à°¿ à°ªà±à°°à°¾à°œà±†à°•à±à°Ÿà± à°ªà±à°°à°¤à°¿à°ªà°¾à°¦à°¿à°‚à°šà°¾à°²à°¨à±à°•à±à°‚à°Ÿà±à°¨à±à°¨à°¾à°°à±?",
+        "no_reports":     "à°®à±€à°•à± à°¸à°•à±à°°à°¿à°¯ à°¨à°¿à°µà±‡à°¦à°¿à°•à°²à± à°²à±‡à°µà±.",
     },
 }
 
@@ -221,6 +229,22 @@ def get_reply(key: str, lang: str, **kwargs) -> str:
     text = templates.get(key, REPLY_TEMPLATES["English"].get(key, key))
     return text.format(**kwargs) if kwargs else text
 
+def fetch_twilio_media_part(media_url: str, mime_type: str):
+    if not media_url or not mime_type.startswith("image/"):
+        return None
+    try:
+        auth_tuple = (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN) if TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN else None
+        with httpx.Client(timeout=12) as client:
+            response = client.get(media_url, auth=auth_tuple)
+            response.raise_for_status()
+            if len(response.content) > 5 * 1024 * 1024:
+                logger.warning("[MEDIA] Photo skipped because it exceeds 5MB.")
+                return None
+            return types.Part.from_bytes(data=response.content, mime_type=mime_type)
+    except Exception as e:
+        logger.warning(f"[MEDIA] Could not fetch photo for multimodal triage: {e}")
+        return None
+
 @app.get("/")
 def root():
     return FileResponse("public/index.html")
@@ -231,12 +255,13 @@ async def health():
 
 @app.get("/sw.js")
 async def service_worker():
-    return FileResponse("sw.js", media_type="application/javascript")
+    return FileResponse("public/sw.js", media_type="application/javascript")
 
 @app.get("/favicon.svg")
 async def favicon():
-    return FileResponse("favicon.svg", media_type="image/svg+xml")
+    return FileResponse("public/favicon.svg", media_type="image/svg+xml")
 
+@app.post("/webhook/sms")
 @app.post("/webhook/whatsapp")
 async def receive_whatsapp(request: Request, background_tasks: BackgroundTasks, db = Depends(get_db)):
     form_data = await request.form()
@@ -447,13 +472,24 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db):
         constituency_zone = None
         estimated_budget = None
         semantic_tag = None
+        visual_evidence = ""
         
         if gemini_client and description:
             try:
-                prompt = f"Analyze this community development proposal from a Smart City WhatsApp tip-line. Extract the structured triage data, including what language they originally used.\n\nProposal Text: {description}"
+                prompt = (
+                    "Analyze this community development proposal from a Smart City WhatsApp tip-line. "
+                    "Extract the structured triage data, including what language they originally used. "
+                    "If an image is attached, use it as civic evidence only when it supports the report; do not invent details.\n\n"
+                    f"Proposal Text: {description}\n"
+                    f"Submitted Location: {location_raw or 'Not provided'}"
+                )
+                contents = [prompt]
+                image_part = fetch_twilio_media_part(photo_url, data.get("photo_type") or "")
+                if image_part:
+                    contents.append(image_part)
                 response = gemini_client.models.generate_content(
                     model='gemini-2.5-flash-lite',
-                    contents=prompt,
+                    contents=contents,
                     config={
                         'response_mime_type': 'application/json',
                         'response_schema': TriageResult,
@@ -471,6 +507,7 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db):
                 constituency_zone = triage.constituency_zone
                 estimated_budget = triage.estimated_budget
                 semantic_tag = triage.semantic_tag
+                visual_evidence = triage.visual_evidence or ""
             except Exception as e:
                 logger.error(f"[AI ERROR] Gemini Triage Failed: {e}", exc_info=True)
                 
@@ -494,6 +531,7 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db):
             "constituency_zone": constituency_zone,
             "estimated_budget": estimated_budget,
             "semantic_tag": semantic_tag,
+            "visual_evidence": visual_evidence,
             "reference_id": ref_id,
             "status": "Open",
             "id": doc_ref.id
@@ -517,7 +555,7 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db):
                     survey_q = tr.text.strip()
                 except Exception:
                     pass  # Fall back to English question
-            twiml.message(f"✅ Proposal submitted! Ref: #{ref_id}.\n\n*{survey_q}*\n\nReply with the number of your choice:\n{opt_text}")
+            twiml.message(f"âœ… Proposal submitted! Ref: #{ref_id}.\n\n*{survey_q}*\n\nReply with the number of your choice:\n{opt_text}")
         else:
             clear_session(db, sender)
             # Confirm submission in user's language
@@ -662,8 +700,9 @@ _RAG_CACHE = {"data": None, "at": 0.0}
 @app.post("/api/chat")
 async def api_chat(req: ChatRequest, db = Depends(get_db), admin = Depends(verify_admin)):
     if not gemini_client:
-        raise HTTPException(status_code=500, detail="Gemini AI not initialized")
+        return {"response": "UrbanOS AI is not configured in this environment. The dashboard data APIs are still available for proposals, rankings, sanctions, and surveys."}
 
+    fallback_response = "UrbanOS AI is temporarily unavailable. Please retry in a moment; no civic data was modified."
     try:
         global _RAG_CACHE
         now = time.time()
@@ -675,17 +714,31 @@ async def api_chat(req: ChatRequest, db = Depends(get_db), admin = Depends(verif
             dataset_docs = db.collection('custom_datasets').stream()
             
             try:
-                msgs_docs = db.collection('messages').order_by('timestamp', direction=firestore.Query.DESCENDING).limit(20).stream()
-                proposals = []
-                for doc in msgs_docs:
-                    d = doc.to_dict()
-                    proposals.append(f"- {d.get('category')} in {d.get('constituency_zone')}: {d.get('summary')} (Status: {d.get('status')})")
+                msgs_docs = db.collection('messages').order_by('timestamp', direction=firestore.Query.DESCENDING).limit(100).stream()
             except Exception:
-                msgs_docs = db.collection('messages').limit(20).stream()
-                proposals = []
-                for doc in msgs_docs:
-                    d = doc.to_dict()
-                    proposals.append(f"- {d.get('category')} in {d.get('constituency_zone')}: {d.get('summary')} (Status: {d.get('status')})")
+                msgs_docs = db.collection('messages').limit(100).stream()
+
+            proposal_rows = []
+            proposals = []
+            for doc in msgs_docs:
+                d = doc.to_dict()
+                proposal_rows.append(d)
+                proposals.append(
+                    "- Ref {ref}: {category} / {tag} in {zone}: {summary} "
+                    "(Priority: {priority}, Status: {status}, Budget: INR {budget}, Visual evidence: {visual}) "
+                    "Citizen text: {body}".format(
+                        ref=d.get("reference_id") or doc.id,
+                        category=d.get("category") or "Uncategorized",
+                        tag=d.get("semantic_tag") or "untagged",
+                        zone=d.get("constituency_zone") or "Unknown",
+                        summary=d.get("summary") or "No summary",
+                        priority=d.get("priority") or "Unknown",
+                        status=d.get("status") or "Open",
+                        budget=d.get("estimated_budget") or 0,
+                        visual=d.get("visual_evidence") or "none",
+                        body=(d.get("body") or "")[:240],
+                    )
+                )
                 
             sanctions = []
             for doc in sanc_docs:
@@ -697,13 +750,46 @@ async def api_chat(req: ChatRequest, db = Depends(get_db), admin = Depends(verif
                 d = doc.to_dict()
                 datasets.append(f"--- DATASET: {d.get('filename')} ---\n{d.get('content')}\n")
 
+            zone_counts = {}
+            category_counts = {}
+            priority_counts = {}
+            status_counts = {}
+            total_budget = 0
+            for p in proposal_rows:
+                zone = p.get("constituency_zone") or "Unknown"
+                category = p.get("category") or "Uncategorized"
+                priority = p.get("priority") or "Unknown"
+                status = p.get("status") or "Open"
+                zone_counts[zone] = zone_counts.get(zone, 0) + 1
+                category_counts[category] = category_counts.get(category, 0) + 1
+                priority_counts[priority] = priority_counts.get(priority, 0) + 1
+                status_counts[status] = status_counts.get(status, 0) + 1
+                total_budget += p.get("estimated_budget") or 0
+
+            aggregate_summary = (
+                f"Total proposals in context: {len(proposal_rows)}\n"
+                f"Total estimated budget in context: INR {total_budget}\n"
+                f"Zone counts: {zone_counts}\n"
+                f"Category counts: {category_counts}\n"
+                f"Priority counts: {priority_counts}\n"
+                f"Status counts: {status_counts}\n"
+            )
+            fallback_response = (
+                "UrbanOS AI is temporarily unavailable, but the live data context was loaded.\n\n"
+                "```text\n"
+                f"{aggregate_summary}"
+                "```"
+            )
+
             sys_prompt = (
                 "You are a Production-level AI database assistant for UrbanOS, analyzing citizen grievances, sanctioned projects, and uploaded datasets.\n"
                 "STRICT BIAS GUARDRAILS: You must remain strictly neutral, unbiased, and objective. Do not favor any political entity, demographic, or region.\n"
                 "STRICT KNOWLEDGE GUARDRAILS: If the user asks about something NOT in the provided context, you MUST explicitly say 'I do not know' or 'I do not have data on that'. Do not hallucinate data.\n"
                 "CHART GENERATION: If the user asks for a chart, graph, or plot, output a valid Mermaid JS code block (```mermaid ... ```). Keep it simple.\n"
                 "EXCEL/CSV EXPORT: If the user asks for data in an Excel sheet or CSV, output the data as a standard Markdown table. The system will automatically convert it to a downloadable CSV for them.\n\n"
-                "--- CITIZEN PROPOSALS ---\n" +
+                "--- AGGREGATE SUMMARY ---\n" +
+                aggregate_summary +
+                "\n--- CITIZEN PROPOSALS ---\n" +
                 "\n".join(proposals) +
                 "\n\n--- SANCTIONED PROJECTS ---\n" +
                 "\n".join(sanctions) +
@@ -711,6 +797,7 @@ async def api_chat(req: ChatRequest, db = Depends(get_db), admin = Depends(verif
             )
             _RAG_CACHE["data"] = sys_prompt
             _RAG_CACHE["at"] = now
+
 
         contents = []
         for h in req.history:
@@ -726,7 +813,7 @@ async def api_chat(req: ChatRequest, db = Depends(get_db), admin = Depends(verif
         return {"response": resp.text.strip()}
     except Exception as e:
         logger.error(f"Chat API failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        return {"response": fallback_response}
 
 @app.get("/messages")
 async def get_messages(db = Depends(get_db), admin = Depends(verify_admin)):
@@ -756,6 +843,8 @@ async def get_messages(db = Depends(get_db), admin = Depends(verify_admin)):
             "estimated_budget": msg.get("estimated_budget"),
             "sentiment": msg.get("sentiment"),
             "original_language": msg.get("original_language"),
+            "priority": msg.get("priority"),
+            "visual_evidence": msg.get("visual_evidence"),
             "timestamp": msg.get("timestamp")
         })
     return JSONResponse(content=messages)
@@ -774,25 +863,59 @@ async def get_messages(db = Depends(get_db), admin = Depends(verify_admin)):
 # TOTAL Lucknow District Population (Census 2011): 4,589,838
 # Lucknow Urban Agglomeration: 2,902,920
 #
-# This layer is PLUGGABLE — replace with live Census API calls at:
-#   → data.gov.in  (Open Government Data Platform India)
-#   → udiseplus.gov.in (school density data)
-#   → nhm.gov.in (health infrastructure data)
+# This layer is PLUGGABLE â€” replace with live Census API calls at:
+#   â†’ data.gov.in  (Open Government Data Platform India)
+#   â†’ udiseplus.gov.in (school density data)
+#   â†’ nhm.gov.in (health infrastructure data)
 # ---------------------------------------------------------------------------
 DEMO_DEMOGRAPHICS = {
-    # North Lucknow: Sarojini Nagar, Bakshi Ka Talab — peri-urban, lower infra density
-    "North":   {"population": 312000, "youth_pct": 36, "nearest_school_km": 7.8, "nearest_hospital_km": 11.2, "literacy_rate": 69},
-    # South Lucknow: Cantonment, Alambagh — mixed urban, better infra
-    "South":   {"population": 328000, "youth_pct": 27, "nearest_school_km": 2.9, "nearest_hospital_km": 4.8,  "literacy_rate": 79},
-    # East Lucknow: Gomti Nagar, Indira Nagar — newer development zones
-    "East":    {"population": 287000, "youth_pct": 30, "nearest_school_km": 4.1, "nearest_hospital_km": 6.5,  "literacy_rate": 76},
-    # West Lucknow: Chinhat, Amausi — industrial-adjacent, developing
-    "West":    {"population": 241000, "youth_pct": 32, "nearest_school_km": 5.6, "nearest_hospital_km": 8.3,  "literacy_rate": 72},
-    # Central Lucknow: Hazratganj, Chowk, Aminabad — dense urban core
-    "Central": {"population": 421000, "youth_pct": 24, "nearest_school_km": 1.6, "nearest_hospital_km": 2.4,  "literacy_rate": 85},
+    # North Lucknow: Sarojini Nagar, Bakshi Ka Talab â€” peri-urban, lower infra density
+    "North":   {"population": 312000, "youth_pct": 36, "nearest_school_km": 7.8, "nearest_hospital_km": 11.2, "literacy_rate": 69, "road_gap_index": 7.1, "water_gap_index": 6.8, "sanitation_gap_index": 7.4, "utility_gap_index": 6.2, "environment_gap_index": 6.6, "civic_amenity_gap_index": 7.0},
+    # South Lucknow: Cantonment, Alambagh â€” mixed urban, better infra
+    "South":   {"population": 328000, "youth_pct": 27, "nearest_school_km": 2.9, "nearest_hospital_km": 4.8,  "literacy_rate": 79, "road_gap_index": 4.4, "water_gap_index": 4.8, "sanitation_gap_index": 5.2, "utility_gap_index": 4.1, "environment_gap_index": 4.5, "civic_amenity_gap_index": 4.7},
+    # East Lucknow: Gomti Nagar, Indira Nagar â€” newer development zones
+    "East":    {"population": 287000, "youth_pct": 30, "nearest_school_km": 4.1, "nearest_hospital_km": 6.5,  "literacy_rate": 76, "road_gap_index": 5.3, "water_gap_index": 6.1, "sanitation_gap_index": 6.4, "utility_gap_index": 5.2, "environment_gap_index": 5.8, "civic_amenity_gap_index": 5.5},
+    # West Lucknow: Chinhat, Amausi â€” industrial-adjacent, developing
+    "West":    {"population": 241000, "youth_pct": 32, "nearest_school_km": 5.6, "nearest_hospital_km": 8.3,  "literacy_rate": 72, "road_gap_index": 6.5, "water_gap_index": 5.9, "sanitation_gap_index": 6.9, "utility_gap_index": 6.7, "environment_gap_index": 7.2, "civic_amenity_gap_index": 6.3},
+    # Central Lucknow: Hazratganj, Chowk, Aminabad â€” dense urban core
+    "Central": {"population": 421000, "youth_pct": 24, "nearest_school_km": 1.6, "nearest_hospital_km": 2.4,  "literacy_rate": 85, "road_gap_index": 3.8, "water_gap_index": 3.5, "sanitation_gap_index": 4.2, "utility_gap_index": 3.1, "environment_gap_index": 4.0, "civic_amenity_gap_index": 3.6},
 }
 
 PRIORITY_WEIGHTS = {"Critical": 4, "High": 3, "Medium": 2, "Low": 1}
+
+INFRA_GAP_SOURCES = {
+    "education_access": "UDISE+ school-density layer, constituency zone estimate",
+    "health_access": "NHM facility mapping layer, constituency zone estimate",
+    "road_connectivity": "PWD road-condition and ward connectivity proxy",
+    "water_sanitation": "Jal Jeevan/NULM ward service-gap proxy",
+    "power_lighting": "DISCOM outage and streetlight coverage proxy",
+    "environment_public_space": "LMC parks, waste, and flood-risk proxy",
+    "civic_amenity": "Composite ward amenity gap proxy",
+}
+
+def project_gap_signal(category: str, semantic_tag: str, title: str, demo: dict) -> dict:
+    """Pick the deprivation signal that matches the project type."""
+    text = f"{category or ''} {semantic_tag or ''} {title or ''}".lower()
+    if any(k in text for k in ("school", "education", "literacy", "classroom")):
+        raw_value = demo["nearest_school_km"]
+        return {"key": "education_access", "label": "Nearest school distance", "value": raw_value, "unit": "km", "normalized_gap": min(raw_value, 10), "source": INFRA_GAP_SOURCES["education_access"]}
+    if any(k in text for k in ("hospital", "health", "clinic", "phc", "dispensary")):
+        raw_value = demo["nearest_hospital_km"]
+        return {"key": "health_access", "label": "Nearest health facility distance", "value": raw_value, "unit": "km", "normalized_gap": min(raw_value, 10), "source": INFRA_GAP_SOURCES["health_access"]}
+    if any(k in text for k in ("road", "bridge", "footpath", "traffic", "signal", "pothole")):
+        raw_value = demo["road_gap_index"]
+        return {"key": "road_connectivity", "label": "Road/connectivity gap index", "value": raw_value, "unit": "/10", "normalized_gap": raw_value, "source": INFRA_GAP_SOURCES["road_connectivity"]}
+    if any(k in text for k in ("water", "drain", "sewer", "sanitation", "pipeline", "toilet", "nala")):
+        raw_value = max(demo["water_gap_index"], demo["sanitation_gap_index"])
+        return {"key": "water_sanitation", "label": "Water/sanitation gap index", "value": raw_value, "unit": "/10", "normalized_gap": raw_value, "source": INFRA_GAP_SOURCES["water_sanitation"]}
+    if any(k in text for k in ("electric", "power", "light", "streetlight", "transformer")):
+        raw_value = demo["utility_gap_index"]
+        return {"key": "power_lighting", "label": "Power/lighting gap index", "value": raw_value, "unit": "/10", "normalized_gap": raw_value, "source": INFRA_GAP_SOURCES["power_lighting"]}
+    if any(k in text for k in ("park", "waste", "garbage", "green", "pollution", "flood")):
+        raw_value = demo["environment_gap_index"]
+        return {"key": "environment_public_space", "label": "Environment/public-space gap index", "value": raw_value, "unit": "/10", "normalized_gap": raw_value, "source": INFRA_GAP_SOURCES["environment_public_space"]}
+    raw_value = demo["civic_amenity_gap_index"]
+    return {"key": "civic_amenity", "label": "Composite civic amenity gap index", "value": raw_value, "unit": "/10", "normalized_gap": raw_value, "source": INFRA_GAP_SOURCES["civic_amenity"]}
 
 # ---------------------------------------------------------------------------
 # RANKED PROJECTS CACHE
@@ -821,7 +944,7 @@ async def get_ranked_projects(db = Depends(get_db), admin = Depends(verify_admin
     # SEMANTIC CLUSTERING
     # Cluster by (semantic_tag, zone) instead of raw (category, zone).
     # semantic_tag is a normalized snake_case key assigned by Gemini during
-    # triage — it groups proposals about the *same real-world issue* together
+    # triage â€” it groups proposals about the *same real-world issue* together
     # regardless of how they were phrased or which broad category they fell into.
     # Falls back to category for older messages that pre-date the semantic_tag field.
     # ---------------------------------------------------------------------------
@@ -852,22 +975,31 @@ async def get_ranked_projects(db = Depends(get_db), admin = Depends(verify_admin
     for key, cl in clusters.items():
         demand = len(cl["messages"])
         demo = DEMO_DEMOGRAPHICS.get(cl["zone"], DEMO_DEMOGRAPHICS["Central"])
-        infra_gap = demo["nearest_school_km"]  # simple proxy
-        impact_score = round((demand * cl["priority_score"] * (1 + infra_gap / 10)), 1)
         # Use most common summary as project title
         summaries = [m.get("summary") or "" for m in cl["messages"] if m.get("summary")]
-        title = summaries[0] if summaries else f"{cl['category']} — {cl['zone']} Zone"
+        title = summaries[0] if summaries else f"{cl['category']} â€” {cl['zone']} Zone"
+        gap_signal = project_gap_signal(cl["category"], cl["semantic_tag"], title, demo)
+        infra_gap = gap_signal["normalized_gap"]
+        impact_score = round((demand * cl["priority_score"] * (1 + infra_gap / 10)), 1)
         avg_budget = int(cl["budget_sum"] / demand) if demand else 0
         ranked.append({
             "id": key,
             "title": title,
             "category": cl["category"],
+            "semantic_tag": cl["semantic_tag"],
             "zone": cl["zone"],
             "demand_count": demand,
             "unique_senders": len(cl["senders"]),
             "impact_score": impact_score,
             "estimated_budget": avg_budget,
             "demographics": demo,
+            "latitude": cl["messages"][0].get("latitude"),
+            "longitude": cl["messages"][0].get("longitude"),
+            "evidence": {
+                "gap_signal": gap_signal,
+                "formula": "demand_count * priority_score * (1 + category_gap / 10)",
+                "priority_score": cl["priority_score"],
+            },
             "justification": None,  # filled below
             "status": cl["messages"][0].get("status", "Open"),
             "senders": list(cl["senders"]),
@@ -881,10 +1013,11 @@ async def get_ranked_projects(db = Depends(get_db), admin = Depends(verify_admin
         for proj in top[:1]:
             try:
                 demo = proj["demographics"]
+                gap_signal = proj["evidence"]["gap_signal"]
                 prompt = (
                     f"You are an AI advisor for an Indian MP's office. Write a vivid, compelling 2-3 sentence justification "
                     f"(max 60 words) explaining EXACTLY why this project was ranked so highly for immediate action. "
-                    f"Highlight the high citizen demand, critical demographic needs, and the calculated impact score. "
+                    f"Highlight citizen demand, the relevant deprivation metric, and the calculated impact score. "
                     f"Be highly specific, data-driven, and urgent.\\n\\n"
                     f"Project: {proj['title']}\\n"
                     f"Impact Score: {proj['impact_score']} (Very High)\\n"
@@ -892,10 +1025,9 @@ async def get_ranked_projects(db = Depends(get_db), admin = Depends(verify_admin
                     f"Zone: {proj['zone']} Constituency\n"
                     f"Citizen Demand: {proj['demand_count']} proposals received\n"
                     f"Zone Population: {demo['population']:,} residents\n"
-                    f"Youth Population: {demo['youth_pct']}% aged 0-14\n"
-                    f"Nearest school distance: {demo['nearest_school_km']} km\n"
-                    f"Literacy rate: {demo['literacy_rate']}%\n"
-                    f"Estimated cost: ₹{proj['estimated_budget']:,}\n"
+                    f"Relevant deprivation signal: {gap_signal['label']} = {gap_signal['value']}{gap_signal['unit']}\n"
+                    f"Signal source: {gap_signal['source']}\n"
+                    f"Estimated cost: â‚¹{proj['estimated_budget']:,}\n"
                 )
                 # Call Gemini for a smart justification
                 resp = gemini_client.models.generate_content(
@@ -905,12 +1037,14 @@ async def get_ranked_projects(db = Depends(get_db), admin = Depends(verify_admin
                 proj["justification"] = resp.text.strip().replace('"', '')
             except Exception as e:
                 logger.error(f"[AI JUSTIFICATION] Failed: {e}")
-                proj["justification"] = f"{proj['demand_count']} citizens in {proj['zone']} zone have flagged this as a priority. Demographic data indicates high need in this area."
+                gap_signal = proj["evidence"]["gap_signal"]
+                proj["justification"] = f"{proj['demand_count']} citizens in {proj['zone']} flagged this. Evidence: {gap_signal['label']} is {gap_signal['value']}{gap_signal['unit']}."
 
     # Fallback justification for remaining
-    for proj in top[1:]:
+    for proj in top:
         if not proj.get("justification"):
-            proj["justification"] = f"{proj['demand_count']} citizens in {proj['zone']} zone have flagged this as a priority."
+            gap_signal = proj["evidence"]["gap_signal"]
+            proj["justification"] = f"{proj['demand_count']} citizens in {proj['zone']} flagged this. Evidence: {gap_signal['label']} is {gap_signal['value']}{gap_signal['unit']}."
 
     # Cache results before returning
     _RANKED_CACHE["data"] = top
@@ -933,12 +1067,21 @@ async def sanction_project(req: SanctionRequest, db = Depends(get_db), admin = D
     all_docs = list(db.collection('messages').stream())
     notified = 0
     notified_senders = set()
+    cluster_tag = None
+    cluster_zone = req.zone
+    if "|" in req.project_id:
+        cluster_tag, cluster_zone = req.project_id.rsplit("|", 1)
 
     twilio_client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN) if TWILIO_ACCOUNT_SID else None
 
     for doc in all_docs:
         msg = doc.to_dict()
-        if msg.get("category") == req.category and msg.get("constituency_zone") == req.zone:
+        msg_tag = msg.get("semantic_tag") or msg.get("category")
+        same_cluster = (
+            msg.get("constituency_zone") == cluster_zone and
+            ((cluster_tag and msg_tag == cluster_tag) or (not cluster_tag and msg.get("category") == req.category))
+        )
+        if same_cluster:
             doc.reference.update({"status": "Sanctioned"})
             sender = msg.get("sender")
             if sender and sender not in notified_senders and twilio_client and TWILIO_WHATSAPP_NUMBER:
@@ -947,8 +1090,8 @@ async def sanction_project(req: SanctionRequest, db = Depends(get_db), admin = D
                         from_=TWILIO_WHATSAPP_NUMBER,
                         to=sender,
                         body=(
-                            f"🎉 Great news! Your proposal regarding '{req.title}' has been *SANCTIONED* by your MP's office. "
-                            f"Reference: {req.project_id}. Work will begin as per the planning schedule. Thank you for making your voice heard! — UrbanOS"
+                            f"ðŸŽ‰ Great news! Your proposal regarding '{req.title}' has been *SANCTIONED* by your MP's office. "
+                            f"Reference: {req.project_id}. Work will begin as per the planning schedule. Thank you for making your voice heard! â€” UrbanOS"
                         )
                     )
                     notified_senders.add(sender)
@@ -962,9 +1105,13 @@ async def sanction_project(req: SanctionRequest, db = Depends(get_db), admin = D
         "title": req.title,
         "zone": req.zone,
         "category": req.category,
+        "semantic_tag": cluster_tag,
         "sanctioned_at": datetime.now().isoformat(),
         "citizens_notified": notified,
     })
+
+    _RANKED_CACHE["data"] = None
+    _RANKED_CACHE["at"] = 0.0
 
     return {"status": "sanctioned", "citizens_notified": notified}
 

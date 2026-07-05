@@ -1,0 +1,17 @@
+.git
+.github
+.env
+firebase-key.json
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.db
+urbanos.db
+.firebase/
+docs/
+ngrok.exe
+ngrok.zip
+test_*.py
+tests/
+*.log
