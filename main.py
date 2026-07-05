@@ -876,9 +876,9 @@ async def get_ranked_projects(db = Depends(get_db), admin = Depends(verify_admin
     ranked.sort(key=lambda x: x["impact_score"], reverse=True)
     top = ranked[:8]
 
-    # Generate AI justification for top 5 (Gemini)
+    # Generate AI justification for top 1 (Gemini) - limited to save quota for Chat agent
     if gemini_client:
-        for proj in top[:5]:
+        for proj in top[:1]:
             try:
                 demo = proj["demographics"]
                 prompt = (
@@ -906,8 +906,8 @@ async def get_ranked_projects(db = Depends(get_db), admin = Depends(verify_admin
                 proj["justification"] = f"{proj['demand_count']} citizens in {proj['zone']} zone have flagged this as a priority. Demographic data indicates high need in this area."
 
     # Fallback justification for remaining
-    for proj in top[5:]:
-        if not proj["justification"]:
+    for proj in top[1:]:
+        if not proj.get("justification"):
             proj["justification"] = f"{proj['demand_count']} citizens in {proj['zone']} zone have flagged this as a priority."
 
     # Cache results before returning
