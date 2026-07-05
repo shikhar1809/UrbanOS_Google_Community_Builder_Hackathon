@@ -20,6 +20,7 @@ from twilio.request_validator import RequestValidator
 
 from google import genai
 from pydantic import BaseModel, Field
+from typing import Literal
 
 load_dotenv()
 
@@ -66,26 +67,20 @@ TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
 twilio_validator = RequestValidator(TWILIO_AUTH_TOKEN) if TWILIO_AUTH_TOKEN else None
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-# Use Vertex AI mode (Application Default Credentials via Cloud Run service account).
-# Falls back to API key if GEMINI_API_KEY looks like a real key (starts with AIzaSy).
 try:
-    if GEMINI_API_KEY and GEMINI_API_KEY.startswith("AIzaSy"):
-        gemini_client = genai.Client(api_key=GEMINI_API_KEY)
-    else:
-        # Use Vertex AI ADC — works automatically in Cloud Run with service account
-        gemini_client = genai.Client(vertexai=True, project="urbanos101", location="us-central1")
+    gemini_client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
 except Exception as _e:
     logger.warning(f"Gemini client init failed: {_e}")
     gemini_client = None
 
 class TriageResult(BaseModel):
-    category: str = Field(description="Must be one of: Construction Development, Land Development, Infrastructure Upgrade, Public Utility Works, Environmental Project, Maintenance & Repair, Other")
-    priority: str = Field(description="Must be one of: Low, Medium, High, Critical")
-    feasibility: str = Field(alias="sentiment", description="Must be one of: High, Moderate, Complex, Unknown. Maps to the old sentiment DB column.")
+    category: Literal["Construction Development", "Land Development", "Infrastructure Upgrade", "Public Utility Works", "Environmental Project", "Maintenance & Repair", "Other"] = Field(description="Must be one of the strictly provided categories.")
+    priority: Literal["Low", "Medium", "High", "Critical"] = Field(description="Priority severity level.")
+    feasibility: Literal["High", "Moderate", "Complex", "Unknown"] = Field(alias="sentiment", description="Maps to the old sentiment DB column.")
     extracted_location: str = Field(description="Street name, landmark, or area extracted from text. Empty string if none.")
     summary: str = Field(description="Short 4-5 word summary title of the project proposal.")
     original_language: str = Field(description="The language the user originally submitted their request in (e.g., Hindi, English, Spanish).")
-    constituency_zone: str = Field(description="Must be one of: North, South, East, West, Central. Infer this constituency zone from the location context. Default to Central if unknown.")
+    constituency_zone: Literal["North", "South", "East", "West", "Central"] = Field(description="Infer this constituency zone from the location context. Default to Central if unknown.")
     estimated_budget: int = Field(description="An integer representing the estimated cost in INR based on the project scale (e.g., 500000 for small, 50000000 for large capital works).")
 
 @app.get("/")
