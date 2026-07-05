@@ -181,6 +181,16 @@
                 firebase.auth().onAuthStateChanged((user) => {
                     if (user) {
                         document.getElementById('pin-gate').style.display = 'none';
+                        
+                        // Update profile UI with real Google account data
+                        const profileNameEl = document.getElementById('user-profile-name');
+                        const profileImgEl = document.getElementById('user-profile-img');
+                        const profileRoleEl = document.getElementById('user-profile-role');
+                        
+                        if (profileNameEl && user.displayName) profileNameEl.innerText = user.displayName;
+                        if (profileImgEl && user.photoURL) profileImgEl.src = user.photoURL;
+                        if (profileRoleEl) profileRoleEl.innerText = user.email; // Show email as role
+
                         if (typeof startSplashScreen === 'function') startSplashScreen();
                     } else {
                         document.getElementById('pin-gate').style.display = 'flex';
@@ -293,10 +303,10 @@
 <div class="flex items-center gap-5">
 
 <div class="flex items-center gap-3 pl-5 border-l border-zinc-800 cursor-pointer">
-<img class="w-9 h-9 rounded-full object-cover" src="https://i.pravatar.cc/150?img=33"/>
+<img id="user-profile-img" class="w-9 h-9 rounded-full object-cover" src="https://ui-avatars.com/api/?name=Admin+User&background=333&color=fff"/>
 <div class="text-xs">
-<div class="text-white font-medium">Admin User</div>
-<div class="text-zinc-500 mt-0.5">Dispatch Officer</div>
+<div id="user-profile-name" class="text-white font-medium">Admin User</div>
+<div id="user-profile-role" class="text-zinc-500 mt-0.5">Dispatch Officer</div>
 </div>
 <span class="material-symbols-outlined text-zinc-500 text-[18px]">expand_more</span>
 </div>
