@@ -166,6 +166,7 @@
                 firebase.auth().onAuthStateChanged((user) => {
                     if (user) {
                         document.getElementById('pin-gate').style.display = 'none';
+                        if (typeof startSplashScreen === 'function') startSplashScreen();
                     } else {
                         document.getElementById('pin-gate').style.display = 'flex';
                     }
@@ -1567,7 +1568,10 @@
             return lang ? `<span class="text-[10px] font-medium bg-zinc-800 px-1.5 py-0.5 rounded text-zinc-300">${LANG_FLAGS[lang] || '🌐'} ${lang}</span>` : '';
         }
 
-        document.addEventListener('DOMContentLoaded', () => {
+        let splashStarted = false;
+        window.startSplashScreen = function() {
+            if (splashStarted) return;
+            splashStarted = true;
 
             const splashText = document.getElementById('splash-text');
             const splashProgress = document.getElementById('splash-progress');
@@ -1583,23 +1587,23 @@
             
             sequence.forEach((step) => {
                 setTimeout(() => {
-                    splashText.textContent = step.text;
-                    splashProgress.style.width = step.progress;
+                    if(splashText) splashText.textContent = step.text;
+                    if(splashProgress) splashProgress.style.width = step.progress;
                 }, step.delay);
                 totalDelay = Math.max(totalDelay, step.delay);
             });
             
             // Fade out and remove after sequence completes
             setTimeout(() => {
-                splashScreen.style.opacity = '0';
+                if(splashScreen) splashScreen.style.opacity = '0';
                 setTimeout(() => {
-                    splashScreen.style.display = 'none';
+                    if(splashScreen) splashScreen.style.display = 'none';
                     // Trigger initial fetch only after splash screen finishes
                     fetchMessages();
                     setInterval(fetchMessages, 2000); // Resume polling
                 }, 700); // wait for CSS fade transition
             }, totalDelay + 800);
-        });
+        };
         
         // Remove the existing automatic calls to fetchMessages to prevent double fetching
     
