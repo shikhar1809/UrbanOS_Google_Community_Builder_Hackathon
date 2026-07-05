@@ -87,6 +87,16 @@ class TriageResult(BaseModel):
     original_language: str = Field(description="The language the user originally submitted their request in (e.g., Hindi, English, Spanish).")
     constituency_zone: Literal["North", "South", "East", "West", "Central"] = Field(description="Infer this constituency zone from the location context. Default to Central if unknown.")
     estimated_budget: int = Field(description="An integer representing the estimated cost in INR based on the project scale (e.g., 500000 for small, 50000000 for large capital works).")
+    semantic_tag: str = Field(
+        description=(
+            "A normalized snake_case topic tag (2-3 words) that semantically groups this proposal "
+            "with similar ones regardless of phrasing. Be CONSISTENT — the same real-world issue "
+            "must always produce the same tag. Examples: 'road_repair', 'school_construction', "
+            "'water_supply', 'street_lighting', 'drainage_improvement', 'park_development', "
+            "'hospital_upgrade', 'bridge_construction', 'sanitation_works', 'electricity_supply'. "
+            "Two proposals about 'MG Road is dark' and 'need streetlights on main road' must share 'street_lighting'."
+        )
+    )
 
 # ---------------------------------------------------------------------------
 # MULTILINGUAL SUPPORT
@@ -426,6 +436,7 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db):
         original_language = None
         constituency_zone = None
         estimated_budget = None
+        semantic_tag = None
         
         if gemini_client and description:
             try:
@@ -449,6 +460,7 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db):
                 summary = triage.summary
                 constituency_zone = triage.constituency_zone
                 estimated_budget = triage.estimated_budget
+                semantic_tag = triage.semantic_tag
             except Exception as e:
                 logger.error(f"[AI ERROR] Gemini Triage Failed: {e}", exc_info=True)
                 
@@ -471,6 +483,7 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db):
             "original_language": original_language,
             "constituency_zone": constituency_zone,
             "estimated_budget": estimated_budget,
+            "semantic_tag": semantic_tag,
             "reference_id": ref_id,
             "status": "Open",
             "id": doc_ref.id
@@ -755,27 +768,51 @@ DEMO_DEMOGRAPHICS = {
 
 PRIORITY_WEIGHTS = {"Critical": 4, "High": 3, "Medium": 2, "Low": 1}
 
+# ---------------------------------------------------------------------------
+# RANKED PROJECTS CACHE
+# ---------------------------------------------------------------------------
+# Caches ranked project results for CACHE_TTL_SECONDS to avoid calling
+# Gemini justifications on every dashboard load. Cache is per-process
+# (warm Cloud Function instances); invalidated on timeout or new sanction.
+# ---------------------------------------------------------------------------
+_RANKED_CACHE: dict = {"data": None, "at": 0.0}
+CACHE_TTL_SECONDS = 300  # 5 minutes
+
 @app.get("/projects/ranked")
 async def get_ranked_projects(db = Depends(get_db)):
-    """Groups messages into projects, scores them, and generates AI justification."""
+    """Groups messages into projects, scores them, and generates AI justification.
+    Results are cached in-process for 5 minutes to reduce Gemini API cost at scale."""
+    now = time.time()
+    if _RANKED_CACHE["data"] and (now - _RANKED_CACHE["at"]) < CACHE_TTL_SECONDS:
+        logger.info("[CACHE HIT] Returning cached ranked projects (age: %.0fs)", now - _RANKED_CACHE["at"])
+        return JSONResponse(content=_RANKED_CACHE["data"])
+
+    logger.info("[CACHE MISS] Recomputing ranked projects...")
     all_docs = list(db.collection('messages').limit(500).stream())
     messages = [d.to_dict() for d in all_docs]
 
-    # Cluster by (category, constituency_zone)
+    # ---------------------------------------------------------------------------
+    # SEMANTIC CLUSTERING
+    # Cluster by (semantic_tag, zone) instead of raw (category, zone).
+    # semantic_tag is a normalized snake_case key assigned by Gemini during
+    # triage — it groups proposals about the *same real-world issue* together
+    # regardless of how they were phrased or which broad category they fell into.
+    # Falls back to category for older messages that pre-date the semantic_tag field.
+    # ---------------------------------------------------------------------------
     clusters = {}
     for m in messages:
-        raw_cat = m.get("category")
-        if not raw_cat:
-            # Use first 40 chars of body as a unique cluster key so uncategorized
-            # requests are still individually visible in the ranking
+        # Use semantic_tag if available, else fall back to category, else body snippet
+        tag = m.get("semantic_tag") or m.get("category")
+        if not tag:
             body_snippet = (m.get("body") or "").strip()[:40]
-            raw_cat = body_snippet if body_snippet else "General Proposal"
-        cat = raw_cat
+            tag = body_snippet if body_snippet else "General Proposal"
         zone = m.get("constituency_zone") or "Central"
-        key = f"{cat}|{zone}"
+        key = f"{tag}|{zone}"
         if key not in clusters:
             clusters[key] = {
-                "category": cat, "zone": zone,
+                "category": m.get("category") or tag,
+                "semantic_tag": tag,
+                "zone": zone,
                 "messages": [], "senders": set(),
                 "budget_sum": 0, "priority_score": 0,
             }
@@ -823,6 +860,7 @@ async def get_ranked_projects(db = Depends(get_db)):
                     f"(max 50 words) recommending action on this project, citing the data provided. "
                     f"Be specific, data-driven, and urgent.\n\n"
                     f"Project: {proj['title']}\n"
+                    f"Topic: {proj.get('semantic_tag', proj['category'])}\n"
                     f"Zone: {proj['zone']} Constituency\n"
                     f"Citizen Demand: {proj['demand_count']} proposals received\n"
                     f"Zone Population: {demo['population']:,} residents\n"
@@ -844,6 +882,10 @@ async def get_ranked_projects(db = Depends(get_db)):
         if not proj["justification"]:
             proj["justification"] = f"{proj['demand_count']} citizens in {proj['zone']} zone have flagged this as a priority."
 
+    # Cache results before returning
+    _RANKED_CACHE["data"] = top
+    _RANKED_CACHE["at"] = time.time()
+    logger.info("[CACHE SET] Ranked projects cached for %ds", CACHE_TTL_SECONDS)
     return JSONResponse(content=top)
 
 
