@@ -511,7 +511,7 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db):
             if lang != "English" and gemini_client:
                 try:
                     tr = gemini_client.models.generate_content(
-                        model='gemini-2.5-flash',
+                        model='gemini-2.5-flash-lite',
                         contents=f"Translate ONLY this sentence to {lang}, keep numbers and formatting intact, return only the translation:\n{survey_q}"
                     )
                     survey_q = tr.text.strip()
@@ -525,7 +525,7 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db):
             if lang != "English" and gemini_client:
                 try:
                     tr = gemini_client.models.generate_content(
-                        model='gemini-2.5-flash',
+                        model='gemini-2.5-flash-lite',
                         contents=f"Translate ONLY this sentence to {lang}, keep the reference ID #{ref_id} exactly as is, return only the translation:\n{confirm_msg}"
                     )
                     confirm_msg = tr.text.strip()
@@ -719,7 +719,7 @@ async def api_chat(req: ChatRequest, db = Depends(get_db), admin = Depends(verif
         contents.append({"role": "user", "parts": [{"text": req.query}]})
 
         resp = gemini_client.models.generate_content(
-            model='gemini-2.5-flash',
+            model='gemini-2.5-flash-lite',
             contents=contents,
             config={"system_instruction": sys_prompt}
         )
@@ -897,10 +897,12 @@ async def get_ranked_projects(db = Depends(get_db), admin = Depends(verify_admin
                     f"Literacy rate: {demo['literacy_rate']}%\n"
                     f"Estimated cost: ₹{proj['estimated_budget']:,}\n"
                 )
+                # Call Gemini for a smart justification
                 resp = gemini_client.models.generate_content(
-                    model='gemini-2.5-flash', contents=prompt
+                    model='gemini-2.5-flash-lite',
+                    contents=prompt
                 )
-                proj["justification"] = resp.text.strip()
+                proj["justification"] = resp.text.strip().replace('"', '')
             except Exception as e:
                 logger.error(f"[AI JUSTIFICATION] Failed: {e}")
                 proj["justification"] = f"{proj['demand_count']} citizens in {proj['zone']} zone have flagged this as a priority. Demographic data indicates high need in this area."
