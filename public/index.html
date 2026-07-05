@@ -97,8 +97,8 @@
     }
 
     /* ── PAGE BACKGROUNDS ───────────────────────────── */
-    .view-content { display: none !important; }
-    .view-content.active { display: flex !important; }
+    .view-content { visibility: hidden; position: absolute; pointer-events: none; width: 100%; height: 0; overflow: hidden; }
+    .view-content.active { visibility: visible; position: relative; pointer-events: auto; display: flex !important; min-height: calc(100vh - 76px); }
 
     /* ── INPUTS & FORMS ─────────────────────────────── */
     input, textarea, select {
@@ -336,6 +336,11 @@
     .text-gray-500 { color: #64748B !important; }
     .text-gray-400 { color: #94A3B8 !important; }
 
+
+    /* Ensure Leaflet map containers always have dimensions even when tab hidden */
+    #priority-map, #coordination-map, #live-heatmap {
+        min-height: 200px;
+    }
     /* Fix bg shades */
     .bg-gray-50  { background-color: #F8FAFC !important; }
     .bg-gray-100 { background-color: #F1F5F9 !important; }
@@ -351,7 +356,7 @@
 <script defer src="/__/firebase/10.7.0/firebase-auth-compat.js"></script>
 <script defer src="/__/firebase/init.js"></script>
 </head>
-<body class="h-screen flex flex-col overflow-hidden">
+<body class="bg-gray-100 min-h-screen flex flex-col overflow-y-auto overflow-x-hidden custom-scrollbar">
 <!-- ============================================================ -->
 <!-- ADMIN AUTH GATE -->
 <!-- ============================================================ -->
@@ -383,7 +388,11 @@
 </div>
 
 <script>
-    // Global Auth Fetch Wrapper
+    // Backend URL — uses relative path on deployed site, hardcoded for local dev
+    const BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+        ? 'https://urbanos.web.app'
+        : '';
+
     async function authFetch(url, options = {}) {
         if (typeof firebase !== 'undefined' && firebase.auth().currentUser) {
             const token = await firebase.auth().currentUser.getIdToken();
@@ -392,7 +401,7 @@
         } else {
             console.warn("No authenticated user, proceeding without token.");
         }
-        return window.fetch(url, options);
+        return window.fetch(BASE_URL + url, options);
     }
 </script>
 <script>
@@ -503,7 +512,7 @@
         </div>
 
         <!-- Center: UrbanOS Logo -->
-        <div class="flex flex-col items-center justify-center z-10 bg-white p-8 rounded-full shadow-[0_20px_60px_rgba(0,0,0,0.06)] border border-gray-200">
+        <div class="flex flex-col items-center justify-center z-10">
             <div class="relative flex items-center justify-center w-20 h-20 mb-5">
                 <svg class="w-16 h-16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M12 22s8-6 8-12.5a8 8 0 0 0-16 0C4 16 12 22 12 22z" stroke="#3b82f6" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -551,7 +560,7 @@
 </div>
 </header>
 <!-- Main Content -->
-<div class="view-content w-full h-full gap-5 flex-col overflow-y-auto custom-scrollbar" id="view-priority">
+<div class="view-content w-full gap-5 flex-col" id="view-priority">
     
     <!-- Budget Health Dashboard -->
     <div class="card p-6 flex flex-col gap-4 shrink-0 bg-white border-blue-900/30 relative overflow-hidden">
@@ -621,7 +630,7 @@
         </div>
     </div>
 </div>
-<div class="view-content w-full h-full flex-col gap-5 overflow-y-auto" id="view-analysis">
+<div class="view-content w-full flex-col gap-5" id="view-analysis">
 
   <!-- KPI Row -->
   <div class="grid grid-cols-4 gap-4 shrink-0">
@@ -743,7 +752,7 @@
 
 </div>
 
-<div class="view-content w-full h-full flex flex-col gap-5" id="view-insights">
+<div class="view-content w-full flex flex-col gap-5" id="view-insights">
   <!-- AI Database Assistant (Full Screen) -->
   <div class="flex-1 flex flex-col gap-4 bg-gray-50 border border-gray-200 rounded-xl p-6 relative">
       <div class="flex justify-between items-center shrink-0 border-b border-gray-200 pb-4">
@@ -770,7 +779,7 @@
       </div>
       
       <!-- Chat History -->
-      <div id="ai-chat-history" class="flex-1 overflow-y-auto flex flex-col gap-5 pr-2 custom-scrollbar">
+      <div id="ai-chat-history" class="flex-1 flex flex-col gap-5 pr-2">
           <div class="flex flex-col gap-1 items-start">
               <div class="text-xs text-gray-500 uppercase tracking-wider font-bold ml-1">UrbanOS AI</div>
               <div class="bg-white border border-gray-300 text-sm text-gray-600 px-5 py-4 rounded-2xl rounded-tl-sm max-w-[85%] leading-relaxed shadow-sm">
@@ -799,7 +808,7 @@
   </div>
 </div>
 
-<div class="view-content w-full h-full flex flex-col gap-5" id="view-coordination">
+<div class="view-content w-full flex flex-col gap-5" id="view-coordination">
   <!-- Feedback & Analysis (Survey Manager) -->
   <div class="flex-1 flex gap-5">
       <!-- Left: Active Surveys List -->
@@ -848,123 +857,115 @@
       </div>
   </div>
 </div>
-<div class="view-content w-full h-full flex-col gap-5 active" id="view-live">
-<!-- Top Section: Lucknow Heatmap & Live Feed -->
-<div class="flex h-[280px] shrink-0 gap-5 overflow-hidden">
-<div class="card map-bg flex-1 relative overflow-hidden border-none shadow-inner h-full">
-<div class="absolute inset-0 z-0" id="live-heatmap"></div>
-<div class="absolute top-5 left-5 bg-white text-black px-4 py-2.5 rounded-full text-sm font-medium shadow-[0_8px_30px_rgb(0,0,0,0.12)] z-10 flex items-center gap-2">
-<span class="material-symbols-outlined text-red-500 text-[18px]">local_fire_department</span>
-                Lucknow Live Hotspots
+<div class="view-content w-full flex flex-col gap-5 active" id="view-live">
+    <!-- Top Section: Telemetry Bar -->
+    <div class="flex gap-5 shrink-0">
+        <div class="card flex-1 p-4 flex items-center gap-4 bg-gray-50 border-gray-200">
+            <div class="w-10 h-10 rounded-full bg-white border border-gray-200 flex items-center justify-center">
+                <div class="pulse-dot"></div>
             </div>
-<!-- Route Card -->
-<div class="route-card">
-    <div class="row">
-        <span class="material-symbols-outlined icon">chevron_left</span>
-        <span>Current location</span>
-    </div>
-    <div class="row">
-        <span class="material-symbols-outlined icon">chevron_left</span>
-        <span>Target location</span>
-    </div>
-    <div class="divider"></div>
-    <div class="section-label">Estimated Journey Duration</div>
-    <div class="row" style="justify-content:space-between">
-        <div class="route-indicator">
-            <div class="dot-top"></div>
-            <div class="line"></div>
-            <div class="dot-bottom"></div>
-        </div>
-        <div style="flex:1; display:flex; align-items:center; gap:8px">
-            <span class="material-symbols-outlined icon">directions_car</span>
             <div>
-                <div class="dur-label">Time</div>
-                <div class="duration">19 minutes</div>
+                <div class="text-[10px] uppercase tracking-wider text-gray-500 mb-0.5">System Health</div>
+                <div class="text-sm text-gray-900 font-bold">Status: <span class="text-green-500 ml-1" id="sys-health">Live</span></div>
             </div>
         </div>
-    </div>
-    <div class="row" style="justify-content:space-between; margin-top:4px">
-        <div style="width:26px"></div>
-        <div style="flex:1; display:flex; align-items:center; gap:8px">
-            <span class="material-symbols-outlined icon">directions_walk</span>
+        <div class="card flex-1 p-4 flex items-center gap-4 bg-gray-50 border-gray-200">
+            <div class="w-10 h-10 rounded-full bg-white border border-gray-200 flex items-center justify-center">
+                <span class="material-symbols-outlined text-gray-500 text-[18px]">speed</span>
+            </div>
             <div>
-                <div class="dur-label">Time</div>
-                <div class="duration">1 hour 2 minutes</div>
+                <div class="text-[10px] uppercase tracking-wider text-gray-500 mb-0.5">Ingestion Latency</div>
+                <div class="text-sm text-gray-900 font-bold"><span id="sys-latency">12 ms </span></div>
+            </div>
+        </div>
+        <div class="card flex-1 p-4 flex items-center gap-4 bg-gray-50 border-gray-200">
+            <div class="w-10 h-10 rounded-full bg-white border border-gray-200 flex items-center justify-center">
+                <span class="material-symbols-outlined text-blue-400 text-[18px]">sync</span>
+            </div>
+            <div>
+                <div class="text-[10px] uppercase tracking-wider text-gray-500 mb-0.5">Messages Processed</div>
+                <div class="text-sm text-gray-900 font-bold" id="msg-counter">0</div>
             </div>
         </div>
     </div>
-</div>
-<!-- Map controls -->
-<div class="absolute top-5 right-5 flex flex-col gap-3 z-10">
-<button class="w-11 h-11 bg-white text-black rounded-full shadow-[0_8px_30px_rgb(0,0,0,0.12)] flex items-center justify-center hover:bg-gray-50 transition">
-<span class="material-symbols-outlined text-[20px]">fullscreen</span>
-</button>
-</div>
-</div>
-<aside class="w-[400px] flex flex-col gap-0 card overflow-hidden bg-gray-50 border-gray-200">
-<div class="p-4 border-b border-gray-200 flex items-center justify-between bg-gray-50">
-<span class="text-sm font-medium text-gray-900 flex items-center gap-2">
-<span class="pulse-dot"></span> Live Webhook Payload
-                    </span>
-<span class="text-[10px] text-gray-500 font-mono">application/json</span>
-</div>
-<div class="flex-1 overflow-y-auto p-4 flex flex-col gap-3 font-mono text-[11px] text-gray-500 leading-relaxed" id="raw-feed-container">
-<div class="text-center text-gray-500 my-10 italic">Listening for incoming webhooks...</div>
-</div>
-</aside>
-</div>
-<!-- Middle Section: Telemetry Bar -->
-<div class="flex gap-5">
-<div class="card flex-1 p-5 flex items-center gap-4 bg-gray-50">
-<div class="w-12 h-12 rounded-full bg-white border border-gray-200 flex items-center justify-center">
-<div class="pulse-dot"></div>
-</div>
-<div>
-<div class="text-xs text-gray-500 mb-1">System Health</div>
-<div class="text-lg text-gray-900 font-medium">Status: <span class="text-sm text-green-400 ml-1" id="sys-health">Awaiting Data</span></div>
-</div>
-</div>
-<div class="card flex-1 p-5 flex items-center gap-4 bg-gray-50">
-<div class="w-12 h-12 rounded-full bg-white border border-gray-200 flex items-center justify-center">
-<span class="material-symbols-outlined text-gray-500">speed</span>
-</div>
-<div>
-<div class="text-xs text-gray-500 mb-1">Ingestion Latency</div>
-<div class="text-lg text-gray-900 font-medium"><span id="sys-latency">0 ms </span><span class="text-sm text-gray-500 ml-1">(Live)</span></div>
-</div>
-</div>
-<div class="card flex-1 p-5 flex items-center gap-4 bg-gray-50">
-<div class="w-12 h-12 rounded-full bg-white border border-gray-200 flex items-center justify-center">
-<span class="material-symbols-outlined text-blue-400">sync</span>
-</div>
-<div>
-<div class="text-xs text-gray-500 mb-1">Messages Processed</div>
-<div class="text-lg text-gray-900 font-medium" id="msg-counter">0</div>
-</div>
-</div>
-</div>
-<!-- Bottom Section: Animation -->
-<div class="card p-8 flex-1 min-h-[160px] relative flex items-center justify-between overflow-hidden bg-white border-gray-200" id="animation-canvas">
-<!-- Grid Background for tech feel -->
-<div class="absolute inset-0 opacity-10" style="background-image: linear-gradient(#e5e7eb 1px, transparent 1px), linear-gradient(90deg, #e5e7eb 1px, transparent 1px); background-size: 20px 20px;"></div>
-<!-- WhatsApp Node -->
-<div class="z-10 flex flex-col items-center gap-2 ml-8">
-<div class="w-16 h-16 rounded-2xl bg-[#25D366] flex items-center justify-center shadow-[0_0_20px_rgba(37,211,102,0.3)]">
-<span class="material-symbols-outlined text-gray-900 text-[32px]">forum</span>
-</div>
-<span class="text-xs text-gray-500 font-medium tracking-widest uppercase">WhatsApp API</span>
-</div>
-<!-- Dashed Path -->
-<div class="absolute left-32 right-32 top-1/2 border-t-2 border-dashed border-gray-300 -mt-px z-0"></div>
-<!-- The flying packets -->
-<!-- UrbanOS Node -->
-<div class="z-10 flex flex-col items-center gap-2 mr-8">
-<div class="w-16 h-16 rounded-2xl bg-gray-50 border border-gray-300 flex items-center justify-center shadow-xl">
-<svg class="w-8 h-8 text-blue-400 drop-shadow-[0_0_8px_rgba(59,130,246,0.8)]" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 22s8-6 8-12.5a8 8 0 0 0-16 0C4 16 12 22 12 22z" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 12v-3h2V6h4v4h2v2" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-</div>
-<span class="text-xs text-gray-900 font-medium tracking-widest uppercase">UrbanOS Engine</span>
-</div>
-</div>
+
+    <!-- Main Section: Map & Sidebar -->
+    <div class="flex gap-5" style="height: 600px;">
+        <!-- Live Map taking primary space -->
+        <div class="card flex-[3] relative overflow-hidden border-gray-200 shadow-sm rounded-xl">
+            <div class="absolute inset-0 z-0 bg-gray-100" id="live-heatmap"></div>
+            <div class="absolute top-4 left-4 bg-white/90 backdrop-blur text-gray-900 px-4 py-2 rounded-lg text-sm font-bold shadow-md z-10 flex items-center gap-2 border border-gray-200">
+                <span class="material-symbols-outlined text-emerald-500 text-[18px]">radar</span>
+                Lucknow Urban Grid
+            </div>
+            <!-- Map Legend -->
+            <div class="absolute bottom-4 left-4 bg-white/90 backdrop-blur p-3 rounded-lg shadow-md z-10 border border-gray-200 text-xs text-gray-700 flex flex-col gap-2">
+                <div class="font-bold border-b border-gray-200 pb-1 mb-1">Grid Legend</div>
+                <div class="flex items-center gap-2"><div class="w-4 h-4 bg-emerald-500 opacity-20 border border-emerald-500"></div> Low Activity</div>
+                <div class="flex items-center gap-2"><div class="w-4 h-4 bg-emerald-500 opacity-60 border border-emerald-500"></div> High Activity</div>
+                <div class="flex items-center gap-2"><div class="w-3 h-3 rounded-full bg-blue-400 border border-white"></div> Citizen Report</div>
+                <div class="flex items-center gap-2"><div class="w-4 h-4 bg-purple-500 rounded-sm"></div> Sanctioned Project</div>
+            </div>
+            
+            <!-- Map Controls -->
+            <div class="absolute top-4 right-4 bg-white/90 backdrop-blur p-3 rounded-lg shadow-md z-10 border border-gray-200 text-xs text-gray-700 flex flex-col gap-3 min-w-[180px]">
+                <div class="font-bold border-b border-gray-200 pb-1 mb-1 flex items-center gap-2">
+                    <span class="material-symbols-outlined text-[16px]">tune</span> Map Controls
+                </div>
+                <!-- Layer Toggles -->
+                <div class="flex flex-col gap-2">
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" id="toggle-hex" checked class="rounded text-emerald-500 focus:ring-emerald-500" onchange="window.updateMapFilters()">
+                        Hex Grid (Insights)
+                    </label>
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" id="toggle-heat" checked class="rounded text-emerald-500 focus:ring-emerald-500" onchange="window.updateMapFilters()">
+                        Heatmap
+                    </label>
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" id="toggle-pins" checked class="rounded text-emerald-500 focus:ring-emerald-500" onchange="window.updateMapFilters()">
+                        Live Pins
+                    </label>
+                </div>
+                <!-- Filters -->
+                <div class="border-t border-gray-200 pt-2 mt-1 flex flex-col gap-2">
+                    <div>
+                        <div class="mb-1 font-semibold">Filter Category</div>
+                        <select id="filter-category" class="w-full border border-gray-300 rounded p-1 text-xs outline-none" onchange="window.updateMapFilters()">
+                            <option value="All">All Categories</option>
+                            <option value="Infrastructure">Infrastructure</option>
+                            <option value="Public Safety">Public Safety</option>
+                            <option value="Utilities">Utilities</option>
+                            <option value="Sanitation">Sanitation</option>
+                        </select>
+                    </div>
+                    <div>
+                        <div class="mb-1 font-semibold">Filter Priority</div>
+                        <select id="filter-priority" class="w-full border border-gray-300 rounded p-1 text-xs outline-none" onchange="window.updateMapFilters()">
+                            <option value="All">All Priorities</option>
+                            <option value="Critical">Critical</option>
+                            <option value="High">High</option>
+                            <option value="Medium">Medium</option>
+                            <option value="Low">Low</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Raw Webhook Feed Sidebar -->
+        <aside class="flex-1 flex flex-col gap-0 card overflow-hidden bg-gray-50 border-gray-200 rounded-xl" style="max-height:600px">
+            <div class="p-4 border-b border-gray-200 flex items-center justify-between bg-white shrink-0">
+                <span class="text-sm font-bold text-gray-900 flex items-center gap-2">
+                    <span class="pulse-dot"></span> Live Incident Feed
+                </span>
+                <span class="text-[10px] text-gray-500 font-mono bg-gray-100 px-2 py-1 rounded">Real-time</span>
+            </div>
+            <div class="flex-1 overflow-y-auto p-4 flex flex-col gap-3 font-mono text-[11px] text-gray-500 leading-relaxed custom-scrollbar" id="raw-feed-container">
+                <div class="text-center text-gray-400 my-10 italic">Awaiting inbound webhooks...</div>
+            </div>
+        </aside>
+    </div>
 </div>
 </main>
 <script>let lastMessageCount = -1;
@@ -1088,9 +1089,6 @@
         }
 
         function applyLucknowGridAndLock(mapObj, lock) {
-            const bounds = [[26.75, 80.85], [26.95, 81.05]]; // Approximate bounds of Lucknow
-            L.rectangle(bounds, {color: "#3b82f6", weight: 2, fill: false, opacity: 0.4}).addTo(mapObj);
-            
             if (lock) {
                 mapObj.dragging.disable();
                 mapObj.touchZoom.disable();
@@ -1106,6 +1104,11 @@
             try {
                 const response = await authFetch('/messages');
                 const data = await response.json();
+                
+                // --- IMMEDIATE UI UPDATES FOR MAP ---
+                if (data && Array.isArray(data)) {
+                    placeLiveMarkers(data);
+                }
                 
                 // Trigger live animation if new messages arrived
                 if (lastMessageCount !== -1 && data.length > lastMessageCount) {
@@ -1684,8 +1687,7 @@
                     }
                     
                     // 4. Update Live Map Pins / Heatmap
-                    // Place live markers and heatmap via global function
-                    placeLiveMarkers(data);
+                    // (Moved to top of fetchMessages)
             
                     const newRows = data.map((msg, index) => {
                         const date = new Date(msg.timestamp).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -1759,10 +1761,52 @@
                     }
                 });
             }
+            if (window.liveMap) {
+                if(window.liveRankedMarkers) window.liveRankedMarkers.forEach(m => window.liveMap.removeLayer(m));
+                window.liveRankedMarkers = [];
+                window.rankedProjectsData.forEach(p => {
+                    // Only show Sanctioned projects on live map as "existing projects"
+                    if (p.latitude && p.longitude && p.status === 'Sanctioned') {
+                        const purpleSquare = L.divIcon({
+                            className: 'custom-square',
+                            html: `<div style="width:12px;height:12px;background-color:#a855f7;border:2px solid white;box-shadow:0 2px 5px rgba(0,0,0,0.3);border-radius:2px;"></div>`,
+                            iconSize: [12,12],
+                            iconAnchor: [6,6]
+                        });
+                        const marker = L.marker([p.latitude, p.longitude], {icon: purpleSquare})
+                            .bindTooltip(`Sanctioned: ${p.title}`, {direction:'top'})
+                            .addTo(window.liveMap);
+                        window.liveRankedMarkers.push(marker);
+                    }
+                });
+            }
+        }
+
+        window.updateMapFilters = function() {
+            if(window.liveMessagesData) placeLiveMarkers(window.liveMessagesData);
         }
 
         function placeLiveMarkers(messages) {
+            window.liveMessagesData = messages;
             if (!window.liveMap) return;
+            
+            // Read UI States
+            const showPins = document.getElementById('toggle-pins') ? document.getElementById('toggle-pins').checked : true;
+            const showHeat = document.getElementById('toggle-heat') ? document.getElementById('toggle-heat').checked : true;
+            const showHex = document.getElementById('toggle-hex') ? document.getElementById('toggle-hex').checked : true;
+            
+            const catFilt = document.getElementById('filter-category') ? document.getElementById('filter-category').value : 'All';
+            const prioFilt = document.getElementById('filter-priority') ? document.getElementById('filter-priority').value : 'All';
+            
+            // Filter Data
+            let filtered = messages;
+            if (catFilt !== 'All') {
+                filtered = filtered.filter(m => m.category && m.category.includes(catFilt));
+            }
+            if (prioFilt !== 'All') {
+                filtered = filtered.filter(m => m.priority === prioFilt);
+            }
+
             const bluePin = L.divIcon({
                 className: 'custom-pin',
                 html: `<div style="width:12px;height:12px;background-color:#38bdf8;border-radius:50%;border:2px solid white;box-shadow:0 2px 5px rgba(0,0,0,0.25);"></div>`,
@@ -1771,44 +1815,129 @@
             });
             if(window.liveMarkers) window.liveMarkers.forEach(m => window.liveMap.removeLayer(m));
             window.liveMarkers = [];
-            if(window.liveHeatLayer) window.liveHeatLayer.setLatLngs([]);
-            messages.forEach(msg => {
+            
+            let heatPoints = [];
+            filtered.forEach(msg => {
                 if (msg.latitude && msg.longitude) {
-                    const m = L.marker([msg.latitude, msg.longitude], {icon: bluePin})
-                        .bindTooltip(msg.summary || msg.category || 'Complaint', {direction:'top'})
-                        .addTo(window.liveMap);
-                    window.liveMarkers.push(m);
-                    if(window.liveHeatLayer) window.liveHeatLayer.addLatLng([msg.latitude, msg.longitude, 1.0]);
+                    if (showPins) {
+                        const m = L.marker([msg.latitude, msg.longitude], {icon: bluePin})
+                            .bindTooltip(msg.summary || msg.category || 'Complaint', {direction:'top'})
+                            .addTo(window.liveMap);
+                        window.liveMarkers.push(m);
+                    }
+                    heatPoints.push([msg.latitude, msg.longitude, 1.0]);
                 }
             });
-            // Store for replay
-            window.liveMessagesData = messages;
+            
+            if(window.liveHeatLayer) {
+                if (showHeat) window.liveHeatLayer.setLatLngs(heatPoints);
+                else window.liveHeatLayer.setLatLngs([]);
+            }
+            
+            if (window.liveHexLayer) {
+                window.liveMap.removeLayer(window.liveHexLayer);
+                window.liveHexLayer = null;
+            }
+            
+            // Draw Hex Grid
+            if (showHex && typeof turf !== 'undefined') {
+                try {
+                    drawHexGrid(window.liveMap, filtered);
+                } catch(e) { console.error('Turf error:', e); }
+            }
         }
+
+        function drawHexGrid(map, messages) {
+            const bbox = [80.80, 26.70, 81.10, 27.00]; // Lucknow bbox [minX, minY, maxX, maxY]
+            const cellSide = 1.5; // kilometers
+            const hexGrid = turf.hexGrid(bbox, cellSide, {units: 'kilometers'});
+            
+            const pts = turf.featureCollection(
+                messages.filter(m => m.latitude && m.longitude)
+                        .map(m => turf.point([parseFloat(m.longitude), parseFloat(m.latitude)], m))
+            );
+            
+            hexGrid.features.forEach(hex => {
+                const ptsWithin = turf.pointsWithinPolygon(pts, hex);
+                hex.properties.count = ptsWithin.features.length;
+                const catCounts = {};
+                let budget = 0;
+                ptsWithin.features.forEach(pt => {
+                    const c = pt.properties.category || 'Unknown';
+                    catCounts[c] = (catCounts[c] || 0) + 1;
+                    if(pt.properties.estimated_budget) {
+                        let b = String(pt.properties.estimated_budget).replace(/[^0-9]/g, '');
+                        if(b) budget += parseInt(b);
+                    }
+                });
+                let topCat = 'None', max = 0;
+                for (let c in catCounts) { if(catCounts[c] > max) { max = catCounts[c]; topCat = c; } }
+                hex.properties.topCategory = topCat;
+                hex.properties.budget = budget;
+            });
+            
+            const maxCount = Math.max(...hexGrid.features.map(f => f.properties.count), 1);
+            if (window.liveHexLayer) map.removeLayer(window.liveHexLayer);
+            
+            window.liveHexLayer = L.geoJSON(hexGrid, {
+                style: function(feature) {
+                    const cnt = feature.properties.count;
+                    if (cnt === 0) return {color: '#10b981', weight: 1, opacity: 0.15, fillOpacity: 0};
+                    return {
+                        color: '#047857', weight: 1, opacity: 0.4,
+                        fillColor: '#10b981', fillOpacity: 0.1 + ((cnt / maxCount) * 0.7)
+                    };
+                },
+                onEachFeature: function(feature, layer) {
+                    layer.on({
+                        mouseover: function(e) {
+                            var l = e.target;
+                            l.setStyle({ weight: 2, color: '#1d4ed8', opacity: 0.8 });
+                            l.bringToFront();
+                        },
+                        mouseout: function(e) { window.liveHexLayer.resetStyle(e.target); }
+                    });
+                    if (feature.properties.count > 0) {
+                        const fmtB = feature.properties.budget > 10000000 ? '₹' + (feature.properties.budget/10000000).toFixed(1) + ' Cr' : '₹' + (feature.properties.budget/100000).toFixed(1) + ' L';
+                        const t = `
+                            <div class="font-sans min-w-[140px]">
+                                <div class="font-bold text-gray-900 border-b border-gray-200 pb-1 mb-1">Region Insights</div>
+                                <div class="text-xs text-gray-600 mb-0.5">Reports: <strong class="text-gray-900">${feature.properties.count}</strong></div>
+                                <div class="text-xs text-gray-600 mb-0.5">Top Issue: <strong class="text-gray-900">${feature.properties.topCategory}</strong></div>
+                                <div class="text-xs text-gray-600">Est. Budget: <strong class="text-gray-900">${fmtB}</strong></div>
+                            </div>`;
+                        layer.bindTooltip(t, {direction: 'center', className: 'shadow-xl border-0 rounded-lg p-3 bg-white/95 backdrop-blur'});
+                    }
+                }
+            }).addTo(map);
+        }
+
         // ────────────────────────────────────────────────────────────────
 
         // Initialize Open Source Maps (Leaflet + CartoDB Positron)
         function initMaps() {
+            const customMapStyle = 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}&apistyle=s.t:0%7Cs.e:l%7Cp.v:off%2Cs.t:0%7Cs.e:g.f%7Cp.c:0xf5f5f5%2Cs.t:4%7Cs.e:g.f%7Cp.c:0xffffff%2Cs.t:4%7Cs.e:g.s%7Cp.c:0xe0e0e0%2Cs.t:2%7Cs.e:g.f%7Cp.c:0xd0e6d0%2Cs.t:3%7Cs.e:g.f%7Cp.c:0xd0e6d0%2Cs.t:6%7Cs.e:g.f%7Cp.c:0xd4e4eb';
             if(document.getElementById('priority-map') && !window.priorityMap) {
-                window.priorityMap = L.map('priority-map', { zoomControl: false, attributionControl: false }).setView([26.8467, 80.9462], 12);
+                window.priorityMap = L.map('priority-map', { zoomControl: true, attributionControl: false }).setView([26.8467, 80.9462], 12);
                 applyLucknowGridAndLock(window.priorityMap, false);
-                L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-                    maxZoom: 19, subdomains: 'abcd', attribution: ''
+                L.tileLayer(customMapStyle, {
+                    maxZoom: 20, attribution: 'Google'
                 }).addTo(window.priorityMap);
                 setTimeout(placeRankedMarkers, 300);
             }
             if(document.getElementById('coordination-map') && !window.coordMap) {
-                window.coordMap = L.map('coordination-map', { zoomControl: false, attributionControl: false }).setView([26.8467, 80.9462], 12);
-                applyLucknowGridAndLock(window.coordMap, true);
-                L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-                    maxZoom: 19, subdomains: 'abcd'
+                window.coordMap = L.map('coordination-map', { zoomControl: true, attributionControl: false }).setView([26.8467, 80.9462], 12);
+                applyLucknowGridAndLock(window.coordMap, false);
+                L.tileLayer(customMapStyle, {
+                    maxZoom: 20, attribution: 'Google'
                 }).addTo(window.coordMap);
                 setTimeout(placeRankedMarkers, 300);
             }
             if(document.getElementById('live-heatmap') && !window.liveMap) {
-                window.liveMap = L.map('live-heatmap', { zoomControl: false, attributionControl: false }).setView([26.8467, 80.9462], 12);
-                applyLucknowGridAndLock(window.liveMap, true);
-                L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-                    maxZoom: 19, subdomains: 'abcd', attribution: ''
+                window.liveMap = L.map('live-heatmap', { zoomControl: true, attributionControl: false }).setView([26.8467, 80.9462], 12);
+                applyLucknowGridAndLock(window.liveMap, false);
+                L.tileLayer(customMapStyle, {
+                    maxZoom: 20, attribution: 'Google'
                 }).addTo(window.liveMap);
                 
                 if(typeof L.heatLayer !== 'undefined') {
@@ -1884,7 +2013,7 @@
                                 ${p.title}
                             </div>
                             <div class="text-[11px] text-gray-600 italic whitespace-normal max-w-md mb-1 leading-relaxed">
-                                🤖 ${p.justification || 'AI analysis pending...'}
+                                <span class="material-symbols-outlined text-[14px] text-white bg-blue-500 rounded-full align-middle not-italic mr-0.5" style="font-size:13px;line-height:13px;padding:2px;">info</span> ${p.justification || 'AI analysis pending...'}
                             </div>
                             <div class="text-xs text-gray-500">${p.demand_count} citizen proposals · ${p.unique_senders} unique voices</div>
                         </td>
@@ -1979,10 +2108,14 @@
                 if(splashScreen) splashScreen.style.opacity = '0';
                 setTimeout(() => {
                     if(splashScreen) splashScreen.style.display = 'none';
+                    // Initialize all maps now that splash is gone
+                    initMaps();
                     // Trigger initial fetch only after splash screen finishes
                     fetchMessages();
                     fetchRankedProjects();
                     setInterval(fetchMessages, 2000); // Resume polling
+                    // Re-run initMaps after data arrives (in case maps were null)
+                    setTimeout(initMaps, 2000);
                 }, 700); // wait for CSS fade transition
             }, totalDelay + 800);
         };
@@ -2123,29 +2256,37 @@
     }
     
     async function createSurvey() {
-        let q = document.getElementById('survey-q').value;
-        let opt = document.getElementById('survey-opt').value;
-        if(!q || !opt) return alert("Fill fields");
+        let q = document.getElementById('survey-q').value.trim();
+        let opt = document.getElementById('survey-opt').value.trim();
+        if(!q || !opt) return alert("Please fill in both the question and the options.");
         
-        const btn = event.target;
-        btn.disabled = true;
-        btn.textContent = 'Launching...';
+        // Split comma-separated options into array and trim whitespace
+        const optionsArr = opt.split(',').map(o => o.trim()).filter(o => o.length > 0);
+        if(optionsArr.length < 2) return alert("Please provide at least 2 comma-separated options.");
+
+        const btn = document.querySelector('[onclick="createSurvey()"]');
+        if(btn) { btn.disabled = true; btn.textContent = 'Launching...'; }
         
         try {
-            // Step 1: Create
+            // Step 1: Create — send options as comma-joined string (backend expects str)
             let res = await authFetch('/surveys', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({question: q, options: opt})
+                body: JSON.stringify({question: q, options: optionsArr.join(', ')})
             });
+            if (!res.ok) {
+                const errText = await res.text();
+                throw new Error(`Server error ${res.status}: ${errText}`);
+            }
             let data = await res.json();
             const newId = data.id;
+            if (!newId) throw new Error('No survey ID returned from server');
             
             // Step 2: Activate
             await authFetch(`/surveys/${newId}/activate`, {method: 'POST'});
             
             // Step 3: Broadcast
-            btn.textContent = 'Broadcasting...';
+            if(btn) btn.textContent = 'Broadcasting...';
             let bRes = await authFetch(`/surveys/${newId}/broadcast`, {method: 'POST'});
             let bData = await bRes.json();
             
@@ -2159,10 +2300,10 @@
                 alert(`✅ Survey created and set active. No citizen numbers found to broadcast yet — citizens who have previously submitted proposals will receive it automatically after their next interaction.`);
             }
         } catch(e) {
+            console.error('Survey error:', e);
             alert("Error launching survey: " + e.message);
         } finally {
-            btn.disabled = false;
-            btn.textContent = 'Create & Launch';
+            if(btn) { btn.disabled = false; btn.innerHTML = '<span class="material-symbols-outlined text-[18px]">send</span> Create & Launch via WhatsApp'; }
         }
     }
     

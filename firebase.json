@@ -16,6 +16,12 @@
   },
   "functions": {
     "source": ".",
-    "runtime": "python311"
+    "runtime": "python311",
+    "secretEnvironmentVariables": [
+      { "key": "GEMINI_API_KEY", "secret": "GEMINI_API_KEY" },
+      { "key": "TWILIO_ACCOUNT_SID", "secret": "TWILIO_ACCOUNT_SID" },
+      { "key": "TWILIO_AUTH_TOKEN", "secret": "TWILIO_AUTH_TOKEN" },
+      { "key": "TWILIO_WHATSAPP_NUMBER", "secret": "TWILIO_WHATSAPP_NUMBER" }
+    ]
   }
 }

@@ -1,0 +1,180 @@
+{"kind":"deck","id":"pr/5pq7da","name":"Deck"}
+{"kind":"layout","layoutId":"ef602fff-5b04-4ce5-9703-2ce1d83e78f1","name":"Master","type":"master"}
+{"kind":"layout","layoutId":"e11c0236-c6d7-46a4-8db5-d7a0fe69c2c7","name":"Title Slide","type":"title"}
+{"kind":"slide","id":"sl/s575gq","slide":1,"title":"urbanOS","textShapes":9}
+{"kind":"textbox","id":"sh/epkzupwb","slide":1,"text":"urbanOS","textPreview":"urbanOS","textChars":7,"textLines":1,"bbox":[64,56,460,86]}
+{"kind":"textbox","id":"sh/pg3ex0nu","slide":1,"text":"People's Priority","textPreview":"People's Priority","textChars":17,"textLines":1,"bbox":[68,146,520,40]}
+{"kind":"textbox","id":"sh/wval87ed","slide":1,"text":"An AI layer between citizen voice and MP development decisions.","textPreview":"An AI layer between citizen voice and MP development decisions.","textChars":63,"textLines":1,"bbox":[68,205,600,74]}
+{"kind":"shape","id":"sh/7mp0bi9s","slide":1,"bbox":[72,390,480,126]}
+{"kind":"textbox","id":"sh/e1w7mp0b","slide":1,"text":"Team","textPreview":"Team","textChars":4,"textLines":1,"bbox":[102,418,90,24]}
+{"kind":"textbox","id":"sh/psfil0rq","slide":1,"text":"afterburners","textPreview":"afterburners","textChars":12,"textLines":1,"bbox":[102,448,250,34]}
+{"kind":"textbox","id":"sh/w7mp0bi9","slide":1,"text":"Team leader: Shikhar Shahi","textPreview":"Team leader: Shikhar Shahi","textChars":26,"textLines":1,"bbox":[102,488,320,26]}
+{"kind":"textbox","id":"sh/7u54zido","slide":1,"text":"PHOTO","textPreview":"PHOTO","textChars":5,"textLines":1,"bbox":[802,86,344,468]}
+{"kind":"textbox","id":"sh/ed8bat47","slide":1,"text":"UrbanOS","textPreview":"UrbanOS","textChars":7,"textLines":1,"bbox":[64,660,180,24]}
+{"kind":"textbox","id":"sh/onyd0z61","slide":1,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[1140,660,72,24]}
+{"kind":"notes","id":"nt/s575gq","slide":1,"text":""}
+{"kind":"slide","id":"sl/d8q0ij","slide":2,"title":"PROBLEM STATEMENT","textShapes":10}
+{"kind":"textbox","id":"sh/cbulwval","slide":2,"text":"PROBLEM STATEMENT","textPreview":"PROBLEM STATEMENT","textChars":17,"textLines":1,"bbox":[64,52,360,26]}
+{"kind":"textbox","id":"sh/nqxs72x4","slide":2,"text":"Citizen priorities reach the office as noise, not a ranked planning queue","textPreview":"Citizen priorities reach the office as noise, not a ranked planning queue","textChars":73,"textLines":1,"bbox":[64,92,730,96]}
+{"kind":"textbox","id":"sh/u54zidon","slide":2,"text":"MP offices hear real demand every week, but the inputs arrive in formats that cannot be compared fairly.","textPreview":"MP offices hear real demand every week, but the inputs arrive in formats that cannot be compared fairly.","textChars":104,"textLines":1,"bbox":[66,190,760,54]}
+{"kind":"shape","id":"sh/czed8v6p","slide":2,"bbox":[78,298,12,12]}
+{"kind":"textbox","id":"sh/neloj2t8","slide":2,"text":"Requests arrive through public meetings, letters, WhatsApp, social posts, grievance portals, photos and calls.","textPreview":"Requests arrive through public meetings, letters, WhatsApp, social posts, grievance portals, photos and calls.","textChars":110,"textLines":1,"bbox":[106,292,582,44]}
+{"kind":"shape","id":"sh/ytsvu9kn","slide":2,"bbox":[78,374,12,12]}
+{"kind":"textbox","id":"sh/58z25kb6","slide":2,"text":"There is no objective way to consolidate repeat asks, spot recurring needs, and weigh them against real infrastructure gaps.","textPreview":"There is no objective way to consolidate repeat asks, spot recurring needs, and weigh them against real infrastructure gaps.","textChars":124,"textLines":1,"bbox":[106,368,582,44]}
+{"kind":"shape","id":"sh/gn29gr2p","slide":2,"bbox":[78,450,12,12]}
+{"kind":"textbox","id":"sh/u54zidon","slide":2,"text":"The result is an unfair choice between projects that sound urgent and projects that are measurably high priority.","textPreview":"The result is an unfair choice between projects that sound urgent and projects that are measurably high priority.","textChars":113,"textLines":1,"bbox":[106,444,582,44]}
+{"kind":"shape","id":"sh/nqxs72x4","slide":2,"bbox":[780,398,350,182]}
+{"kind":"textbox","id":"sh/cbulwval","slide":2,"text":"The decision problem","textPreview":"The decision problem","textChars":20,"textLines":1,"bbox":[816,426,280,34]}
+{"kind":"textbox","id":"sh/5sneloj2","slide":2,"text":"School, road, drainage, or health centre. Which moves first?","textPreview":"School, road, drainage, or health centre. Which moves first?","textChars":60,"textLines":1,"bbox":[816,478,280,58]}
+{"kind":"textbox","id":"sh/ytsvu9kn","slide":2,"text":"UrbanOS","textPreview":"UrbanOS","textChars":7,"textLines":1,"bbox":[64,660,180,24]}
+{"kind":"textbox","id":"sh/neloj2t8","slide":2,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[1140,660,72,24]}
+{"kind":"image","id":"im/wfyxobm5","slide":2,"name":"","alt":"2D illustration of online citizen messages","bbox":[820,250,330,170]}
+{"kind":"notes","id":"nt/d8q0ij","slide":2,"text":""}
+{"kind":"slide","id":"sl/ybxatg","slide":3,"title":"CHALLENGE","textShapes":17}
+{"kind":"textbox","id":"sh/9gr2p8nq","slide":3,"text":"CHALLENGE","textPreview":"CHALLENGE","textChars":9,"textLines":1,"bbox":[64,52,360,26]}
+{"kind":"textbox","id":"sh/2p8nqxs7","slide":3,"text":"The product must listen in many formats and still recommend action","textPreview":"The product must listen in many formats and still recommend action","textChars":66,"textLines":1,"bbox":[64,92,730,96]}
+{"kind":"textbox","id":"sh/ra5gbq1o","slide":3,"text":"The evaluation asks for a multilingual AI platform that converts citizen suggestions into ranked works an MP can act on.","textPreview":"The evaluation asks for a multilingual AI platform that converts citizen suggestions into ranked works an MP can act on.","textChars":120,"textLines":1,"bbox":[66,190,760,54]}
+{"kind":"shape","id":"sh/94fu18jq","slide":3,"bbox":[82,302,238,198]}
+{"kind":"textbox","id":"sh/2hwfyxob","slide":3,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[106,328,60,32]}
+{"kind":"textbox","id":"sh/r2p8nqxs","slide":3,"text":"Intake","textPreview":"Intake","textChars":6,"textLines":1,"bbox":[106,372,180,34]}
+{"kind":"textbox","id":"sh/kb6xkf6d","slide":3,"text":"Voice, text, photos, location pins and messaging apps.","textPreview":"Voice, text, photos, location pins and messaging apps.","textChars":54,"textLines":1,"bbox":[106,420,178,80]}
+{"kind":"shape","id":"sh/9w3m94fu","slide":3,"bbox":[368,302,238,198]}
+{"kind":"textbox","id":"sh/xczed8v6","slide":3,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[392,328,60,32]}
+{"kind":"textbox","id":"sh/8v6psfil","slide":3,"text":"Sensemaking","textPreview":"Sensemaking","textChars":11,"textLines":1,"bbox":[392,372,180,34]}
+{"kind":"textbox","id":"sh/fa9w3m94","slide":3,"text":"Surface recurring themes and map demand hotspots.","textPreview":"Surface recurring themes and map demand hotspots.","textChars":49,"textLines":1,"bbox":[392,420,178,80]}
+{"kind":"shape","id":"sh/qpg3ex0n","slide":3,"bbox":[654,302,238,198]}
+{"kind":"textbox","id":"sh/x4nap4r6","slide":3,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[678,328,60,32]}
+{"kind":"textbox","id":"sh/8jqh0fep","slide":3,"text":"Evidence","textPreview":"Evidence","textChars":8,"textLines":1,"bbox":[678,372,180,34]}
+{"kind":"textbox","id":"sh/fyxobm58","slide":3,"text":"Combine feedback with demographic, infrastructure and public datasets.","textPreview":"Combine feedback with demographic, infrastructure and public datasets.","textChars":70,"textLines":1,"bbox":[678,420,178,80]}
+{"kind":"shape","id":"sh/qd4vmtwr","slide":3,"bbox":[940,302,238,198]}
+{"kind":"textbox","id":"sh/xs72x4na","slide":3,"text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[964,328,60,32]}
+{"kind":"textbox","id":"sh/87ed8bat","slide":3,"text":"Action","textPreview":"Action","textChars":6,"textLines":1,"bbox":[964,372,180,34]}
+{"kind":"textbox","id":"sh/4fu18jqh","slide":3,"text":"Recommend and rank high-priority works.","textPreview":"Recommend and rank high-priority works.","textChars":39,"textLines":1,"bbox":[964,420,178,80]}
+{"kind":"textbox","id":"sh/x0nuxc3y","slide":3,"text":"UrbanOS","textPreview":"UrbanOS","textChars":7,"textLines":1,"bbox":[64,660,180,24]}
+{"kind":"textbox","id":"sh/m94fu18j","slide":3,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[1140,660,72,24]}
+{"kind":"image","id":"im/5sneloj2","slide":3,"name":"","alt":"2D illustration of civic building development","bbox":[896,118,260,150]}
+{"kind":"notes","id":"nt/ybxatg","slide":3,"text":""}
+{"kind":"slide","id":"sl/pkwemk","slide":4,"title":"SOLUTION","textShapes":20}
+{"kind":"textbox","id":"sh/tcj6tova","slide":4,"text":"SOLUTION","textPreview":"SOLUTION","textChars":8,"textLines":1,"bbox":[64,52,360,26]}
+{"kind":"textbox","id":"sh/il0rqd4v","slide":4,"text":"UrbanOS turns messy public input into a defensible priority list","textPreview":"UrbanOS turns messy public input into a defensible priority list","textChars":64,"textLines":1,"bbox":[64,92,730,96]}
+{"kind":"textbox","id":"sh/b6xkf6dc","slide":4,"text":"It meets citizens where they already communicate, then gives the MP office a planning workflow.","textPreview":"It meets citizens where they already communicate, then gives the MP office a planning workflow.","textChars":95,"textLines":1,"bbox":[66,190,760,54]}
+{"kind":"shape","id":"sh/t47y1kre","slide":4,"bbox":[66,326,194,140]}
+{"kind":"textbox","id":"sh/idonyd0z","slide":4,"text":"Citizen input","textPreview":"Citizen input","textChars":13,"textLines":1,"bbox":[86,354,150,28]}
+{"kind":"textbox","id":"sh/byhgn29g","slide":4,"text":"WhatsApp or SMS","textPreview":"WhatsApp or SMS","textChars":15,"textLines":1,"bbox":[86,392,150,54]}
+{"kind":"textbox","id":"sh/0fepkzup","slide":4,"text":"->","textPreview":"->","textChars":2,"textLines":1,"bbox":[264,380,38,28]}
+{"kind":"shape","id":"sh/p0bi9s36","slide":4,"bbox":[301,326,194,140]}
+{"kind":"textbox","id":"sh/x0nuxc3y","slide":4,"text":"AI triage","textPreview":"AI triage","textChars":9,"textLines":1,"bbox":[321,354,150,28]}
+{"kind":"textbox","id":"sh/4fu18jqh","slide":4,"text":"category, priority, zone, budget","textPreview":"category, priority, zone, budget","textChars":32,"textLines":1,"bbox":[321,392,150,54]}
+{"kind":"textbox","id":"sh/fu18jqh0","slide":4,"text":"->","textPreview":"->","textChars":2,"textLines":1,"bbox":[499,380,38,28]}
+{"kind":"shape","id":"sh/m94fu18j","slide":4,"bbox":[536,326,194,140]}
+{"kind":"textbox","id":"sh/xobm58z2","slide":4,"text":"Cluster","textPreview":"Cluster","textChars":7,"textLines":1,"bbox":[556,354,150,28]}
+{"kind":"textbox","id":"sh/83itgfml","slide":4,"text":"same issue, same area","textPreview":"same issue, same area","textChars":21,"textLines":1,"bbox":[556,392,150,54]}
+{"kind":"textbox","id":"sh/fil0rqd4","slide":4,"text":"->","textPreview":"->","textChars":2,"textLines":1,"bbox":[734,380,38,28]}
+{"kind":"shape","id":"sh/qxs72x4n","slide":4,"bbox":[771,326,194,140]}
+{"kind":"textbox","id":"sh/xkf6dcbu","slide":4,"text":"Rank","textPreview":"Rank","textChars":4,"textLines":1,"bbox":[791,354,150,28]}
+{"kind":"textbox","id":"sh/4zidonyd","slide":4,"text":"demand x urgency x gap","textPreview":"demand x urgency x gap","textChars":22,"textLines":1,"bbox":[791,392,150,54]}
+{"kind":"textbox","id":"sh/0fepkzup","slide":4,"text":"->","textPreview":"->","textChars":2,"textLines":1,"bbox":[969,380,38,28]}
+{"kind":"shape","id":"sh/p0bi9s36","slide":4,"bbox":[1006,326,194,140]}
+{"kind":"textbox","id":"sh/i9s36hcr","slide":4,"text":"Close loop","textPreview":"Close loop","textChars":10,"textLines":1,"bbox":[1026,354,150,28]}
+{"kind":"textbox","id":"sh/bulwval8","slide":4,"text":"sanction and notify","textPreview":"sanction and notify","textChars":19,"textLines":1,"bbox":[1026,392,150,54]}
+{"kind":"textbox","id":"sh/032lszqt","slide":4,"text":"The MP does not get another inbox. They get a ranked queue with evidence and a feedback loop.","textPreview":"The MP does not get another inbox. They get a ranked queue with evidence and a feedback loop.","textChars":93,"textLines":1,"bbox":[156,526,920,46]}
+{"kind":"textbox","id":"sh/tovahoza","slide":4,"text":"UrbanOS","textPreview":"UrbanOS","textChars":7,"textLines":1,"bbox":[64,660,180,24]}
+{"kind":"textbox","id":"sh/ixczed8v","slide":4,"text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[1140,660,72,24]}
+{"kind":"image","id":"im/d4vmtwra","slide":4,"name":"","alt":"2D map and location illustration","bbox":[862,106,270,170]}
+{"kind":"notes","id":"nt/pkwemk","slide":4,"text":""}
+{"kind":"slide","id":"sl/s69g0y","slide":5,"title":"PRODUCT PROOF","textShapes":11}
+{"kind":"textbox","id":"sh/sfil0rqd","slide":5,"text":"PRODUCT PROOF","textPreview":"PRODUCT PROOF","textChars":13,"textLines":1,"bbox":[64,52,360,26]}
+{"kind":"textbox","id":"sh/zupwb2hw","slide":5,"text":"The raw feed is now a live constituency command surface","textPreview":"The raw feed is now a live constituency command surface","textChars":55,"textLines":1,"bbox":[64,92,730,96]}
+{"kind":"textbox","id":"sh/a9w3m94f","slide":5,"text":"The current build shows incoming proposals, map hotspots, filters and telemetry in one operational view.","textPreview":"The current build shows incoming proposals, map hotspots, filters and telemetry in one operational view.","textChars":104,"textLines":1,"bbox":[66,190,760,54]}
+{"kind":"shape","id":"sh/orytsvu9","slide":5,"bbox":[866,284,292,340]}
+{"kind":"textbox","id":"sh/z61032ls","slide":5,"text":"500","textPreview":"500","textChars":3,"textLines":1,"bbox":[900,318,240,44]}
+{"kind":"textbox","id":"sh/al87ed8b","slide":5,"text":"proposals loaded into the live feed","textPreview":"proposals loaded into the live feed","textChars":35,"textLines":1,"bbox":[900,362,230,44]}
+{"kind":"textbox","id":"sh/hk3q5o7q","slide":5,"text":"map","textPreview":"map","textChars":3,"textLines":1,"bbox":[900,426,240,44]}
+{"kind":"textbox","id":"sh/oza1gvy9","slide":5,"text":"hotspots, pins and raw intake side by side","textPreview":"hotspots, pins and raw intake side by side","textChars":42,"textLines":1,"bbox":[900,470,230,44]}
+{"kind":"textbox","id":"sh/29gr2p8n","slide":5,"text":"real-time","textPreview":"real-time","textChars":9,"textLines":1,"bbox":[900,532,240,44]}
+{"kind":"textbox","id":"sh/vu9knih4","slide":5,"text":"webhook incident stream for aides","textPreview":"webhook incident stream for aides","textChars":33,"textLines":1,"bbox":[900,576,230,44]}
+{"kind":"textbox","id":"sh/kf6dcbul","slide":5,"text":"UrbanOS","textPreview":"UrbanOS","textChars":7,"textLines":1,"bbox":[64,660,180,24]}
+{"kind":"textbox","id":"sh/d0z61032","slide":5,"text":"05","textPreview":"05","textChars":2,"textLines":1,"bbox":[1140,660,72,24]}
+{"kind":"image","id":"im/0nuxc3yl","slide":5,"name":"","geometry":"roundRect","alt":"UrbanOS raw feed and live map screenshot","bbox":[70,274,760,352]}
+{"kind":"notes","id":"nt/s69g0y","slide":5,"text":""}
+{"kind":"slide","id":"sl/x35k42","slide":6,"title":"AI EXECUTION","textShapes":11}
+{"kind":"textbox","id":"sh/bulwval8","slide":6,"text":"AI EXECUTION","textPreview":"AI EXECUTION","textChars":12,"textLines":1,"bbox":[64,52,360,26]}
+{"kind":"textbox","id":"sh/0fepkzup","slide":6,"text":"The AI is doing civic work, not decoration","textPreview":"The AI is doing civic work, not decoration","textChars":42,"textLines":1,"bbox":[64,92,730,96]}
+{"kind":"textbox","id":"sh/p0bi9s36","slide":6,"text":"Gemini is used where judgment and structure are needed, while the backend keeps every output reviewable.","textPreview":"Gemini is used where judgment and structure are needed, while the backend keeps every output reviewable.","textChars":104,"textLines":1,"bbox":[66,190,760,54]}
+{"kind":"shape","id":"sh/bi9s36hc","slide":6,"bbox":[70,278,350,258]}
+{"kind":"textbox","id":"sh/032lszqt","slide":6,"text":"Structured triage","textPreview":"Structured triage","textChars":17,"textLines":1,"bbox":[104,314,270,34]}
+{"kind":"textbox","id":"sh/tovahoza","slide":6,"text":"Schema-constrained JSON for category, priority, feasibility, location, budget, language, zone and semantic tag.","textPreview":"Schema-constrained JSON for category, priority, feasibility, location, budget, language, zone and semantic tag.","textChars":111,"textLines":1,"bbox":[104,368,270,112]}
+{"kind":"shape","id":"sh/il0rqd4v","slide":6,"bbox":[465,278,350,258]}
+{"kind":"textbox","id":"sh/b6xkf6dc","slide":6,"text":"Multimodal evidence","textPreview":"Multimodal evidence","textChars":19,"textLines":1,"bbox":[499,314,270,34]}
+{"kind":"textbox","id":"sh/32lszqtc","slide":6,"text":"Photo and voice pathways turn unstructured field reports into visible evidence and searchable civic records.","textPreview":"Photo and voice pathways turn unstructured field reports into visible evidence and searchable civic records.","textChars":108,"textLines":1,"bbox":[499,368,270,112]}
+{"kind":"shape","id":"sh/ahoza1gv","slide":6,"bbox":[860,278,350,258]}
+{"kind":"textbox","id":"sh/l87ed8ba","slide":6,"text":"Grounded agent","textPreview":"Grounded agent","textChars":14,"textLines":1,"bbox":[894,314,270,34]}
+{"kind":"textbox","id":"sh/sneloj2t","slide":6,"text":"The RAG assistant answers from connected proposals, sanctions, surveys and uploaded datasets, with graceful fallback.","textPreview":"The RAG assistant answers from connected proposals, sanctions, surveys and uploaded datasets, with graceful fallback.","textChars":117,"textLines":1,"bbox":[894,368,270,112]}
+{"kind":"textbox","id":"sh/3ex0nuxc","slide":6,"text":"UrbanOS","textPreview":"UrbanOS","textChars":7,"textLines":1,"bbox":[64,660,180,24]}
+{"kind":"textbox","id":"sh/at47y1kr","slide":6,"text":"06","textPreview":"06","textChars":2,"textLines":1,"bbox":[1140,660,72,24]}
+{"kind":"image","id":"im/36hcrmhk","slide":6,"name":"","alt":"2D analytics illustration","bbox":[886,96,250,150]}
+{"kind":"notes","id":"nt/x35k42","slide":6,"text":""}
+{"kind":"slide","id":"sl/u6xhpk","slide":7,"title":"PRIORITIZATION","textShapes":7}
+{"kind":"textbox","id":"sh/o7qpg3ex","slide":7,"text":"PRIORITIZATION","textPreview":"PRIORITIZATION","textChars":14,"textLines":1,"bbox":[64,52,360,26]}
+{"kind":"textbox","id":"sh/vmtwra5g","slide":7,"text":"Ranking combines public demand with measurable need","textPreview":"Ranking combines public demand with measurable need","textChars":51,"textLines":1,"bbox":[64,92,730,96]}
+{"kind":"textbox","id":"sh/61032lsz","slide":7,"text":"UrbanOS clusters repeated requests, scores urgency, then applies a project-specific infrastructure gap signal.","textPreview":"UrbanOS clusters repeated requests, scores urgency, then applies a project-specific infrastructure gap signal.","textChars":110,"textLines":1,"bbox":[66,190,760,54]}
+{"kind":"shape","id":"sh/oj2t83it","slide":7,"bbox":[76,294,440,210]}
+{"kind":"textbox","id":"sh/vy90je9c","slide":7,"text":"Impact Score","textPreview":"Impact Score","textChars":12,"textLines":1,"bbox":[114,334,260,36]}
+{"kind":"textbox","id":"sh/6dcbulwv","slide":7,"text":"demand count x priority score x (1 + category gap / 10)","textPreview":"demand count x priority score x (1 + category gap / 10)","textChars":55,"textLines":1,"bbox":[114,390,350,82]}
+{"kind":"textbox","id":"sh/onyd0z61","slide":7,"text":"UrbanOS","textPreview":"UrbanOS","textChars":7,"textLines":1,"bbox":[64,660,180,24]}
+{"kind":"textbox","id":"sh/epkzupwb","slide":7,"text":"07","textPreview":"07","textChars":2,"textLines":1,"bbox":[1140,660,72,24]}
+{"kind":"image","id":"im/gbq1oryt","slide":7,"name":"","alt":"2D illustration of development work under construction","bbox":[112,498,276,118]}
+{"kind":"image","id":"im/cbulwval","slide":7,"name":"","geometry":"roundRect","alt":"UrbanOS planning queue screenshot","bbox":[570,274,610,330]}
+{"kind":"notes","id":"nt/u6xhpk","slide":7,"text":""}
+{"kind":"slide","id":"sl/feklxu","slide":8,"title":"DEPLOYMENT","textShapes":16}
+{"kind":"textbox","id":"sh/tcj6tova","slide":8,"text":"DEPLOYMENT","textPreview":"DEPLOYMENT","textChars":10,"textLines":1,"bbox":[64,52,360,26]}
+{"kind":"textbox","id":"sh/il0rqd4v","slide":8,"text":"The prototype can run in an MP office without a new citizen app","textPreview":"The prototype can run in an MP office without a new citizen app","textChars":63,"textLines":1,"bbox":[64,92,730,96]}
+{"kind":"textbox","id":"sh/b6xkf6dc","slide":8,"text":"It uses familiar channels for citizens and simple hosted infrastructure for the office.","textPreview":"It uses familiar channels for citizens and simple hosted infrastructure for the office.","textChars":87,"textLines":1,"bbox":[66,190,760,54]}
+{"kind":"textbox","id":"sh/t47y1kre","slide":8,"text":"Citizen channels","textPreview":"Citizen channels","textChars":16,"textLines":1,"bbox":[92,292,260,32]}
+{"kind":"textbox","id":"sh/idonyd0z","slide":8,"text":"WhatsApp, SMS, voice notes, photos and location pins.","textPreview":"WhatsApp, SMS, voice notes, photos and location pins.","textChars":53,"textLines":1,"bbox":[92,330,470,44]}
+{"kind":"textbox","id":"sh/byhgn29g","slide":8,"text":"Backend","textPreview":"Backend","textChars":7,"textLines":1,"bbox":[92,396,260,32]}
+{"kind":"textbox","id":"sh/0fepkzup","slide":8,"text":"FastAPI, Firestore, Firebase Hosting and Cloud Functions.","textPreview":"FastAPI, Firestore, Firebase Hosting and Cloud Functions.","textChars":57,"textLines":1,"bbox":[92,434,470,44]}
+{"kind":"textbox","id":"sh/p0bi9s36","slide":8,"text":"AI layer","textPreview":"AI layer","textChars":8,"textLines":1,"bbox":[92,500,260,32]}
+{"kind":"textbox","id":"sh/x0nuxc3y","slide":8,"text":"Gemini triage, semantic clustering and grounded insights.","textPreview":"Gemini triage, semantic clustering and grounded insights.","textChars":57,"textLines":1,"bbox":[92,538,470,44]}
+{"kind":"shape","id":"sh/4fu18jqh","slide":8,"bbox":[724,424,380,178]}
+{"kind":"textbox","id":"sh/fu18jqh0","slide":8,"text":"Inclusion by design","textPreview":"Inclusion by design","textChars":19,"textLines":1,"bbox":[764,454,290,36]}
+{"kind":"textbox","id":"sh/m94fu18j","slide":8,"text":"multilingual","textPreview":"multilingual","textChars":12,"textLines":1,"bbox":[764,510,142,34]}
+{"kind":"textbox","id":"sh/xobm58z2","slide":8,"text":"low bandwidth","textPreview":"low bandwidth","textChars":13,"textLines":1,"bbox":[922,510,154,34]}
+{"kind":"textbox","id":"sh/83itgfml","slide":8,"text":"voice first","textPreview":"voice first","textChars":11,"textLines":1,"bbox":[764,558,124,34]}
+{"kind":"textbox","id":"sh/fil0rqd4","slide":8,"text":"SMS fallback","textPreview":"SMS fallback","textChars":12,"textLines":1,"bbox":[904,558,150,34]}
+{"kind":"textbox","id":"sh/qxs72x4n","slide":8,"text":"UrbanOS","textPreview":"UrbanOS","textChars":7,"textLines":1,"bbox":[64,660,180,24]}
+{"kind":"textbox","id":"sh/xkf6dcbu","slide":8,"text":"08","textPreview":"08","textChars":2,"textLines":1,"bbox":[1140,660,72,24]}
+{"kind":"image","id":"im/lkjm1cfa","slide":8,"name":"","alt":"2D project feedback illustration","bbox":[764,276,260,134]}
+{"kind":"notes","id":"nt/feklxu","slide":8,"text":""}
+{"kind":"slide","id":"sl/horph1","slide":9,"title":"WHY IT SCORES","textShapes":23}
+{"kind":"textbox","id":"sh/e1w7mp0b","slide":9,"text":"WHY IT SCORES","textPreview":"WHY IT SCORES","textChars":13,"textLines":1,"bbox":[64,52,360,26]}
+{"kind":"textbox","id":"sh/psfil0rq","slide":9,"text":"UrbanOS answers the judging rubric with a running product","textPreview":"UrbanOS answers the judging rubric with a running product","textChars":57,"textLines":1,"bbox":[64,92,730,96]}
+{"kind":"textbox","id":"sh/w7mp0bi9","slide":9,"text":"The pitch is simple: better listening, fairer ranking, faster action and clearer citizen feedback.","textPreview":"The pitch is simple: better listening, fairer ranking, faster action and clearer citizen feedback.","textChars":98,"textLines":1,"bbox":[66,190,760,54]}
+{"kind":"textbox","id":"sh/epkzupwb","slide":9,"text":"25%","textPreview":"25%","textChars":3,"textLines":1,"bbox":[84,266,80,36]}
+{"kind":"textbox","id":"sh/pg3ex0nu","slide":9,"text":"AI / Technical Execution","textPreview":"AI / Technical Execution","textChars":24,"textLines":1,"bbox":[190,266,360,26]}
+{"kind":"textbox","id":"sh/wval87ed","slide":9,"text":"Structured triage, multimodal evidence, semantic clusters and grounded RAG.","textPreview":"Structured triage, multimodal evidence, semantic clusters and grounded RAG.","textChars":75,"textLines":1,"bbox":[560,268,580,34]}
+{"kind":"textbox","id":"sh/36hcrmhk","slide":9,"text":"25%","textPreview":"25%","textChars":3,"textLines":1,"bbox":[84,326,80,36]}
+{"kind":"textbox","id":"sh/eloj2t83","slide":9,"text":"Deployability & Scalability","textPreview":"Deployability & Scalability","textChars":27,"textLines":1,"bbox":[190,326,360,26]}
+{"kind":"textbox","id":"sh/wra5gbq1","slide":9,"text":"Firebase plus FastAPI can run for a constituency and scale toward district tenancy.","textPreview":"Firebase plus FastAPI can run for a constituency and scale toward district tenancy.","textChars":83,"textLines":1,"bbox":[560,328,580,34]}
+{"kind":"textbox","id":"sh/lc7u54zi","slide":9,"text":"20%","textPreview":"20%","textChars":3,"textLines":1,"bbox":[84,386,80,36]}
+{"kind":"textbox","id":"sh/eloj2t83","slide":9,"text":"Problem-Solution Fit","textPreview":"Problem-Solution Fit","textChars":20,"textLines":1,"bbox":[190,386,360,26]}
+{"kind":"textbox","id":"sh/36hcrmhk","slide":9,"text":"Directly targets MP offices deciding between competing public works.","textPreview":"Directly targets MP offices deciding between competing public works.","textChars":68,"textLines":1,"bbox":[560,388,580,34]}
+{"kind":"textbox","id":"sh/wfyxobm5","slide":9,"text":"15%","textPreview":"15%","textChars":3,"textLines":1,"bbox":[84,446,80,36]}
+{"kind":"textbox","id":"sh/l0rqd4vm","slide":9,"text":"Inclusivity & Accessibility","textPreview":"Inclusivity & Accessibility","textChars":27,"textLines":1,"bbox":[190,446,360,26]}
+{"kind":"textbox","id":"sh/ed8bat47","slide":9,"text":"WhatsApp/SMS, voice, photos, multilingual replies and low-connectivity fallback.","textPreview":"WhatsApp/SMS, voice, photos, multilingual replies and low-connectivity fallback.","textChars":80,"textLines":1,"bbox":[560,448,580,34]}
+{"kind":"textbox","id":"sh/7u54zido","slide":9,"text":"10%","textPreview":"10%","textChars":3,"textLines":1,"bbox":[84,506,80,36]}
+{"kind":"textbox","id":"sh/w7mp0bi9","slide":9,"text":"Impact Potential","textPreview":"Impact Potential","textChars":16,"textLines":1,"bbox":[190,506,360,26]}
+{"kind":"textbox","id":"sh/psfil0rq","slide":9,"text":"Creates a defensible priority layer for many citizens and many local projects.","textPreview":"Creates a defensible priority layer for many citizens and many local projects.","textChars":78,"textLines":1,"bbox":[560,508,580,34]}
+{"kind":"textbox","id":"sh/9w3m94fu","slide":9,"text":"5%","textPreview":"5%","textChars":2,"textLines":1,"bbox":[84,566,80,36]}
+{"kind":"textbox","id":"sh/kb6xkf6d","slide":9,"text":"Presentation & Clarity","textPreview":"Presentation & Clarity","textChars":22,"textLines":1,"bbox":[190,566,360,26]}
+{"kind":"textbox","id":"sh/rqd4vmtw","slide":9,"text":"A non-technical office can understand what to act on in minutes.","textPreview":"A non-technical office can understand what to act on in minutes.","textChars":64,"textLines":1,"bbox":[560,568,580,34]}
+{"kind":"textbox","id":"sh/25kb6xkf","slide":9,"text":"UrbanOS","textPreview":"UrbanOS","textChars":7,"textLines":1,"bbox":[64,660,180,24]}
+{"kind":"textbox","id":"sh/9knih4by","slide":9,"text":"09","textPreview":"09","textChars":2,"textLines":1,"bbox":[1140,660,72,24]}
+{"kind":"image","id":"im/u9knih4b","slide":9,"name":"","alt":"Small 2D civic building illustration","bbox":[1002,70,160,98]}
+{"kind":"notes","id":"nt/horph1","slide":9,"text":""}
+{"kind":"slide","id":"sl/0y96c5","slide":10,"title":"Testing","textShapes":3}
+{"kind":"textbox","id":"sh/2x4nap4r","slide":10,"text":"Testing","textPreview":"Testing","textChars":7,"textLines":1,"bbox":[64,56,520,72]}
+{"kind":"shape","id":"sh/donyd0z6","slide":10,"bbox":[80,170,1120,430]}
+{"kind":"textbox","id":"sh/k3q5o7qp","slide":10,"text":"UrbanOS","textPreview":"UrbanOS","textChars":7,"textLines":1,"bbox":[64,660,180,24]}
+{"kind":"textbox","id":"sh/val87ed8","slide":10,"text":"10","textPreview":"10","textChars":2,"textLines":1,"bbox":[1140,660,72,24]}
+{"kind":"notes","id":"nt/0y96c5","slide":10,"text":""}

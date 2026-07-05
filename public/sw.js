@@ -1,5 +1,5 @@
 
-const CACHE_NAME = 'urbanos-cache-v2';
+const CACHE_NAME = 'urbanos-cache-v4';
 const urlsToCache = [
   '/',
   '/index.html',
@@ -30,19 +30,27 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener('fetch', event => {
-
   // Only cache GET requests
   if (event.request.method !== 'GET') return;
   // Don't cache API calls
-  if (event.request.url.includes('/messages')) return;
-  
+  if (event.request.url.includes('/messages') || event.request.url.includes('/projects')) return;
+
+  // Use Network-First strategy
   event.respondWith(
-    caches.match(event.request)
-      .then(response => {
-        if (response) {
-          return response;
-        }
-        return fetch(event.request);
-      })
+    fetch(event.request).then(response => {
+      // Check if we received a valid response
+      if (!response || response.status !== 200 || response.type !== 'basic') {
+        return response;
+      }
+      // Clone response and update cache
+      var responseToCache = response.clone();
+      caches.open(CACHE_NAME).then(cache => {
+        cache.put(event.request, responseToCache);
+      });
+      return response;
+    }).catch(() => {
+      // If network fails, try cache
+      return caches.match(event.request);
+    })
   );
 });
