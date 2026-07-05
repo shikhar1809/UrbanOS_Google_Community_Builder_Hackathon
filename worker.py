@@ -70,7 +70,7 @@ async def process_voice_note(media_url: str, phone_number: str):
         # 3. Transcribe
         prompt = "Transcribe this audio message exactly. Only return the transcription, nothing else."
         transcription_response = gemini_client.models.generate_content(
-            model='gemini-2.5-flash',
+            model='gemini-2.5-flash-lite',
             contents=[uploaded_file, prompt]
         )
         

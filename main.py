@@ -452,7 +452,7 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db):
             try:
                 prompt = f"Analyze this community development proposal from a Smart City WhatsApp tip-line. Extract the structured triage data, including what language they originally used.\n\nProposal Text: {description}"
                 response = gemini_client.models.generate_content(
-                    model='gemini-2.5-flash',
+                    model='gemini-2.5-flash-lite',
                     contents=prompt,
                     config={
                         'response_mime_type': 'application/json',
@@ -649,7 +649,7 @@ async def upload_dataset(file: UploadFile = File(...), db = Depends(get_db), adm
         doc_ref.set({
             "id": doc_ref.id,
             "filename": file.filename,
-            "content": text_content[:15000], # Limit to avoid massive context blowup
+            "content": text_content[:5000], # Limit heavily to avoid massive context blowup
             "uploaded_at": datetime.now().isoformat()
         })
         return {"status": "success", "id": doc_ref.id}
@@ -675,13 +675,13 @@ async def api_chat(req: ChatRequest, db = Depends(get_db), admin = Depends(verif
             dataset_docs = db.collection('custom_datasets').stream()
             
             try:
-                msgs_docs = db.collection('messages').order_by('timestamp', direction=firestore.Query.DESCENDING).limit(100).stream()
+                msgs_docs = db.collection('messages').order_by('timestamp', direction=firestore.Query.DESCENDING).limit(20).stream()
                 proposals = []
                 for doc in msgs_docs:
                     d = doc.to_dict()
                     proposals.append(f"- {d.get('category')} in {d.get('constituency_zone')}: {d.get('summary')} (Status: {d.get('status')})")
             except Exception:
-                msgs_docs = db.collection('messages').limit(100).stream()
+                msgs_docs = db.collection('messages').limit(20).stream()
                 proposals = []
                 for doc in msgs_docs:
                     d = doc.to_dict()
