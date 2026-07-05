@@ -143,8 +143,23 @@
         </div>
     </div>
 </div>
+
+<script>
+    // Global Auth Fetch Wrapper
+    async function authFetch(url, options = {}) {
+        if (typeof firebase !== 'undefined' && firebase.auth().currentUser) {
+            const token = await firebase.auth().currentUser.getIdToken();
+            options.headers = options.headers || {};
+            options.headers['Authorization'] = `Bearer ${token}`;
+        } else {
+            console.warn("No authenticated user, proceeding without token.");
+        }
+        return window.fetch(url, options);
+    }
+</script>
 <script>
     // Firebase Google Authentication
+
     function signInWithGoogle() {
         const provider = new firebase.auth.GoogleAuthProvider();
         firebase.auth().signInWithPopup(provider)
@@ -792,7 +807,7 @@
         // Fetch Live Messages from FastAPI backend
         async function fetchMessages() {
             try {
-                const response = await fetch('/messages');
+                const response = await authFetch('/messages');
                 const data = await response.json();
                 
                 // Trigger live animation if new messages arrived
@@ -1467,7 +1482,7 @@
             const qBody = document.getElementById('queue-body');
             
             try {
-                const r = await fetch('/projects/ranked');
+                const r = await authFetch('/projects/ranked');
                 const ranked = await r.json();
                 const fmtCr = val => val >= 10000000 ? '₹' + (val/10000000).toFixed(1) + ' Cr' : '₹' + (val/100000).toFixed(1) + ' L';
                 const zoneColors = {North:'text-blue-400', South:'text-emerald-400', East:'text-amber-400', West:'text-purple-400', Central:'text-rose-400'};
@@ -1535,7 +1550,7 @@
             btn.textContent = 'Sanctioning...';
             
             try {
-                const res = await fetch('/projects/sanction', {
+                const res = await authFetch('/projects/sanction', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ project_id: projectId, title, zone, category, senders })
@@ -1697,7 +1712,7 @@
 <script>
     async function loadSurveys() {
         try {
-            let res = await fetch('/surveys');
+            let res = await authFetch('/surveys');
             let data = await res.json();
             let html = '';
             data.forEach(s => {
@@ -1751,7 +1766,7 @@
         
         try {
             // Step 1: Create
-            let res = await fetch('/surveys', {
+            let res = await authFetch('/surveys', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({question: q, options: opt})
@@ -1760,11 +1775,11 @@
             const newId = data.id;
             
             // Step 2: Activate
-            await fetch(`/surveys/${newId}/activate`, {method: 'POST'});
+            await authFetch(`/surveys/${newId}/activate`, {method: 'POST'});
             
             // Step 3: Broadcast
             btn.textContent = 'Broadcasting...';
-            let bRes = await fetch(`/surveys/${newId}/broadcast`, {method: 'POST'});
+            let bRes = await authFetch(`/surveys/${newId}/broadcast`, {method: 'POST'});
             let bData = await bRes.json();
             
             document.getElementById('survey-q').value = '';
@@ -1789,7 +1804,7 @@
         if(!confirm("Are you sure you want to broadcast this survey to all constituents via WhatsApp Direct Message?")) return;
         
         try {
-            let res = await fetch(`/surveys/${id}/broadcast`, {method: 'POST'});
+            let res = await authFetch(`/surveys/${id}/broadcast`, {method: 'POST'});
             let data = await res.json();
             if(data.status === 'success') {
                 alert(`Broadcast sent successfully to ${data.broadcast_count} citizens!`);
@@ -1802,21 +1817,21 @@
     }
     
     async function stopSurvey(id) {
-        await fetch(`/surveys/${id}/stop`, {method: 'POST'});
+        await authFetch(`/surveys/${id}/stop`, {method: 'POST'});
         loadSurveys();
     }
 
     async function deleteSurvey(id) {
         if(!confirm('Delete this survey permanently? This cannot be undone.')) return;
-        await fetch(`/surveys/${id}`, {method: 'DELETE'});
+        await authFetch(`/surveys/${id}`, {method: 'DELETE'});
         loadSurveys();
     }
     
     async function activateSurvey(id) {
-        await fetch(`/surveys/${id}/activate`, {method: 'POST'});
+        await authFetch(`/surveys/${id}/activate`, {method: 'POST'});
         // Also broadcast immediately on activation
         try {
-            let bRes = await fetch(`/surveys/${id}/broadcast`, {method: 'POST'});
+            let bRes = await authFetch(`/surveys/${id}/broadcast`, {method: 'POST'});
             let bData = await bRes.json();
             if(bData.broadcast_count > 0) {
                 alert(`✅ Survey activated & broadcast to ${bData.broadcast_count} citizens!`);
@@ -1864,7 +1879,7 @@
         historyContainer.scrollTop = historyContainer.scrollHeight;
         
         try {
-            const res = await fetch('/api/chat', {
+            const res = await authFetch('/api/chat', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({query: text, history: aiChatHistory})
@@ -1964,7 +1979,7 @@
         formData.append('file', file);
         
         try {
-            const res = await fetch('/api/upload-dataset', {
+            const res = await authFetch('/api/upload-dataset', {
                 method: 'POST',
                 body: formData
             });

@@ -32,8 +32,18 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import firebase_admin
-from firebase_admin import credentials, firestore
+from firebase_admin import credentials, firestore, auth
+
+security = HTTPBearer()
+def verify_admin(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    try:
+        token = credentials.credentials
+        decoded_token = auth.verify_id_token(token)
+        return decoded_token
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Invalid authentication credentials: {str(e)}")
 
 # Initialize Firebase
 try:
@@ -534,7 +544,7 @@ class SurveyCreate(BaseModel):
     options: str
 
 @app.get("/surveys")
-async def get_surveys(db = Depends(get_db)):
+async def get_surveys(db = Depends(get_db), admin = Depends(verify_admin)):
     surveys = [d.to_dict() for d in db.collection('surveys').stream()]
     results = []
     for s in surveys:
@@ -556,7 +566,7 @@ async def get_surveys(db = Depends(get_db)):
     return results
 
 @app.post("/surveys")
-async def create_survey(survey: SurveyCreate, db = Depends(get_db)):
+async def create_survey(survey: SurveyCreate, db = Depends(get_db), admin = Depends(verify_admin)):
     doc_ref = db.collection('surveys').document()
     doc_ref.set({
         "id": doc_ref.id,
@@ -567,7 +577,7 @@ async def create_survey(survey: SurveyCreate, db = Depends(get_db)):
     return {"status": "success", "id": doc_ref.id}
 
 @app.post("/surveys/{survey_id}/activate")
-async def activate_survey(survey_id: str, db = Depends(get_db)):
+async def activate_survey(survey_id: str, db = Depends(get_db), admin = Depends(verify_admin)):
     # Deactivate all
     docs = db.collection('surveys').where('is_active', '==', True).stream()
     for doc in docs:
@@ -577,18 +587,18 @@ async def activate_survey(survey_id: str, db = Depends(get_db)):
     return {"status": "success"}
 
 @app.post("/surveys/{survey_id}/stop")
-async def stop_survey(survey_id: str, db = Depends(get_db)):
+async def stop_survey(survey_id: str, db = Depends(get_db), admin = Depends(verify_admin)):
     db.collection('surveys').document(survey_id).update({"is_active": False})
     return {"status": "success"}
 
 @app.delete("/surveys/{survey_id}")
-async def delete_survey(survey_id: str, db = Depends(get_db)):
+async def delete_survey(survey_id: str, db = Depends(get_db), admin = Depends(verify_admin)):
     db.collection('surveys').document(survey_id).delete()
     return {"status": "success"}
 
 
 @app.post("/surveys/{survey_id}/broadcast")
-async def broadcast_survey(survey_id: str, db = Depends(get_db)):
+async def broadcast_survey(survey_id: str, db = Depends(get_db), admin = Depends(verify_admin)):
     survey_doc = db.collection('surveys').document(survey_id).get()
     survey = survey_doc.to_dict() if survey_doc.exists else None
     if not survey:
@@ -627,11 +637,11 @@ class ChatMessage(BaseModel):
     content: str
 
 class ChatRequest(BaseModel):
-    query: str
+    query: str = Field(max_length=1000)
     history: list[ChatMessage] = []
 
 @app.post("/api/upload-dataset")
-async def upload_dataset(file: UploadFile = File(...), db = Depends(get_db)):
+async def upload_dataset(file: UploadFile = File(...), db = Depends(get_db), admin = Depends(verify_admin)):
     try:
         content = await file.read()
         text_content = content.decode('utf-8')
@@ -647,55 +657,68 @@ async def upload_dataset(file: UploadFile = File(...), db = Depends(get_db)):
         logger.error(f"Failed to upload dataset: {e}")
         raise HTTPException(status_code=500, detail="Failed to process file")
 
+_RAG_CACHE = {"data": None, "at": 0.0}
+
 @app.post("/api/chat")
-async def api_chat(req: ChatRequest, db = Depends(get_db)):
+async def api_chat(req: ChatRequest, db = Depends(get_db), admin = Depends(verify_admin)):
     if not gemini_client:
         raise HTTPException(status_code=500, detail="Gemini AI not initialized")
 
     try:
-        msgs_docs = db.collection('messages').order_by('timestamp', direction=firestore.Query.DESCENDING).limit(100).stream()
-        sanc_docs = db.collection('sanctioned_projects').stream()
-        dataset_docs = db.collection('custom_datasets').stream()
+        global _RAG_CACHE
+        now = time.time()
         
-        proposals = []
-        for doc in msgs_docs:
-            d = doc.to_dict()
-            proposals.append(f"- {d.get('category')} in {d.get('constituency_zone')}: {d.get('summary')} (Status: {d.get('status')})")
+        if _RAG_CACHE["data"] and (now - _RAG_CACHE["at"]) < 120:
+            sys_prompt = _RAG_CACHE["data"]
+        else:
+            try:
+                msgs_docs = db.collection('messages').order_by('timestamp', direction=firestore.Query.DESCENDING).limit(100).stream()
+            except Exception:
+                msgs_docs = db.collection('messages').limit(100).stream()
+                
+            sanc_docs = db.collection('sanctioned_projects').stream()
+            dataset_docs = db.collection('custom_datasets').stream()
             
-        sanctions = []
-        for doc in sanc_docs:
-            d = doc.to_dict()
-            sanctions.append(f"- {d.get('category')} in {d.get('zone')}: {d.get('title')}")
-            
-        datasets = []
-        for doc in dataset_docs:
-            d = doc.to_dict()
-            datasets.append(f"--- DATASET: {d.get('filename')} ---\n{d.get('content')}\n")
+            proposals = []
+            for doc in msgs_docs:
+                d = doc.to_dict()
+                proposals.append(f"- {d.get('category')} in {d.get('constituency_zone')}: {d.get('summary')} (Status: {d.get('status')})")
+                
+            sanctions = []
+            for doc in sanc_docs:
+                d = doc.to_dict()
+                sanctions.append(f"- {d.get('category')} in {d.get('zone')}: {d.get('title')}")
+                
+            datasets = []
+            for doc in dataset_docs:
+                d = doc.to_dict()
+                datasets.append(f"--- DATASET: {d.get('filename')} ---\n{d.get('content')}\n")
 
-        sys_prompt = (
-            "You are a Production-level AI database assistant for UrbanOS, analyzing citizen grievances, sanctioned projects, and uploaded datasets.\n"
-            "STRICT BIAS GUARDRAILS: You must remain strictly neutral, unbiased, and objective. Do not favor any political entity, demographic, or region.\n"
-            "STRICT KNOWLEDGE GUARDRAILS: If the user asks about something NOT in the provided context, you MUST explicitly say 'I do not know' or 'I do not have data on that'. Do not hallucinate data.\n"
-            "CHART GENERATION: If the user asks for a chart, graph, or plot, output a valid Mermaid JS code block (```mermaid ... ```). Keep it simple.\n"
-            "EXCEL/CSV EXPORT: If the user asks for data in an Excel sheet or CSV, output the data as a standard Markdown table. The system will automatically convert it to a downloadable CSV for them.\n\n"
-            "--- CITIZEN PROPOSALS ---\n" +
-            "\n".join(proposals) +
-            "\n\n--- SANCTIONED PROJECTS ---\n" +
-            "\n".join(sanctions) +
-            "\n\n" + "\n".join(datasets)
-        )
+            sys_prompt = (
+                "You are a Production-level AI database assistant for UrbanOS, analyzing citizen grievances, sanctioned projects, and uploaded datasets.\n"
+                "STRICT BIAS GUARDRAILS: You must remain strictly neutral, unbiased, and objective. Do not favor any political entity, demographic, or region.\n"
+                "STRICT KNOWLEDGE GUARDRAILS: If the user asks about something NOT in the provided context, you MUST explicitly say 'I do not know' or 'I do not have data on that'. Do not hallucinate data.\n"
+                "CHART GENERATION: If the user asks for a chart, graph, or plot, output a valid Mermaid JS code block (```mermaid ... ```). Keep it simple.\n"
+                "EXCEL/CSV EXPORT: If the user asks for data in an Excel sheet or CSV, output the data as a standard Markdown table. The system will automatically convert it to a downloadable CSV for them.\n\n"
+                "--- CITIZEN PROPOSALS ---\n" +
+                "\n".join(proposals) +
+                "\n\n--- SANCTIONED PROJECTS ---\n" +
+                "\n".join(sanctions) +
+                "\n\n" + "\n".join(datasets)
+            )
+            _RAG_CACHE["data"] = sys_prompt
+            _RAG_CACHE["at"] = now
 
         contents = []
-        first_msg = f"{sys_prompt}\n\nUser Query: {req.query}"
-        
         for h in req.history:
             contents.append({"role": "user" if h.role == "user" else "model", "parts": [{"text": h.content}]})
         
-        contents.append({"role": "user", "parts": [{"text": first_msg}]})
+        contents.append({"role": "user", "parts": [{"text": req.query}]})
 
         resp = gemini_client.models.generate_content(
             model='gemini-2.5-flash',
-            contents=contents
+            contents=contents,
+            config={"system_instruction": sys_prompt}
         )
         return {"response": resp.text.strip()}
     except Exception as e:
@@ -703,7 +726,7 @@ async def api_chat(req: ChatRequest, db = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/messages")
-async def get_messages(db = Depends(get_db)):
+async def get_messages(db = Depends(get_db), admin = Depends(verify_admin)):
     try:
         docs = db.collection('messages').order_by('timestamp', direction=firestore.Query.DESCENDING).limit(500).stream()
     except Exception:
@@ -779,7 +802,7 @@ _RANKED_CACHE: dict = {"data": None, "at": 0.0}
 CACHE_TTL_SECONDS = 300  # 5 minutes
 
 @app.get("/projects/ranked")
-async def get_ranked_projects(db = Depends(get_db)):
+async def get_ranked_projects(db = Depends(get_db), admin = Depends(verify_admin)):
     """Groups messages into projects, scores them, and generates AI justification.
     Results are cached in-process for 5 minutes to reduce Gemini API cost at scale."""
     now = time.time()
@@ -897,7 +920,7 @@ class SanctionRequest(BaseModel):
     senders: list
 
 @app.post("/projects/sanction")
-async def sanction_project(req: SanctionRequest, db = Depends(get_db)):
+async def sanction_project(req: SanctionRequest, db = Depends(get_db), admin = Depends(verify_admin)):
     """Sanctions a project cluster, updates message statuses, notifies citizens."""
     # Update all messages in this cluster to Sanctioned
     all_docs = list(db.collection('messages').stream())
