@@ -345,7 +345,7 @@
     <div class="card flex-1 flex flex-col overflow-hidden">
         <div class="p-5 border-b border-[#262626] flex justify-between items-center shrink-0 bg-zinc-900">
             <div>
-                <h3 class="serif text-xl text-white">AI-Ranked Project Pipeline</h3>
+                <h3 class="serif text-xl text-white">AI Projects Ranking</h3>
                 <span class="text-xs text-zinc-500">Proposals prioritized by community demand and impact score</span>
             </div>
             <button class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2">
@@ -1539,7 +1539,7 @@
             }
         }
         
-        fetchRankedProjects();
+        // fetchRankedProjects is called from startSplashScreen
 
         // --- Sanction Project ---
         async function sanctionProject(projectId, title, zone, category, senders) {
@@ -1615,6 +1615,7 @@
                     if(splashScreen) splashScreen.style.display = 'none';
                     // Trigger initial fetch only after splash screen finishes
                     fetchMessages();
+                    fetchRankedProjects();
                     setInterval(fetchMessages, 2000); // Resume polling
                 }, 700); // wait for CSS fade transition
             }, totalDelay + 800);

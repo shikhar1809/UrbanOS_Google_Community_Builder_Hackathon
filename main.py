@@ -879,10 +879,12 @@ async def get_ranked_projects(db = Depends(get_db), admin = Depends(verify_admin
             try:
                 demo = proj["demographics"]
                 prompt = (
-                    f"You are an AI advisor for an Indian MP's office. Write a 2-sentence justification "
-                    f"(max 50 words) recommending action on this project, citing the data provided. "
-                    f"Be specific, data-driven, and urgent.\n\n"
-                    f"Project: {proj['title']}\n"
+                    f"You are an AI advisor for an Indian MP's office. Write a vivid, compelling 2-3 sentence justification "
+                    f"(max 60 words) explaining EXACTLY why this project was ranked so highly for immediate action. "
+                    f"Highlight the high citizen demand, critical demographic needs, and the calculated impact score. "
+                    f"Be highly specific, data-driven, and urgent.\\n\\n"
+                    f"Project: {proj['title']}\\n"
+                    f"Impact Score: {proj['impact_score']} (Very High)\\n"
                     f"Topic: {proj.get('semantic_tag', proj['category'])}\n"
                     f"Zone: {proj['zone']} Constituency\n"
                     f"Citizen Demand: {proj['demand_count']} proposals received\n"
