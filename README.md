@@ -1,64 +1,115 @@
-# WhatsApp Twilio Intake & Dashboard
+# UrbanOS.
+> Civic intelligence for Indian constituencies — proposals in, decisions out, via WhatsApp.
 
-A minimal FastAPI backend to receive, store (in-memory), and display incoming WhatsApp messages from a Twilio Sandbox webhook. This serves as a foundation layer before adding AI processing.
+![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=flat-square&logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)
+![Firebase](https://img.shields.io/badge/Firebase-FFCA28?style=flat-square&logo=firebase&logoColor=black)
+![Gemini](https://img.shields.io/badge/Gemini_2.5_Flash-4285F4?style=flat-square&logo=google&logoColor=white)
+![Twilio](https://img.shields.io/badge/WhatsApp-Twilio-F22F46?style=flat-square&logo=twilio&logoColor=white)
+![Live](https://img.shields.io/badge/Live-urbanos.web.app-00C853?style=flat-square&logo=googlechrome&logoColor=white)
 
-## Prerequisites
+---
 
-- Python 3.11+
-- A Twilio account (for the WhatsApp Sandbox)
-- [ngrok](https://ngrok.com/) (to expose the local server to the internet)
+## What is this?
 
-## Setup
+**Q:** What problem does UrbanOS solve?  
+**A:** Most civic feedback dies in suggestion boxes or ignored emails. UrbanOS gives every citizen a direct line to their constituency — via WhatsApp — and gives administrators a ranked, AI-triaged dashboard to act on it.
 
-1. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
+**Q:** Who is it for?  
+**A:** Two users: the **citizen** (anyone with WhatsApp) and the **admin** (MLA/ward officer/civic body). Zero app installs required on either side.
 
-2. Copy the `.env.example` file to `.env` and fill in your Twilio credentials:
-   ```bash
-   # On Windows (cmd): copy .env.example .env
-   # On Windows (powershell): cp .env.example .env
-   ```
-   You can find your Account SID and Auth Token on the Twilio Console homepage.
+---
 
-## Running Locally
+## How does it work?
 
-Start the FastAPI application using uvicorn:
+**Q:** Walk me through the citizen flow.  
+**A:** Citizen WhatsApps a proposal — text, voice note, or photo with a GPS pin. Gemini auto-classifies it: category, priority, budget estimate, zone, and language. Done. No forms, no logins.
+
+**Q:** How does the admin act on proposals?  
+**A:** The dashboard aggregates proposals into ranked projects using a civic impact score: `demand × priority × demographic/infrastructure gaps`. One click to sanction → every citizen who proposed it gets a WhatsApp reply instantly.
+
+**Q:** What's the Insights tab?  
+**A:** A RAG AI agent wired to all live Firestore data. Ask it anything in natural language — it answers, generates Mermaid charts, and can export tables as CSV on demand.
+
+**Q:** How do surveys work?  
+**A:** Admin creates a targeted survey from the dashboard and broadcasts it to all constituents over WhatsApp. Responses flow back into Firestore automatically.
+
+---
+
+## What's the tech?
+
+| Layer | Stack |
+|---|---|
+| 🔧 Backend | FastAPI (Python 3.11) → Firebase Cloud Functions Gen 2 |
+| 🗄️ Database | Cloud Firestore |
+| 🤖 AI | Gemini 2.5 Flash — triage, ranking, RAG, voice transcription |
+| 📱 Citizen Interface | WhatsApp via Twilio webhooks |
+| 🖥️ Admin Dashboard | Vanilla JS + Tailwind CSS, Firebase Hosting |
+| 🌐 Live URL | [urbanos.web.app](https://urbanos.web.app) |
+
+**Notable implementation details:**
+- 🔐 Twilio webhook signature validation (cryptographic HMAC, not just IP trust)
+- 🎙️ Voice notes transcribed via Gemini multimodal — no separate STT service needed
+- 🌏 Auto-detected multi-language support (Hindi, English, and more)
+- ⚡ Async architecture: blocking Firestore I/O offloaded to thread pool
+- 📍 GPS coordinate validation with geographic bounds checking per constituency
+
+---
+
+## How do I run it?
+
+**Q:** What do I need?  
+**A:** Python 3.11+, a Firebase project, a Twilio account (WhatsApp sandbox), and a Gemini API key.
+
+**Q:** How do I set it up?  
+**A:** Clone the repo, copy `.env.example` → `.env`, fill in your keys, then:
+
 ```bash
+pip install -r requirements.txt
 uvicorn main:app --reload
 ```
-The server will run on `http://127.0.0.1:8000`.
 
-To view the dashboard, navigate to `http://127.0.0.1:8000/dashboard` in your browser.
+**Q:** What goes in `.env`?  
+```env
+GEMINI_API_KEY=...
+TWILIO_ACCOUNT_SID=...
+TWILIO_AUTH_TOKEN=...
+TWILIO_WHATSAPP_NUMBER=whatsapp:+14155238886
+FIREBASE_PROJECT_ID=...
+```
 
-## Exposing to Twilio via ngrok
+**Q:** What's the WhatsApp webhook URL?  
+**A:** Point your Twilio sandbox webhook to:
+```
+https://<your-function-url>/webhook/whatsapp
+```
 
-Twilio needs a public URL to send webhook events to. We'll use ngrok to expose our local server.
+---
 
-1. In a separate terminal, start ngrok pointing to port 8000:
-   ```bash
-   ngrok http 8000
-   ```
-2. Copy the `Forwarding` URL that ngrok provides (e.g., `https://<random-id>.ngrok-free.app`).
+## How do I deploy?
 
-## Configuring Twilio Sandbox
+**Q:** How do I ship it?  
+**A:** One command:
+```bash
+firebase deploy
+```
+This deploys the FastAPI backend as a Cloud Function and the admin dashboard to Firebase Hosting simultaneously.
 
-1. Go to the [Twilio Console](https://console.twilio.com/).
-2. Navigate to **Messaging -> Try it out -> Send a WhatsApp message**.
-3. Under the **Sandbox settings** tab, find the field labeled "WHEN A MESSAGE COMES IN".
-4. Paste your ngrok forwarding URL and append `/webhook/whatsapp` to it.
-   Example: `https://<random-id>.ngrok-free.app/webhook/whatsapp`
-5. Save the configuration.
+**Q:** Any gotchas?  
+**A:** Set all your `.env` values as Firebase secret config before deploying (`firebase functions:secrets:set`). The function cold-start is ~1s — acceptable for a webhook handler.
 
-## Joining the Sandbox
+---
 
-1. In the Twilio Console (under the Sandbox settings), you will see a phone number and a join code (e.g., "join something-something").
-2. Save the Twilio Sandbox phone number to your phone's contacts.
-3. Open WhatsApp on your phone, send a message to that contact with the exact join code.
-4. You should receive a confirmation message from Twilio that you are now connected to the sandbox.
+## What's the status?
 
-## Testing
+**Q:** Is this production-ready?  
+**A:** This is a working prototype built for the **Google Community Builder Hackathon**. The core feedback loop — propose → triage → rank → sanction → notify → survey — is fully functional and live at [urbanos.web.app](https://urbanos.web.app).
 
-Once connected, send any message, voice note, photo, or location pin to the sandbox number via WhatsApp.
-Watch your running `uvicorn` console for the raw webhook payload logs, and check the dashboard at `http://127.0.0.1:8000/dashboard` to see the messages appear in real-time.
+**Q:** What's next?  
+**A:** Multi-constituency support, a public-facing transparency portal, and integration with government scheme databases for automatic budget cross-referencing.
+
+---
+
+<div align="center">
+  <sub>Built with 🔥 for the communities that deserve better infrastructure and the engineers who want to help build it.</sub>
+</div>

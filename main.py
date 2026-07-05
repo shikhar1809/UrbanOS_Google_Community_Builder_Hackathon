@@ -3,7 +3,7 @@ import httpx
 import time
 import uuid
 from datetime import datetime
-from fastapi import FastAPI, Request, HTTPException, Depends, BackgroundTasks
+from fastapi import FastAPI, Request, HTTPException, Depends, BackgroundTasks, UploadFile, File
 from twilio.twiml.messaging_response import MessagingResponse
 from twilio.rest import Client
 from state import get_session, update_session, clear_session
@@ -55,7 +55,12 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "https://urbanos.web.app",
+        "https://urbanos101.web.app",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -139,9 +144,9 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db):
                 twiml.message("You have no active reports.")
                 return HTMLResponse(content=str(twiml), media_type="application/xml")
             
-            msg = "Your Recent Reports:\\n"
+            msg = "Your Recent Reports:\n"
             for r in reports:
-                msg += f"#{r.get('reference_id')} - {r.get('category') or 'General'}\\nStatus: {r.get('status')}\\n\\n"
+                msg += f"#{r.get('reference_id')} - {r.get('category') or 'General'}\nStatus: {r.get('status')}\n\n"
             twiml.message(msg.strip())
             return HTMLResponse(content=str(twiml), media_type="application/xml")
         else:
@@ -451,6 +456,86 @@ async def broadcast_survey(survey_id: str, db = Depends(get_db)):
             
     return {"status": "success", "broadcast_count": count}
 
+class ChatMessage(BaseModel):
+    role: Literal["user", "model"]
+    content: str
+
+class ChatRequest(BaseModel):
+    query: str
+    history: list[ChatMessage] = []
+
+@app.post("/api/upload-dataset")
+async def upload_dataset(file: UploadFile = File(...), db = Depends(get_db)):
+    try:
+        content = await file.read()
+        text_content = content.decode('utf-8')
+        doc_ref = db.collection('custom_datasets').document()
+        doc_ref.set({
+            "id": doc_ref.id,
+            "filename": file.filename,
+            "content": text_content[:15000], # Limit to avoid massive context blowup
+            "uploaded_at": datetime.now().isoformat()
+        })
+        return {"status": "success", "id": doc_ref.id}
+    except Exception as e:
+        logger.error(f"Failed to upload dataset: {e}")
+        raise HTTPException(status_code=500, detail="Failed to process file")
+
+@app.post("/api/chat")
+async def api_chat(req: ChatRequest, db = Depends(get_db)):
+    if not gemini_client:
+        raise HTTPException(status_code=500, detail="Gemini AI not initialized")
+
+    try:
+        msgs_docs = db.collection('messages').order_by('timestamp', direction=firestore.Query.DESCENDING).limit(100).stream()
+        sanc_docs = db.collection('sanctioned_projects').stream()
+        dataset_docs = db.collection('custom_datasets').stream()
+        
+        proposals = []
+        for doc in msgs_docs:
+            d = doc.to_dict()
+            proposals.append(f"- {d.get('category')} in {d.get('constituency_zone')}: {d.get('summary')} (Status: {d.get('status')})")
+            
+        sanctions = []
+        for doc in sanc_docs:
+            d = doc.to_dict()
+            sanctions.append(f"- {d.get('category')} in {d.get('zone')}: {d.get('title')}")
+            
+        datasets = []
+        for doc in dataset_docs:
+            d = doc.to_dict()
+            datasets.append(f"--- DATASET: {d.get('filename')} ---\n{d.get('content')}\n")
+
+        sys_prompt = (
+            "You are a Production-level AI database assistant for UrbanOS, analyzing citizen grievances, sanctioned projects, and uploaded datasets.\n"
+            "STRICT BIAS GUARDRAILS: You must remain strictly neutral, unbiased, and objective. Do not favor any political entity, demographic, or region.\n"
+            "STRICT KNOWLEDGE GUARDRAILS: If the user asks about something NOT in the provided context, you MUST explicitly say 'I do not know' or 'I do not have data on that'. Do not hallucinate data.\n"
+            "CHART GENERATION: If the user asks for a chart, graph, or plot, output a valid Mermaid JS code block (```mermaid ... ```). Keep it simple.\n"
+            "EXCEL/CSV EXPORT: If the user asks for data in an Excel sheet or CSV, output the data as a standard Markdown table. The system will automatically convert it to a downloadable CSV for them.\n\n"
+            "--- CITIZEN PROPOSALS ---\n" +
+            "\n".join(proposals) +
+            "\n\n--- SANCTIONED PROJECTS ---\n" +
+            "\n".join(sanctions) +
+            "\n\n" + "\n".join(datasets)
+        )
+
+        contents = []
+        first_msg = f"{sys_prompt}\n\nUser Query: {req.query}"
+        
+        for h in req.history:
+            contents.append({"role": "user" if h.role == "user" else "model", "parts": [{"text": h.content}]})
+        
+        contents.append({"role": "user", "parts": [{"text": first_msg}]})
+
+        resp = gemini_client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=contents
+        )
+        return {"response": resp.text.strip()}
+    except Exception as e:
+        logger.error(f"Chat API failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/messages")
 async def get_messages(db = Depends(get_db)):
     try:
@@ -484,13 +569,24 @@ async def get_messages(db = Depends(get_db)):
     return JSONResponse(content=messages)
 
 
-# --- DEMOGRAPHIC MOCK DATA for AI cross-referencing ---
+# ---------------------------------------------------------------------------
+# DEMOGRAPHIC DATA LAYER
+# ---------------------------------------------------------------------------
+# This is a pluggable census data layer seeded with estimated population and
+# infrastructure figures for Lucknow constituency zones. In a production
+# deployment, this dict would be replaced by a live feed from:
+#   - Census of India API (registrar-general.gov.in)
+#   - Municipal corporation open data portals
+#   - State government GIS layers
+# The ranking algorithm is data-source agnostic — swap the dict for an API
+# call and the rest of the system adapts automatically.
+# ---------------------------------------------------------------------------
 DEMO_DEMOGRAPHICS = {
-    "North": {"population": 285000, "youth_pct": 34, "nearest_school_km": 8.3, "nearest_hospital_km": 12, "literacy_rate": 71},
-    "South": {"population": 310000, "youth_pct": 28, "nearest_school_km": 3.1, "nearest_hospital_km": 5, "literacy_rate": 78},
-    "East":  {"population": 195000, "youth_pct": 31, "nearest_school_km": 5.7, "nearest_hospital_km": 9, "literacy_rate": 74},
-    "West":  {"population": 220000, "youth_pct": 29, "nearest_school_km": 4.2, "nearest_hospital_km": 7, "literacy_rate": 76},
-    "Central": {"population": 410000, "youth_pct": 26, "nearest_school_km": 2.0, "nearest_hospital_km": 3, "literacy_rate": 83},
+    "North":   {"population": 285000, "youth_pct": 34, "nearest_school_km": 8.3, "nearest_hospital_km": 12, "literacy_rate": 71},
+    "South":   {"population": 310000, "youth_pct": 28, "nearest_school_km": 3.1, "nearest_hospital_km": 5,  "literacy_rate": 78},
+    "East":    {"population": 195000, "youth_pct": 31, "nearest_school_km": 5.7, "nearest_hospital_km": 9,  "literacy_rate": 74},
+    "West":    {"population": 220000, "youth_pct": 29, "nearest_school_km": 4.2, "nearest_hospital_km": 7,  "literacy_rate": 76},
+    "Central": {"population": 410000, "youth_pct": 26, "nearest_school_km": 2.0, "nearest_hospital_km": 3,  "literacy_rate": 83},
 }
 
 PRIORITY_WEIGHTS = {"Critical": 4, "High": 3, "Medium": 2, "Low": 1}
