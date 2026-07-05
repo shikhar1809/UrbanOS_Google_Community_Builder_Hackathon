@@ -671,18 +671,21 @@ async def api_chat(req: ChatRequest, db = Depends(get_db), admin = Depends(verif
         if _RAG_CACHE["data"] and (now - _RAG_CACHE["at"]) < 120:
             sys_prompt = _RAG_CACHE["data"]
         else:
-            try:
-                msgs_docs = db.collection('messages').order_by('timestamp', direction=firestore.Query.DESCENDING).limit(100).stream()
-            except Exception:
-                msgs_docs = db.collection('messages').limit(100).stream()
-                
             sanc_docs = db.collection('sanctioned_projects').stream()
             dataset_docs = db.collection('custom_datasets').stream()
             
-            proposals = []
-            for doc in msgs_docs:
-                d = doc.to_dict()
-                proposals.append(f"- {d.get('category')} in {d.get('constituency_zone')}: {d.get('summary')} (Status: {d.get('status')})")
+            try:
+                msgs_docs = db.collection('messages').order_by('timestamp', direction=firestore.Query.DESCENDING).limit(100).stream()
+                proposals = []
+                for doc in msgs_docs:
+                    d = doc.to_dict()
+                    proposals.append(f"- {d.get('category')} in {d.get('constituency_zone')}: {d.get('summary')} (Status: {d.get('status')})")
+            except Exception:
+                msgs_docs = db.collection('messages').limit(100).stream()
+                proposals = []
+                for doc in msgs_docs:
+                    d = doc.to_dict()
+                    proposals.append(f"- {d.get('category')} in {d.get('constituency_zone')}: {d.get('summary')} (Status: {d.get('status')})")
                 
             sanctions = []
             for doc in sanc_docs:

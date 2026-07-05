@@ -187,8 +187,8 @@
                         const profileImgEl = document.getElementById('user-profile-img');
                         const profileRoleEl = document.getElementById('user-profile-role');
                         
-                        if (profileNameEl && user.displayName) profileNameEl.innerText = user.displayName;
-                        if (profileImgEl && user.photoURL) profileImgEl.src = user.photoURL;
+                        if (profileNameEl) profileNameEl.innerText = user.displayName || user.email.split('@')[0];
+                        if (profileImgEl) profileImgEl.src = user.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName || user.email)}&background=333&color=fff`;
                         if (profileRoleEl) profileRoleEl.innerText = user.email; // Show email as role
 
                         if (typeof startSplashScreen === 'function') startSplashScreen();
