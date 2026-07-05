@@ -108,6 +108,10 @@
     </style>
 <link crossorigin="" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" rel="stylesheet"/><script crossorigin="" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script><script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
+<!-- Firebase SDKs -->
+<script defer src="/__/firebase/10.7.0/firebase-app-compat.js"></script>
+<script defer src="/__/firebase/10.7.0/firebase-auth-compat.js"></script>
+<script defer src="/__/firebase/init.js"></script>
 </head>
 <body class="h-screen flex flex-col overflow-hidden">
 <!-- ============================================================ -->
@@ -123,34 +127,52 @@
                 </svg>
             </div>
             <h1 class="text-2xl font-bold text-white tracking-tight">UrbanOS<span class="text-blue-500">.</span></h1>
-            <p class="text-xs text-zinc-500 text-center">Admin access only. Enter your PIN to continue.</p>
+            <p class="text-xs text-zinc-500 text-center">Admin access only. Please sign in to continue.</p>
         </div>
         <div class="w-full flex flex-col gap-3">
-            <input type="password" id="pin-input" maxlength="6" placeholder="Enter PIN" class="w-full bg-[#1C1C1C] border border-[#333] text-white text-center text-xl tracking-[0.5em] rounded-xl px-4 py-3 focus:outline-none focus:border-blue-500 transition" onkeypress="if(event.key==='Enter') checkPin()">
-            <button onclick="checkPin()" class="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl transition text-sm shadow-[0_0_20px_rgba(37,99,235,0.3)]">Access Dashboard</button>
-            <p id="pin-error" class="text-red-400 text-xs text-center hidden">Incorrect PIN. Try again.</p>
+            <button onclick="signInWithGoogle()" class="w-full py-3 bg-white hover:bg-gray-100 text-black font-bold rounded-xl transition flex items-center justify-center gap-3 text-sm shadow-[0_0_20px_rgba(255,255,255,0.1)]">
+                <svg class="w-5 h-5" viewBox="0 0 24 24">
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                </svg>
+                Sign in with Google
+            </button>
+            <p id="auth-error" class="text-red-400 text-xs text-center hidden">Authentication failed. Please try again.</p>
         </div>
-        <p class="text-[10px] text-zinc-700 text-center">Prototype authentication &mdash; for hackathon demo only</p>
     </div>
 </div>
 <script>
-    // Prototype PIN — in production this would be Firebase Auth / OAuth
-    const ADMIN_PIN = '1234';
-    function checkPin() {
-        const val = document.getElementById('pin-input').value;
-        if (val === ADMIN_PIN) {
-            sessionStorage.setItem('urbanos_auth', 'true');
-            document.getElementById('pin-gate').style.display = 'none';
-        } else {
-            document.getElementById('pin-error').classList.remove('hidden');
-            document.getElementById('pin-input').value = '';
-            document.getElementById('pin-input').focus();
-        }
+    // Firebase Google Authentication
+    function signInWithGoogle() {
+        const provider = new firebase.auth.GoogleAuthProvider();
+        firebase.auth().signInWithPopup(provider)
+            .then((result) => {
+                document.getElementById('pin-gate').style.display = 'none';
+            })
+            .catch((error) => {
+                console.error("Auth Error:", error);
+                document.getElementById('auth-error').classList.remove('hidden');
+                document.getElementById('auth-error').innerText = error.message || "Authentication failed.";
+            });
     }
-    // Skip gate if already authenticated in this session
-    if (sessionStorage.getItem('urbanos_auth') === 'true') {
-        document.getElementById('pin-gate').style.display = 'none';
-    }
+
+    // Monitor Auth State
+    window.addEventListener('load', () => {
+        // Wait briefly for firebase to initialize via init.js
+        setTimeout(() => {
+            if (typeof firebase !== 'undefined') {
+                firebase.auth().onAuthStateChanged((user) => {
+                    if (user) {
+                        document.getElementById('pin-gate').style.display = 'none';
+                    } else {
+                        document.getElementById('pin-gate').style.display = 'flex';
+                    }
+                });
+            }
+        }, 500);
+    });
 </script>
 <div class="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#0A0A0A] transition-opacity duration-700" id="splash-screen">
     <div class="relative w-[550px] h-[550px] flex items-center justify-center">
@@ -1552,9 +1574,9 @@
             const splashScreen = document.getElementById('splash-screen');
             
             const sequence = [
-                { text: "fetching grievances...", progress: "30%", delay: 600 },
-                { text: "loading grievances...", progress: "70%", delay: 1500 },
-                { text: "updating dashboard...", progress: "100%", delay: 2200 }
+                { text: "fetching grievances...", progress: "30%", delay: 1500 },
+                { text: "loading grievances...", progress: "70%", delay: 3500 },
+                { text: "updating dashboard...", progress: "100%", delay: 5500 }
             ];
             
             let totalDelay = 0;
