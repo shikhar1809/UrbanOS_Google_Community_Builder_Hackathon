@@ -499,7 +499,7 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db):
                 if image_part:
                     contents.append(image_part)
                 response = gemini_client.models.generate_content(
-                    model='gemini-2.5-flash-lite',
+                    model='gemini-2.5-flash',
                     contents=contents,
                     config={
                         'response_mime_type': 'application/json',
@@ -562,7 +562,7 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db):
             if lang != "English" and gemini_client:
                 try:
                     tr = gemini_client.models.generate_content(
-                        model='gemini-2.5-flash-lite',
+                        model='gemini-2.5-flash',
                         contents=f"Translate ONLY this sentence to {lang}, keep numbers and formatting intact, return only the translation:\n{survey_q}"
                     )
                     survey_q = tr.text.strip()
@@ -576,7 +576,7 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db):
             if lang != "English" and gemini_client:
                 try:
                     tr = gemini_client.models.generate_content(
-                        model='gemini-2.5-flash-lite',
+                        model='gemini-2.5-flash',
                         contents=f"Translate ONLY this sentence to {lang}, keep the reference ID #{ref_id} exactly as is, return only the translation:\n{confirm_msg}"
                     )
                     confirm_msg = tr.text.strip()
@@ -819,7 +819,7 @@ async def api_chat(req: ChatRequest, db = Depends(get_db), admin = Depends(verif
         contents.append({"role": "user", "parts": [{"text": req.query}]})
 
         resp = gemini_client.models.generate_content(
-            model='gemini-2.5-flash-lite',
+            model='gemini-2.5-flash',
             contents=contents,
             config={"system_instruction": sys_prompt}
         )
@@ -1044,7 +1044,7 @@ async def get_ranked_projects(db = Depends(get_db), admin = Depends(verify_admin
                 )
                 # Call Gemini for a smart justification
                 resp = gemini_client.models.generate_content(
-                    model='gemini-2.5-flash-lite',
+                    model='gemini-2.5-flash',
                     contents=prompt
                 )
                 proj["justification"] = resp.text.strip().replace('"', '')
