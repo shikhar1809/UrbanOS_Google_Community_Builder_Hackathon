@@ -752,7 +752,7 @@
 
 </div>
 
-<div class="view-content w-full flex flex-col gap-5" id="view-insights">
+<div class="view-content w-full flex flex-col gap-5 h-[calc(100vh-100px)]" id="view-insights">
   <!-- AI Database Assistant (Full Screen) -->
   <div class="flex-1 flex flex-col gap-4 bg-gray-50 border border-gray-200 rounded-xl p-6 relative">
       <div class="flex justify-between items-center shrink-0 border-b border-gray-200 pb-4">
@@ -779,7 +779,7 @@
       </div>
       
       <!-- Chat History -->
-      <div id="ai-chat-history" class="flex-1 flex flex-col gap-5 pr-2">
+      <div id="ai-chat-history" class="flex-1 flex flex-col gap-5 pr-2 overflow-y-auto custom-scrollbar">
           <div class="flex flex-col gap-1 items-start">
               <div class="text-xs text-gray-500 uppercase tracking-wider font-bold ml-1">UrbanOS AI</div>
               <div class="bg-white border border-gray-300 text-sm text-gray-600 px-5 py-4 rounded-2xl rounded-tl-sm max-w-[85%] leading-relaxed shadow-sm">
