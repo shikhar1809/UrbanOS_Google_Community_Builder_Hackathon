@@ -115,6 +115,8 @@ class TriageResult(BaseModel):
         )
     )
     visual_evidence: str = Field(default="", description="If a photo was provided, describe the visible civic evidence in 6-12 words. Empty string if no photo or not relevant.")
+    estimated_latitude: float | None = Field(default=None, description="If location text is provided, guess the approximate latitude for a map marker in Lucknow, India. Otherwise null.")
+    estimated_longitude: float | None = Field(default=None, description="If location text is provided, guess the approximate longitude for a map marker in Lucknow, India. Otherwise null.")
 
 # ---------------------------------------------------------------------------
 # MULTILINGUAL SUPPORT
@@ -512,6 +514,8 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db):
 
                 if loc_source == "text":
                     extracted_location = triage.extracted_location or location_raw
+                    lat = triage.estimated_latitude
+                    lng = triage.estimated_longitude
                 summary = triage.summary
                 constituency_zone = triage.constituency_zone
                 estimated_budget = triage.estimated_budget
@@ -827,9 +831,9 @@ async def api_chat(req: ChatRequest, db = Depends(get_db), admin = Depends(verif
 @app.get("/messages")
 async def get_messages(db = Depends(get_db), admin = Depends(verify_admin)):
     try:
-        docs = db.collection('messages').order_by('timestamp', direction=firestore.Query.DESCENDING).limit(500).stream()
+        docs = db.collection('messages').order_by('timestamp', direction=firestore.Query.DESCENDING).limit(5000).stream()
     except Exception:
-        docs = db.collection('messages').limit(500).stream()
+        docs = db.collection('messages').limit(5000).stream()
     messages = []
     for doc in docs:
         msg = doc.to_dict()
