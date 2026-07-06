@@ -798,7 +798,7 @@ async def api_chat(req: ChatRequest, db = Depends(get_db), admin = Depends(verif
                 "You are a Production-level AI database assistant for UrbanOS, analyzing citizen grievances, sanctioned projects, and uploaded datasets.\n"
                 "STRICT BIAS GUARDRAILS: You must remain strictly neutral, unbiased, and objective. Do not favor any political entity, demographic, or region.\n"
                 "STRICT KNOWLEDGE GUARDRAILS: If the user asks about something NOT in the provided context, you MUST explicitly say 'I do not know' or 'I do not have data on that'. Do not hallucinate data.\n"
-                "CHART GENERATION: If the user asks for a chart, graph, or plot, output a valid Mermaid JS code block (```mermaid ... ```). Keep it simple.\n"
+                "CHART GENERATION: If the user asks for a chart, graph, or plot, output a valid Mermaid JS code block (```mermaid ... ```). IMPORTANT: For pie charts, you MUST wrap all category labels in double quotes (e.g. \"Category 1\": 40). Keep it simple.\n"
                 "EXCEL/CSV EXPORT: If the user asks for data in an Excel sheet or CSV, output the data as a standard Markdown table. The system will automatically convert it to a downloadable CSV for them.\n\n"
                 "--- AGGREGATE SUMMARY ---\n" +
                 aggregate_summary +
