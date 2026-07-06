@@ -1136,7 +1136,12 @@
                                     }
                                     const rawMsg = data[i];
                                     const div = document.createElement('div');
-                                    div.className = 'p-3 bg-white border border-gray-200 rounded-md shadow-sm break-words';
+                                    div.className = 'p-3 bg-white border border-gray-200 rounded-md shadow-sm break-words cursor-pointer hover:bg-gray-50 transition';
+                                    if (rawMsg.latitude && rawMsg.longitude) {
+                                        div.onclick = () => {
+                                            if(window.liveMap) window.liveMap.setView([rawMsg.latitude, rawMsg.longitude], 16, {animate: true});
+                                        };
+                                    }
                                     const cat = rawMsg.category || 'Uncategorized';
                                     const loc = rawMsg.location || rawMsg.extracted_location || 'Unknown Location';
                                     const lang = rawMsg.original_language || '';
@@ -1186,7 +1191,12 @@
                         rawContainer.innerHTML = ''; // clear placeholder
                         data.forEach(m => {
                             const div = document.createElement('div');
-                            div.className = 'p-3 bg-white border border-gray-200 rounded-md shadow-sm break-words';
+                            div.className = 'p-3 bg-white border border-gray-200 rounded-md shadow-sm break-words cursor-pointer hover:bg-gray-50 transition';
+                            if (m.latitude && m.longitude) {
+                                div.onclick = () => {
+                                    if(window.liveMap) window.liveMap.setView([m.latitude, m.longitude], 16, {animate: true});
+                                };
+                            }
                             const cat = m.category || 'Uncategorized';
                             const loc = m.location || m.extracted_location || 'Unknown';
                             const lang = m.original_language || '';
