@@ -10,6 +10,7 @@
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
 <script>
@@ -351,102 +352,52 @@
 </style>
 <link crossorigin="" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" rel="stylesheet"/><script crossorigin="" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script><script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
-<!-- Firebase SDKs -->
-<script defer src="/__/firebase/10.7.0/firebase-app-compat.js"></script>
-<script defer src="/__/firebase/10.7.0/firebase-auth-compat.js"></script>
-<script defer src="/__/firebase/init.js"></script>
+<!-- Firebase SDKs removed - auth gate removed -->
+
 </head>
 <body class="bg-gray-100 min-h-screen flex flex-col overflow-y-auto overflow-x-hidden custom-scrollbar">
-<!-- ============================================================ -->
-<!-- ADMIN AUTH GATE -->
-<!-- ============================================================ -->
-<div id="pin-gate" class="fixed inset-0 z-[99999] flex items-center justify-center bg-[#0F172A]">
-    <div class="flex flex-col items-center gap-6 w-80">
-        <div class="flex flex-col items-center gap-3">
-            <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-50 to-gray-100 border border-gray-300/50 flex items-center justify-center shadow-md">
-                <svg class="w-10 h-10" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M12 22s8-6 8-12.5a8 8 0 0 0-16 0C4 16 12 22 12 22z" stroke="#3b82f6" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                    <path d="M8 12v-3h2V6h4v4h2v2" stroke="#3b82f6" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-            </div>
-            <h1 class="text-2xl font-bold text-gray-900 tracking-tight">UrbanOS<span class="text-blue-500">.</span></h1>
-            <p class="text-xs text-gray-500 text-center">Admin access only. Please sign in to continue.</p>
-        </div>
-        <div class="w-full flex flex-col gap-3">
-            <button onclick="signInWithGoogle()" class="w-full py-3 bg-white hover:bg-gray-100 text-black font-bold rounded-xl transition flex items-center justify-center gap-3 text-sm shadow-sm">
-                <svg class="w-5 h-5" viewBox="0 0 24 24">
-                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-                </svg>
-                Sign in with Google
-            </button>
-            <p id="auth-error" class="text-red-400 text-xs text-center hidden">Authentication failed. Please try again.</p>
-        </div>
-    </div>
-</div>
 
 <script>
-    // Backend URL — uses relative path on deployed site, hardcoded for local dev
-    const BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-        ? 'https://urbanos.web.app'
-        : '';
+    // Backend URL. main.py serves both this page and the API, so a relative path
+    // is correct in every context the app is actually served from (Firebase
+    // Hosting rewrites and local uvicorn alike). Pointing localhost at the
+    // deployed host made local runs silently test production instead.
+    // Override with window.URBANOS_API_BASE when opening the file standalone.
+    const BASE_URL = (typeof window.URBANOS_API_BASE === 'string')
+        ? window.URBANOS_API_BASE
+        : (window.location.protocol === 'file:' ? 'https://urbanos.web.app' : '');
 
+    // Plain fetch wrapper — no auth required
     async function authFetch(url, options = {}) {
-        if (typeof firebase !== 'undefined' && firebase.auth().currentUser) {
-            const token = await firebase.auth().currentUser.getIdToken();
-            options.headers = options.headers || {};
-            options.headers['Authorization'] = `Bearer ${token}`;
-        } else {
-            console.warn("No authenticated user, proceeding without token.");
-        }
         return window.fetch(BASE_URL + url, options);
     }
-</script>
-<script>
-    // Firebase Google Authentication
 
-    function signInWithGoogle() {
-        const provider = new firebase.auth.GoogleAuthProvider();
-        firebase.auth().signInWithPopup(provider)
-            .then((result) => {
-                document.getElementById('pin-gate').style.display = 'none';
-            })
-            .catch((error) => {
-                console.error("Auth Error:", error);
-                document.getElementById('auth-error').classList.remove('hidden');
-                document.getElementById('auth-error').innerText = error.message || "Authentication failed.";
-            });
-    }
+    // Hard failsafe: force-hide splash after 9 seconds no matter what
+    setTimeout(() => {
+        const splash = document.getElementById('splash-screen');
+        if (splash && splash.style.display !== 'none') {
+            splash.style.opacity = '0';
+            setTimeout(() => { if(splash) splash.style.display = 'none'; }, 600);
+            // Kick off app even if startSplashScreen never ran
+            try { if (typeof initMaps === 'function') initMaps(); } catch(e) {}
+            try { if (typeof fetchMessages === 'function') fetchMessages(); } catch(e) {}
+            try { if (typeof fetchRankedProjects === 'function') fetchRankedProjects(); } catch(e) {}
+            try { if (window.UrbanFeed) UrbanFeed.init(); } catch(e) {}
+            try { if (window.UrbanInsights) UrbanInsights.init(); } catch(e) {}
+        }
+    }, 9000);
 
-    // Monitor Auth State
+    // Auto-start splash screen after page fully loads
     window.addEventListener('load', () => {
-        // Wait briefly for firebase to initialize via init.js
         setTimeout(() => {
-            if (typeof firebase !== 'undefined') {
-                firebase.auth().onAuthStateChanged((user) => {
-                    if (user) {
-                        document.getElementById('pin-gate').style.display = 'none';
-                        
-                        // Update profile UI with real Google account data
-                        const profileNameEl = document.getElementById('user-profile-name');
-                        const profileImgEl = document.getElementById('user-profile-img');
-                        const profileRoleEl = document.getElementById('user-profile-role');
-                        
-                        if (profileNameEl) profileNameEl.innerText = user.displayName || user.email.split('@')[0];
-                        if (profileImgEl) profileImgEl.src = user.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName || user.email)}&background=333&color=fff`;
-                        if (profileRoleEl) profileRoleEl.innerText = user.email; // Show email as role
-
-                        if (typeof startSplashScreen === 'function') startSplashScreen();
-                    } else {
-                        document.getElementById('pin-gate').style.display = 'flex';
-                    }
-                });
+            if (typeof window.startSplashScreen === 'function') {
+                window.startSplashScreen();
             }
-        }, 500);
+        }, 200);
     });
 </script>
+
+
 <div class="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-white transition-opacity duration-700" id="splash-screen">
     <div class="relative w-[550px] h-[550px] flex items-center justify-center">
         
@@ -752,61 +703,177 @@
 
 </div>
 
-<div class="view-content w-full flex flex-col gap-5 h-[calc(100vh-100px)]" id="view-insights">
-  <!-- AI Database Assistant (Full Screen) -->
-  <div class="flex-1 flex flex-col gap-4 bg-gray-50 border border-gray-200 rounded-xl p-6 relative min-h-0">
-      <div class="flex justify-between items-center shrink-0 border-b border-gray-200 pb-4">
-          <div>
-              <h2 class="text-2xl font-bold text-gray-900 flex items-center gap-3">
-                  <span class="material-symbols-outlined text-purple-400 text-[28px]">smart_toy</span>
-                  UrbanOS RAG AI Agent
-              </h2>
-              <div class="text-xs text-gray-500 flex gap-2 mt-2 items-center">
-                  <div class="pulse-dot"></div> Connected Context: 
-                  <span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded border border-gray-300">Citizen Proposals</span> 
-                  <span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded border border-gray-300">Sanctioned Projects</span>
-                  <span class="bg-purple-900/40 text-purple-300 px-2 py-0.5 rounded border border-purple-700/50">Custom Datasets</span>
-              </div>
+<div class="view-content w-full flex flex-col gap-0 h-[calc(100vh-100px)]" id="view-insights">
+  <!-- Two-column resizable layout -->
+  <div class="flex-1 flex flex-row min-h-0 gap-0 overflow-hidden" id="insights-workspace">
+
+    <!-- LEFT: RAG Chat Panel -->
+    <div class="flex flex-col gap-3 bg-gray-50 border border-gray-200 rounded-xl p-5 min-h-0 overflow-hidden" id="insights-left-panel" style="width:48%; min-width:280px;">
+      <!-- Header -->
+      <div class="flex justify-between items-center shrink-0 border-b border-gray-200 pb-3">
+        <div>
+          <h2 class="text-lg font-bold text-gray-900 flex items-center gap-2">
+            <span class="material-symbols-outlined text-purple-400 text-[22px]">smart_toy</span>
+            UrbanOS RAG AI
+          </h2>
+          <div class="text-[10px] text-gray-500 flex gap-1.5 mt-1 flex-wrap items-center">
+            <div class="pulse-dot"></div>
+            <span class="bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded border border-gray-200">Proposals</span>
+            <span class="bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded border border-gray-200">Sanctioned</span>
+            <span class="bg-purple-900/40 text-purple-300 px-1.5 py-0.5 rounded border border-purple-700/50">Datasets</span>
           </div>
-          <!-- Dataset Upload -->
-          <div class="flex items-center gap-3">
-              <input type="file" id="dataset-upload" class="hidden" accept=".csv,.txt" onchange="handleDatasetUpload(event)">
-              <button onclick="document.getElementById('dataset-upload').click()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-900 text-xs font-bold rounded-lg transition border border-gray-300 flex items-center gap-2">
-                  <span class="material-symbols-outlined text-[16px]">upload_file</span>
-                  Add Dataset
-              </button>
-          </div>
-      </div>
-      
-      <!-- Chat History -->
-      <div id="ai-chat-history" class="flex-1 flex flex-col gap-5 pr-2 overflow-y-auto custom-scrollbar min-h-0">
-          <div class="flex flex-col gap-1 items-start">
-              <div class="text-xs text-gray-500 uppercase tracking-wider font-bold ml-1">UrbanOS AI</div>
-              <div class="bg-white border border-gray-300 text-sm text-gray-600 px-5 py-4 rounded-2xl rounded-tl-sm max-w-[85%] leading-relaxed shadow-sm">
-                  Hello! I am connected to the UrbanOS data warehouse. I can help you analyze grievances, sanctioned projects, or any custom dataset you upload. I can also generate Mermaid charts or structured tables (which you can download as Excel/CSV). What would you like to explore?
-              </div>
-          </div>
-      </div>
-      
-      <!-- Chat Input -->
-      <div class="mt-auto shrink-0 relative flex flex-col gap-2 pt-3 border-t border-gray-200">
-          <!-- Grounded example queries -->
-          <div class="flex flex-wrap gap-2 px-1">
-              <button onclick="document.getElementById('ai-chat-input').value = this.innerText; sendAIChatMessage()" class="bg-gray-200 hover:bg-gray-200 border border-gray-300 text-xs text-gray-600 py-1.5 px-3 rounded-full transition shadow-sm cursor-pointer whitespace-nowrap">GIVE ME A STRUCTURED REPORT ON LUCKNOW'S URBAN INFRASTRUCTURE</button>
-              <button onclick="document.getElementById('ai-chat-input').value = this.innerText; sendAIChatMessage()" class="bg-gray-200 hover:bg-gray-200 border border-gray-300 text-xs text-gray-600 py-1.5 px-3 rounded-full transition shadow-sm cursor-pointer whitespace-nowrap">GENERATE A PIE CHART OF CRITICAL ISSUES</button>
-              <button onclick="document.getElementById('ai-chat-input').value = this.innerText; sendAIChatMessage()" class="bg-gray-200 hover:bg-gray-200 border border-gray-300 text-xs text-gray-600 py-1.5 px-3 rounded-full transition shadow-sm cursor-pointer whitespace-nowrap">SUMMARIZE RECENT COMPLAINTS IN GOMTI NAGAR</button>
-              <button onclick="document.getElementById('ai-chat-input').value = this.innerText; sendAIChatMessage()" class="bg-gray-200 hover:bg-gray-200 border border-gray-300 text-xs text-gray-600 py-1.5 px-3 rounded-full transition shadow-sm cursor-pointer whitespace-nowrap">EXPORT A CSV OF SANCTIONED PROJECTS</button>
-          </div>
-          <div class="relative flex items-center gap-3 w-full">
-              <input type="text" id="ai-chat-input" class="w-full bg-white border border-gray-300 rounded-full px-5 py-3 pr-14 text-sm text-gray-900 focus:outline-none focus:border-blue-500 transition shadow-inner" placeholder="Ask UrbanOS AI to analyze data, plot a chart, or summarize feedback..." onkeypress="if(event.key === 'Enter') sendAIChatMessage()">
-              <button onclick="sendAIChatMessage()" class="absolute right-2 w-10 h-10 flex items-center justify-center bg-blue-600 hover:bg-blue-500 text-white rounded-full transition shadow-[0_0_15px_rgba(37,99,235,0.3)]">
-                  <span class="material-symbols-outlined text-[20px]">send</span>
-              </button>
-          </div>
+        </div>
+        <div class="flex gap-2 items-center">
+          <input type="file" id="dataset-upload" class="hidden" accept=".csv,.txt" onchange="handleDatasetUpload(event)">
+          <button onclick="document.getElementById('dataset-upload').click()" class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 text-xs font-bold rounded-lg border border-gray-300 flex items-center gap-1">
+            <span class="material-symbols-outlined text-[14px]">upload_file</span> Dataset
+          </button>
+          <button onclick="toggleInsightsPanel('left')" title="Collapse left panel" class="w-7 h-7 flex items-center justify-center rounded-lg bg-gray-100 hover:bg-gray-200 border border-gray-200 text-gray-500 text-[12px] transition" id="collapse-left-btn">◀</button>
+        </div>
       </div>
 
+      <!-- TIMELINE SCOPING -->
+      <div class="shrink-0 flex flex-col gap-2 border-b border-gray-200 pb-3">
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Timeline</span>
+          <div class="inline-flex rounded-lg border border-gray-300 bg-gray-100 p-0.5" id="insights-range-control">
+            <button data-range="7d"    onclick="UrbanInsights.setRange('7d')"    class="ins-range-btn px-2.5 py-1 text-[11px] font-semibold rounded-md transition text-gray-600 hover:text-gray-900">7 Days</button>
+            <button data-range="month" onclick="UrbanInsights.setRange('month')" class="ins-range-btn px-2.5 py-1 text-[11px] font-semibold rounded-md transition text-gray-600 hover:text-gray-900">This Month</button>
+            <button data-range="all"   onclick="UrbanInsights.setRange('all')"   class="ins-range-btn px-2.5 py-1 text-[11px] font-semibold rounded-md transition bg-white text-gray-900 shadow-sm">All Time</button>
+          </div>
+        </div>
+        <div class="flex items-center gap-3 flex-wrap">
+          <label class="flex items-center gap-1.5 text-[10px] text-gray-600 cursor-pointer select-none"
+                 title="When on, the AI may only reason over reports inside the selected window. When off, it answers from the complete history regardless of the timeline above.">
+            <input type="checkbox" id="insights-scope-toggle" checked onchange="UrbanInsights.setScope(this.checked)" class="accent-purple-600 w-3 h-3">
+            <span>Scope AI to this timeline</span>
+          </label>
+          <label class="flex items-center gap-1.5 text-[10px] text-gray-500 cursor-pointer select-none"
+                 title="Anchor the window to the newest record in the dataset instead of the current clock.">
+            <input type="checkbox" id="insights-anchor-toggle" onchange="UrbanInsights.setAnchor(this.checked ? 'data' : 'now')" class="accent-blue-600 w-3 h-3">
+            <span>Anchor to latest data</span>
+          </label>
+        </div>
+        <!-- Live analytics strip: the same computed numbers the agent is briefed with -->
+        <div class="grid grid-cols-4 gap-1.5" id="insights-kpis">
+          <div class="bg-white border border-gray-200 rounded-lg px-2 py-1.5">
+            <div class="text-[9px] text-gray-400 uppercase tracking-wide">Reports</div>
+            <div class="text-sm font-bold text-gray-900" id="ins-kpi-total">-</div>
+          </div>
+          <div class="bg-white border border-gray-200 rounded-lg px-2 py-1.5">
+            <div class="text-[9px] text-gray-400 uppercase tracking-wide">Open</div>
+            <div class="text-sm font-bold text-amber-600" id="ins-kpi-open">-</div>
+          </div>
+          <div class="bg-white border border-gray-200 rounded-lg px-2 py-1.5">
+            <div class="text-[9px] text-gray-400 uppercase tracking-wide">Critical</div>
+            <div class="text-sm font-bold text-red-600" id="ins-kpi-critical">-</div>
+          </div>
+          <div class="bg-white border border-gray-200 rounded-lg px-2 py-1.5">
+            <div class="text-[9px] text-gray-400 uppercase tracking-wide">Resolved</div>
+            <div class="text-sm font-bold text-green-600" id="ins-kpi-resolution">-</div>
+          </div>
+        </div>
+        <div class="text-[10px] text-gray-500 italic" id="insights-window-note"></div>
+      </div>
+
+      <!-- Chat History -->
+      <div id="ai-chat-history" class="flex-1 flex flex-col gap-4 overflow-y-auto custom-scrollbar min-h-0 pr-1">
+        <div class="flex flex-col gap-1 items-start">
+          <div class="text-[10px] text-gray-400 uppercase tracking-wider font-bold ml-1">UrbanOS AI</div>
+          <div class="bg-white border border-gray-300 text-sm text-gray-600 px-4 py-3 rounded-2xl rounded-tl-sm max-w-[90%] leading-relaxed shadow-sm">
+            Hello! I am connected to the UrbanOS data warehouse. Ask me to analyze grievances, find patterns, or summarize feedback — and I will highlight matching complaints on the map to your right.
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick chips -->
+      <div class="shrink-0 flex flex-wrap gap-1.5 border-t border-gray-200 pt-2">
+        <button onclick="UrbanInsights.ask('Which ward is performing worst and why?')" class="bg-red-50 hover:bg-red-100 border-red-200 text-red-700 text-[10px] py-1 px-2.5 rounded-full transition cursor-pointer border">Which ward is performing worst and why?</button>
+        <button onclick="UrbanInsights.ask('Which ward has the most electricity complaints in the last 7 days?')" class="bg-amber-50 hover:bg-amber-100 border-amber-200 text-amber-700 text-[10px] py-1 px-2.5 rounded-full transition cursor-pointer border">Which ward has the most electricity complaints in the last 7 days?</button>
+        <button onclick="UrbanInsights.ask('Which ward officer is being most disliked?')" class="bg-orange-50 hover:bg-orange-100 border-orange-200 text-orange-700 text-[10px] py-1 px-2.5 rounded-full transition cursor-pointer border">Which ward officer is being most disliked?</button>
+        <button onclick="UrbanInsights.ask('Which are the best performing wards?')" class="bg-green-50 hover:bg-green-100 border-green-200 text-green-700 text-[10px] py-1 px-2.5 rounded-full transition cursor-pointer border">Which are the best performing wards?</button>
+        <button onclick="UrbanInsights.ask('Which complaints are overdue on SLA?')" class="bg-rose-50 hover:bg-rose-100 border-rose-200 text-rose-700 text-[10px] py-1 px-2.5 rounded-full transition cursor-pointer border">Which complaints are overdue on SLA?</button>
+        <button onclick="UrbanInsights.ask('Show a chart of complaint categories')" class="bg-indigo-50 hover:bg-indigo-100 border-indigo-200 text-indigo-700 text-[10px] py-1 px-2.5 rounded-full transition cursor-pointer border">Show a chart of complaint categories</button>
+        <button onclick="UrbanInsights.ask('Show the trend of complaints over time')" class="bg-blue-50 hover:bg-blue-100 border-blue-200 text-blue-700 text-[10px] py-1 px-2.5 rounded-full transition cursor-pointer border">Show the trend of complaints over time</button>
+        <button onclick="UrbanInsights.ask('What are the top issues in Gomti Nagar?')" class="bg-gray-100 hover:bg-gray-200 border-gray-200 text-gray-700 text-[10px] py-1 px-2.5 rounded-full transition cursor-pointer border">What are the top issues in Gomti Nagar?</button>
+        <button onclick="UrbanInsights.ask('Which department has the worst resolution rate?')" class="bg-purple-50 hover:bg-purple-100 border-purple-200 text-purple-700 text-[10px] py-1 px-2.5 rounded-full transition cursor-pointer border">Which department has the worst resolution rate?</button>
+      </div>
+
+      <!-- Input -->
+      <div class="shrink-0 relative flex items-center gap-2 w-full">
+        <input type="text" id="ai-chat-input" class="w-full bg-white border border-gray-300 rounded-full px-4 py-2.5 pr-12 text-sm text-gray-900 focus:outline-none focus:border-blue-500 transition shadow-inner" placeholder="Ask about grievances, wards, budgets..." onkeypress="if(event.key === 'Enter') sendAIChatMessage()">
+        <button onclick="sendAIChatMessage()" class="absolute right-1.5 w-9 h-9 flex items-center justify-center bg-blue-600 hover:bg-blue-500 text-white rounded-full transition">
+          <span class="material-symbols-outlined text-[18px]">send</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- RESIZE HANDLE -->
+    <div id="insights-resize-handle" class="w-2 cursor-col-resize flex items-center justify-center shrink-0 hover:bg-blue-100 transition group z-10" style="margin: 0 4px;">
+      <div class="w-0.5 h-12 bg-gray-300 group-hover:bg-blue-400 rounded transition"></div>
+    </div>
+
+    <!-- RIGHT: Map + Charts Panel -->
+    <div class="flex flex-col bg-white border border-gray-200 rounded-xl overflow-hidden min-h-0 flex-1" id="insights-right-panel" style="min-width:280px;">
+      
+      <!-- MAP SECTION -->
+      <div class="flex flex-col min-h-0" id="insights-map-section" style="flex:1; min-height: 200px;">
+        <!-- Map header + filters -->
+        <div class="shrink-0 p-3 border-b border-gray-200 bg-gray-50">
+          <div class="flex items-center justify-between mb-2">
+            <div class="flex items-center gap-2">
+              <span class="material-symbols-outlined text-blue-500 text-[18px]">map</span>
+              <span class="text-sm font-bold text-gray-900">Complaint Map</span>
+              <span id="insights-map-count" class="text-[10px] text-gray-400 bg-gray-100 px-2 py-0.5 rounded font-mono">All complaints</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <button onclick="insightsMapReset()" class="text-[10px] text-gray-500 hover:text-gray-900 border border-gray-200 bg-white px-2 py-1 rounded transition">Reset All</button>
+              <button onclick="toggleInsightsPanel('right')" title="Collapse right panel" class="w-7 h-7 flex items-center justify-center rounded-lg bg-gray-100 hover:bg-gray-200 border border-gray-200 text-gray-500 text-[12px] transition" id="collapse-right-btn">▶</button>
+            </div>
+          </div>
+          <!-- Active filter chips -->
+          <div class="flex flex-wrap gap-1.5 min-h-[22px]" id="insights-filter-chips">
+            <span class="text-[10px] text-gray-400 italic">AI responses will highlight matching complaints here</span>
+          </div>
+        </div>
+        <!-- Map fills remaining space -->
+        <div id="insights-map" class="flex-1 w-full min-h-0"></div>
+      </div>
+
+      <!-- RESIZE HANDLE between map and charts -->
+      <div id="insights-vertical-handle" class="h-2 cursor-row-resize flex items-center justify-center shrink-0 hover:bg-blue-100 transition group border-t border-gray-200">
+        <div class="h-0.5 w-12 bg-gray-300 group-hover:bg-blue-400 rounded transition"></div>
+      </div>
+
+      <!-- CHARTS SECTION (collapsible) -->
+      <div id="insights-charts-section" class="shrink-0 flex flex-col border-t border-gray-100 bg-gray-50 transition-all" style="height:220px; min-height:40px;">
+        <!-- Charts header -->
+        <div class="flex items-center justify-between px-3 py-2 border-b border-gray-200 shrink-0">
+          <div class="flex items-center gap-2">
+            <span class="material-symbols-outlined text-indigo-400 text-[16px]">bar_chart</span>
+            <span class="text-xs font-bold text-gray-800">Charts & Analytics</span>
+            <span id="charts-status" class="text-[10px] text-gray-400 italic">Ask AI to generate a chart</span>
+          </div>
+          <div class="flex gap-1">
+            <button onclick="toggleChartsSection()" class="text-[10px] text-gray-500 hover:text-gray-900 border border-gray-200 bg-white px-2 py-0.5 rounded transition" id="charts-toggle-btn">▼ Collapse</button>
+            <button onclick="clearInsightsChart()" class="text-[10px] text-gray-500 hover:text-gray-900 border border-gray-200 bg-white px-2 py-0.5 rounded transition">Clear</button>
+          </div>
+        </div>
+        <!-- Charts canvas area -->
+        <div class="flex-1 flex items-center justify-center overflow-hidden p-2" id="insights-chart-container">
+          <div id="insights-chart-placeholder" class="text-center text-gray-300">
+            <span class="material-symbols-outlined text-[40px]">insert_chart</span>
+            <div class="text-[11px] mt-1">Charts will appear here automatically when the AI generates data</div>
+          </div>
+          <canvas id="insights-chart-canvas" class="hidden max-h-full max-w-full"></canvas>
+        </div>
+      </div>
+
+    </div>
   </div>
 </div>
+
+
 
 <div class="view-content w-full flex flex-col gap-5" id="view-coordination">
   <!-- Feedback & Analysis (Survey Manager) -->
@@ -826,13 +893,14 @@
               </button>
           </div>
           
+          <div id="survey-analytics" class="flex flex-col gap-3 mb-4 hidden"></div>
           <div id="survey-list" class="flex flex-col gap-4 flex-1 overflow-y-auto pr-2 custom-scrollbar">
               <div class="text-xs text-gray-500 text-center py-10 italic">Loading active surveys...</div>
           </div>
       </div>
 
       <!-- Right: Survey Creator Panel -->
-      <div class="flex-1 flex flex-col gap-4 bg-gray-50 border border-gray-200 rounded-xl p-5 shrink-0">
+      <div class="flex-1 flex flex-col gap-4 bg-gray-50 border border-gray-200 rounded-xl p-5 shrink-0 overflow-y-auto custom-scrollbar">
           <h3 class="text-lg font-bold text-gray-900 border-b border-gray-200 pb-3">Create New Survey</h3>
           <div class="flex flex-col gap-4 pt-2">
               <div class="flex flex-col gap-2">
@@ -844,9 +912,86 @@
                   <input type="text" id="survey-opt" class="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-blue-500" placeholder="Excellent, Good, Poor">
               </div>
               
-              <div class="bg-indigo-50 border border-indigo-200 rounded-lg p-3 mt-2 shadow-sm">
-                  <div class="text-xs text-indigo-700 mb-1 font-bold">Audience Targeting</div>
-                  <div class="text-[10px] text-indigo-600">Survey will be broadcasted to all citizens who have interacted with UrbanOS WhatsApp.</div>
+              <!-- AUDIENCE TARGETING -->
+              <div class="bg-indigo-50 border border-indigo-200 rounded-lg p-3 mt-1 shadow-sm flex flex-col gap-2">
+                  <div class="flex items-center justify-between">
+                      <div class="text-xs text-indigo-700 font-bold flex items-center gap-1">
+                          <span class="material-symbols-outlined text-[14px]">group</span> Audience Targeting
+                      </div>
+                      <button type="button" onclick="SurveyAudience.reset()" class="text-[10px] text-indigo-600 hover:text-indigo-900 underline">Reset</button>
+                  </div>
+                  <div class="text-[10px] text-indigo-600 -mt-1">Leave everything blank to reach every citizen who has reported.</div>
+
+                  <div class="grid grid-cols-2 gap-2">
+                      <div class="flex flex-col gap-1">
+                          <label class="text-[10px] font-semibold text-indigo-700 uppercase">Wards</label>
+                          <input type="text" id="aud-wards" oninput="SurveyAudience.preview()" placeholder="e.g. 9, 46, 65"
+                                 class="bg-white border border-indigo-200 rounded px-2 py-1.5 text-[11px] focus:outline-none focus:border-indigo-500">
+                      </div>
+                      <div class="flex flex-col gap-1">
+                          <label class="text-[10px] font-semibold text-indigo-700 uppercase">Locality / Zone</label>
+                          <select id="aud-zones" multiple size="3" onchange="SurveyAudience.preview()"
+                                  class="bg-white border border-indigo-200 rounded px-2 py-1 text-[11px] focus:outline-none focus:border-indigo-500"></select>
+                      </div>
+                      <div class="flex flex-col gap-1">
+                          <label class="text-[10px] font-semibold text-indigo-700 uppercase">Problem type</label>
+                          <select id="aud-categories" multiple size="3" onchange="SurveyAudience.preview()"
+                                  class="bg-white border border-indigo-200 rounded px-2 py-1 text-[11px] focus:outline-none focus:border-indigo-500"></select>
+                      </div>
+                      <div class="flex flex-col gap-1">
+                          <label class="text-[10px] font-semibold text-indigo-700 uppercase">Ward officer</label>
+                          <select id="aud-officers" multiple size="3" onchange="SurveyAudience.preview()"
+                                  class="bg-white border border-indigo-200 rounded px-2 py-1 text-[11px] focus:outline-none focus:border-indigo-500"></select>
+                      </div>
+                  </div>
+
+                  <div class="grid grid-cols-3 gap-2">
+                      <div class="flex flex-col gap-1">
+                          <label class="text-[10px] font-semibold text-indigo-700 uppercase">Status</label>
+                          <select id="aud-status" onchange="SurveyAudience.preview()" class="bg-white border border-indigo-200 rounded px-2 py-1 text-[11px]">
+                              <option value="">Any</option>
+                              <option value="open">Still unresolved</option>
+                              <option value="completed">Resolved</option>
+                              <option value="sanctioned">Sanctioned</option>
+                          </select>
+                      </div>
+                      <div class="flex flex-col gap-1">
+                          <label class="text-[10px] font-semibold text-indigo-700 uppercase">Sentiment</label>
+                          <select id="aud-sentiment" onchange="SurveyAudience.preview()" class="bg-white border border-indigo-200 rounded px-2 py-1 text-[11px]">
+                              <option value="">Any</option>
+                              <option value="negative">Unhappy</option>
+                              <option value="neutral">Neutral</option>
+                              <option value="positive">Hopeful</option>
+                          </select>
+                      </div>
+                      <div class="flex flex-col gap-1">
+                          <label class="text-[10px] font-semibold text-indigo-700 uppercase">Timeline</label>
+                          <select id="aud-range" onchange="SurveyAudience.preview()" class="bg-white border border-indigo-200 rounded px-2 py-1 text-[11px]">
+                              <option value="all">All time</option>
+                              <option value="7d">Last 7 days</option>
+                              <option value="month">This month</option>
+                              <option value="30d">Last 30 days</option>
+                          </select>
+                      </div>
+                  </div>
+
+                  <div class="flex items-center gap-2">
+                      <label class="text-[10px] font-semibold text-indigo-700 uppercase">Min reports filed</label>
+                      <input type="number" id="aud-minreports" min="1" value="1" oninput="SurveyAudience.preview()"
+                             class="w-16 bg-white border border-indigo-200 rounded px-2 py-1 text-[11px]">
+                  </div>
+
+                  <!-- LIVE PREVIEW: a broadcast cannot be recalled, so the audience is
+                       always resolved and shown before the send button is available. -->
+                  <div class="bg-white border border-indigo-200 rounded-lg p-2 mt-1">
+                      <div class="flex items-baseline justify-between">
+                          <span class="text-[10px] text-gray-500 uppercase font-bold">Will reach</span>
+                          <span class="text-lg font-bold text-indigo-700" id="aud-count">-</span>
+                      </div>
+                      <div class="text-[10px] text-gray-600 mt-0.5" id="aud-label">All citizens who have reported</div>
+                      <div class="text-[10px] text-gray-500 mt-1" id="aud-detail"></div>
+                      <div class="flex flex-wrap gap-1 mt-1.5" id="aud-chips"></div>
+                  </div>
               </div>
 
               <button onclick="createSurvey()" class="w-full mt-2 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg transition text-sm shadow-[0_4px_12px_rgba(16,185,129,0.3)] flex items-center justify-center gap-2">
@@ -955,14 +1100,46 @@
 
         <!-- Raw Webhook Feed Sidebar -->
         <aside class="flex-1 flex flex-col gap-0 card overflow-hidden bg-gray-50 border-gray-200 rounded-xl" style="max-height:600px">
-            <div class="p-4 border-b border-gray-200 flex items-center justify-between bg-white shrink-0">
-                <span class="text-sm font-bold text-gray-900 flex items-center gap-2">
-                    <span class="pulse-dot"></span> Live Incident Feed
-                </span>
-                <span class="text-[10px] text-gray-500 font-mono bg-gray-100 px-2 py-1 rounded">Real-time</span>
+            <div class="border-b border-gray-200 bg-white shrink-0">
+                <div class="p-4 pb-2 flex items-center justify-between">
+                    <span class="text-sm font-bold text-gray-900 flex items-center gap-2">
+                        <span class="pulse-dot"></span> Live Incident Feed
+                    </span>
+                    <span class="text-[10px] text-gray-500 font-mono bg-gray-100 px-2 py-1 rounded" id="feed-live-badge">Real-time</span>
+                </div>
+
+                <!-- TIMELINE CONTROL -->
+                <div class="px-4 pb-2 flex items-center gap-2 flex-wrap">
+                    <div class="inline-flex rounded-lg border border-gray-300 bg-gray-100 p-0.5" id="feed-range-control">
+                        <button data-range="7d"    onclick="UrbanFeed.setRange('7d')"    class="feed-range-btn px-2.5 py-1 text-[11px] font-semibold rounded-md transition text-gray-600 hover:text-gray-900">7 Days <span class="feed-range-count opacity-60"></span></button>
+                        <button data-range="month" onclick="UrbanFeed.setRange('month')" class="feed-range-btn px-2.5 py-1 text-[11px] font-semibold rounded-md transition text-gray-600 hover:text-gray-900">This Month <span class="feed-range-count opacity-60"></span></button>
+                        <button data-range="all"   onclick="UrbanFeed.setRange('all')"   class="feed-range-btn px-2.5 py-1 text-[11px] font-semibold rounded-md transition bg-white text-gray-900 shadow-sm">All Time <span class="feed-range-count opacity-60"></span></button>
+                    </div>
+                    <label class="flex items-center gap-1 text-[10px] text-gray-500 cursor-pointer select-none" title="Anchor windows to the newest record in the dataset instead of the current clock. Useful when data is loaded in batches.">
+                        <input type="checkbox" id="feed-anchor-toggle" onchange="UrbanFeed.setAnchor(this.checked ? 'data' : 'now')" class="accent-blue-600 w-3 h-3">
+                        Anchor to latest data
+                    </label>
+                </div>
+
+                <!-- SEARCH + COUNTS -->
+                <div class="px-4 pb-3 flex flex-col gap-2">
+                    <input type="text" id="feed-search" placeholder="Search ref ID, ward, officer, locality, keyword..."
+                           class="w-full px-3 py-2 text-xs border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500">
+                    <div class="flex items-center justify-between text-[10px] text-gray-500">
+                        <span id="feed-count-label" class="font-mono">Loading...</span>
+                        <span id="feed-window-label" class="italic"></span>
+                    </div>
+                </div>
             </div>
-            <div class="flex-1 overflow-y-auto p-4 flex flex-col gap-3 font-mono text-[11px] text-gray-500 leading-relaxed custom-scrollbar" id="raw-feed-container">
-                <div class="text-center text-gray-400 my-10 italic">Awaiting inbound webhooks...</div>
+
+            <div class="flex-1 overflow-y-auto p-4 pt-3 flex flex-col gap-0 font-mono text-[11px] text-gray-500 leading-relaxed custom-scrollbar" id="raw-feed-container">
+                <div id="feed-loader" class="flex flex-col items-center justify-center h-full space-y-3 opacity-60 pt-10">
+                    <svg class="animate-spin h-6 w-6 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <div class="text-gray-400 italic font-sans text-xs">Fetching live grievances...</div>
+                </div>
             </div>
         </aside>
     </div>
@@ -1004,6 +1181,8 @@
             }
             if(viewId === 'coordination') {
                 loadSurveys();
+                // Fill the audience pickers from live data the first time the tab opens.
+                if (window.SurveyAudience) SurveyAudience.populate();
             }
         }
 
@@ -1100,128 +1279,347 @@
         }
 
         // Fetch Live Messages from FastAPI backend
+        // ===================================================================
+        // URBANFEED - raw incident feed controller
+        // ===================================================================
+        // Renders the WHOLE dataset (1000+ reports) without freezing the tab:
+        //   * server paginates, so the first screen paints after ~80 records
+        //   * an IntersectionObserver sentinel pulls the next page on scroll
+        //   * polling is a DELTA request (`since`), so a steady-state tick
+        //     transfers only genuinely new reports instead of the full array
+        //   * search and timeline filtering happen server-side, so they apply
+        //     to all records rather than only the ones already in the DOM
+        // Ordering is newest-first everywhere: the server sorts DESC, pages are
+        // appended below, and live arrivals are prepended above.
+        window.UrbanFeed = (function () {
+            const PAGE_SIZE = 80;
+            const POLL_MS = 6000;
+
+            const state = {
+                range: 'all',
+                anchor: 'now',
+                q: '',
+                offset: 0,
+                total: 0,
+                windowTotal: 0,
+                grandTotal: 0,
+                latest: null,
+                loading: false,
+                hasMore: true,
+                started: false,
+                pollTimer: null,
+            };
+
+            const el = id => document.getElementById(id);
+            const esc = t => String(t == null ? '' : t)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
+            const proxyUrl = u => (u && u.includes('twilio.com'))
+                ? '/media-proxy?url=' + encodeURIComponent(u) : u;
+
+            function timeLabel(ts) {
+                if (!ts) return '';
+                const d = new Date(ts);
+                if (isNaN(d)) return '';
+                const diff = (Date.now() - d.getTime()) / 1000;
+                if (diff < 60) return 'just now';
+                if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+                if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+                if (diff < 604800) return Math.floor(diff / 86400) + 'd ago';
+                return d.toLocaleDateString([], { day: '2-digit', month: 'short', year: '2-digit' });
+            }
+
+            function fullTime(ts) {
+                if (!ts) return '';
+                const d = new Date(ts);
+                return isNaN(d) ? '' : d.toLocaleString();
+            }
+
+            function card(m, isNew) {
+                const cat = m.category || 'Uncategorized';
+                let loc = m.location || m.extracted_location;
+                if (!loc || !String(loc).trim()) {
+                    loc = (m.latitude && m.longitude)
+                        ? 'GPS: ' + Number(m.latitude).toFixed(4) + ', ' + Number(m.longitude).toFixed(4)
+                        : (m.constituency_zone || 'Unknown');
+                }
+                const photos = (m.media_urls && m.media_urls.length) ? m.media_urls : (m.media_url ? [m.media_url] : []);
+                const photoHTML = photos.filter(u => u && !String(u).includes('audio'))
+                    .map(u => '<a href="' + esc(u) + '" target="_blank" rel="noopener"><img src="' + esc(proxyUrl(u)) +
+                              '" class="w-12 h-12 object-cover rounded border border-gray-200 inline-block mr-1" onerror="this.style.display=\'none\'"/></a>')
+                    .join('');
+
+                const prioCls = m.priority === 'Critical' ? 'text-red-500 bg-red-50 border-red-200'
+                              : m.priority === 'High' ? 'text-amber-600 bg-amber-50 border-amber-200'
+                              : 'text-gray-500 bg-gray-50 border-gray-200';
+                const stCls = m.status === 'Completed' ? 'text-green-600'
+                            : m.status === 'Sanctioned' ? 'text-emerald-600'
+                            : m.status === 'In Review' ? 'text-amber-600' : 'text-gray-500';
+                const negDot = m.polarity === 'negative'
+                    ? '<span class="w-1.5 h-1.5 rounded-full bg-red-400 inline-block" title="Negative citizen sentiment"></span>' : '';
+
+                const div = document.createElement('div');
+                div.className = 'feed-item p-3 bg-white border border-gray-200 rounded-md shadow-sm break-words cursor-pointer hover:bg-gray-50 hover:border-blue-300 transition mb-2'
+                                + (isNew ? ' ring-1 ring-green-400' : '');
+                div.dataset.ref = m.reference_id || '';
+                if (m.latitude && m.longitude) {
+                    div.onclick = () => {
+                        if (window.liveMap) window.liveMap.flyTo([m.latitude, m.longitude], 16, { duration: 1.2 });
+                    };
+                } else {
+                    div.onclick = () => { /* no coordinates on this report */ };
+                }
+
+                div.innerHTML =
+                    '<div class="flex items-center justify-between mb-2">' +
+                      '<div class="' + (isNew ? 'text-green-600' : 'text-gray-500') + ' text-xs font-mono flex items-center gap-1.5">' +
+                        (isNew ? '&#9660; NEW ' : '') + '#' + esc(m.reference_id || 'Unknown') +
+                        ' <span class="text-gray-400" title="' + esc(fullTime(m.timestamp)) + '">' + esc(timeLabel(m.timestamp)) + '</span>' +
+                        negDot +
+                      '</div>' +
+                      (typeof langFlag === 'function' ? langFlag(m.original_language || '') : '') +
+                    '</div>' +
+                    '<div class="text-gray-900 font-medium text-sm mb-1 font-sans">' + esc(m.summary || cat) + '</div>' +
+                    '<div class="text-gray-500 text-xs mb-1 line-clamp-2">' + esc(m.raw_body || m.body || '') + '</div>' +
+                    '<div class="flex gap-1.5 flex-wrap mt-1 mb-1">' +
+                      '<span class="text-[10px] bg-blue-50 border border-blue-200 px-2 py-0.5 rounded text-blue-600">' + esc(cat) + '</span>' +
+                      '<span class="text-[10px] bg-gray-100 px-2 py-0.5 rounded text-gray-500">&#128205; ' + esc(loc) + '</span>' +
+                      '<span class="text-[10px] font-bold border ' + prioCls + ' px-2 py-0.5 rounded">' + esc(m.priority || '') + '</span>' +
+                      '<span class="text-[10px] ' + stCls + ' px-1">' + esc(m.status || 'Open') + '</span>' +
+                      (m.ward_no ? '<span class="text-[10px] bg-purple-50 border border-purple-200 px-2 py-0.5 rounded text-purple-600">&#127960; ' + esc(m.ward_no) + '</span>' : '') +
+                      (m.responsible_body ? '<span class="text-[10px] bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded text-indigo-600">&#127963; ' + esc(m.responsible_body) + '</span>' : '') +
+                      (m.ward_officer ? '<span class="text-[10px] bg-green-50 border border-green-200 px-2 py-0.5 rounded text-green-700">&#128100; ' + esc(m.ward_officer) + '</span>' : '') +
+                    '</div>' +
+                    (photoHTML ? '<div class="mt-1">' + photoHTML + '</div>' : '');
+                return div;
+            }
+
+            function container() { return el('raw-feed-container'); }
+
+            function setCounts() {
+                const c = el('feed-count-label');
+                if (c) {
+                    const shown = container() ? container().querySelectorAll('.feed-item').length : 0;
+                    c.textContent = 'Showing ' + shown + ' of ' + state.total +
+                                    (state.total !== state.grandTotal ? ' (' + state.grandTotal + ' total)' : '');
+                }
+            }
+
+            function sentinel() {
+                let sn = el('feed-sentinel');
+                if (sn) return sn;
+                sn = document.createElement('div');
+                sn.id = 'feed-sentinel';
+                sn.className = 'py-4 text-center text-[10px] text-gray-400 italic font-sans';
+                sn.textContent = 'Loading more...';
+                container().appendChild(sn);
+                if ('IntersectionObserver' in window) {
+                    const io = new IntersectionObserver(entries => {
+                        if (entries.some(e => e.isIntersecting) && state.hasMore && !state.loading) loadPage();
+                    }, { root: container(), rootMargin: '200px' });
+                    io.observe(sn);
+                }
+                return sn;
+            }
+
+            function qs(extra) {
+                const p = new URLSearchParams({ range: state.range, anchor: state.anchor, limit: String(PAGE_SIZE) });
+                if (state.q) p.set('q', state.q);
+                Object.entries(extra || {}).forEach(([k, v]) => p.set(k, String(v)));
+                return p.toString();
+            }
+
+            async function loadPage() {
+                if (state.loading || !state.hasMore) return;
+                state.loading = true;
+                try {
+                    const res = await authFetch('/api/feed?' + qs({ offset: state.offset }));
+                    const d = await res.json();
+                    const cont = container();
+                    if (!cont) return;
+
+                    const loader = el('feed-loader');
+                    if (loader) loader.remove();
+
+                    state.total = d.filtered_total;
+                    state.windowTotal = d.window_total;
+                    state.grandTotal = d.grand_total;
+                    state.offset = d.next_offset;
+                    state.hasMore = d.has_more;
+                    if (!state.latest && d.latest) state.latest = d.latest;
+
+                    const sn = sentinel();
+                    const frag = document.createDocumentFragment();
+                    d.items.forEach(m => frag.appendChild(card(m, false)));
+                    cont.insertBefore(frag, sn);
+
+                    const wl = el('feed-window-label');
+                    if (wl && d.range) wl.textContent = d.range.label;
+
+                    if (!state.hasMore) {
+                        sn.textContent = state.total === 0
+                            ? 'No reports in this window.'
+                            : 'End of feed \u2014 ' + state.total + ' reports.';
+                    } else {
+                        sn.textContent = 'Loading more...';
+                    }
+                    setCounts();
+                } catch (e) {
+                    console.error('[UrbanFeed] page load failed', e);
+                    const sn = el('feed-sentinel');
+                    if (sn) sn.textContent = 'Could not load more reports.';
+                } finally {
+                    state.loading = false;
+                }
+            }
+
+            async function poll() {
+                if (state.loading || !state.latest) return;
+                try {
+                    const res = await authFetch('/api/feed?' + qs({ since: state.latest }));
+                    const d = await res.json();
+                    if (d.mode !== 'delta' || !d.items || !d.items.length) {
+                        if (typeof d.filtered_total === 'number') { state.total = d.filtered_total; setCounts(); }
+                        return;
+                    }
+                    const cont = container();
+                    if (!cont) return;
+                    // Server returns DESC; insert oldest-of-the-batch first so the
+                    // newest report ends up at the very top.
+                    d.items.slice().reverse().forEach(m => cont.insertBefore(card(m, true), cont.firstChild));
+                    state.latest = d.latest || state.latest;
+                    state.total = d.filtered_total;
+                    state.offset += d.items.length;
+                    setCounts();
+                    const badge = el('feed-live-badge');
+                    if (badge) {
+                        badge.textContent = '+' + d.items.length + ' new';
+                        badge.classList.add('bg-green-100', 'text-green-700');
+                        setTimeout(() => {
+                            badge.textContent = 'Real-time';
+                            badge.classList.remove('bg-green-100', 'text-green-700');
+                        }, 4000);
+                    }
+                } catch (e) { /* transient poll failure is not worth surfacing */ }
+            }
+
+            function reset() {
+                const cont = container();
+                if (!cont) return;
+                cont.innerHTML = '<div id="feed-loader" class="flex items-center justify-center py-10 text-xs text-gray-400 italic font-sans">Loading reports...</div>';
+                state.offset = 0;
+                state.hasMore = true;
+                state.loading = false;
+                loadPage();
+            }
+
+            function paintRangeButtons() {
+                document.querySelectorAll('.feed-range-btn').forEach(b => {
+                    const on = b.dataset.range === state.range;
+                    b.classList.toggle('bg-white', on);
+                    b.classList.toggle('text-gray-900', on);
+                    b.classList.toggle('shadow-sm', on);
+                    b.classList.toggle('text-gray-600', !on);
+                });
+            }
+
+            async function refreshRangeCounts() {
+                try {
+                    const res = await authFetch('/api/feed/stats?range=' + state.range + '&anchor=' + state.anchor);
+                    const d = await res.json();
+                    document.querySelectorAll('.feed-range-btn').forEach(b => {
+                        const n = d.range_counts ? d.range_counts[b.dataset.range] : null;
+                        const span = b.querySelector('.feed-range-count');
+                        if (span && n != null) span.textContent = '(' + n + ')';
+                    });
+                } catch (e) { /* counts are decorative */ }
+            }
+
+            return {
+                init() {
+                    if (state.started) return;
+                    state.started = true;
+                    paintRangeButtons();
+                    reset();
+                    refreshRangeCounts();
+                    const search = el('feed-search');
+                    if (search) {
+                        let t = null;
+                        search.addEventListener('input', e => {
+                            clearTimeout(t);
+                            const v = e.target.value.trim();
+                            t = setTimeout(() => { state.q = v; reset(); }, 280);
+                        });
+                    }
+                    clearInterval(state.pollTimer);
+                    state.pollTimer = setInterval(poll, POLL_MS);
+                },
+                setRange(r) {
+                    if (state.range === r) return;
+                    state.range = r;
+                    paintRangeButtons();
+                    reset();
+                    // Keep the insights panel on the same window the operator picked.
+                    if (window.UrbanInsights && window.UrbanInsights.setRange) window.UrbanInsights.setRange(r, true);
+                },
+                setAnchor(a) {
+                    state.anchor = a;
+                    reset();
+                    refreshRangeCounts();
+                    if (window.UrbanInsights && window.UrbanInsights.setAnchor) window.UrbanInsights.setAnchor(a, true);
+                },
+                getRange() { return { range: state.range, anchor: state.anchor }; },
+                refresh: reset,
+            };
+        })();
+
         async function fetchMessages() {
             try {
                 const response = await authFetch('/messages');
-                const data = await response.json();
+                // Reassigned by the filter block further down, so it cannot be const.
+                let data = await response.json();
                 
                 // --- IMMEDIATE UI UPDATES FOR MAP ---
                 if (data && Array.isArray(data)) {
                     placeLiveMarkers(data);
                 }
                 
-                // Trigger live animation if new messages arrived
+                // The raw feed renders itself from /api/feed (see UrbanFeed below)
+                // so it can paginate the full dataset and poll deltas instead of
+                // re-rendering every card on every tick. Here we only animate the
+                // arrival of new reports and keep the counter honest.
                 if (lastMessageCount !== -1 && data.length > lastMessageCount) {
                     const numNew = data.length - lastMessageCount;
-                    for(let i=0; i<numNew; i++) {
+                    for (let i = 0; i < numNew && i < 12; i++) {
                         setTimeout(() => {
                             const canvas = document.getElementById('animation-canvas');
-                            if(canvas) {
+                            if (canvas) {
                                 const packet = document.createElement('div');
                                 packet.className = 'data-packet fly-once';
                                 canvas.appendChild(packet);
-                                
-                                // Increment counter
-                                const counter = document.getElementById('msg-counter');
-                                if(counter) counter.innerText = parseInt(counter.innerText) + 1;
-                                
                                 setTimeout(() => packet.remove(), 1500);
-                                
-                                // Append raw feed
-                                const rawContainer = document.getElementById('raw-feed-container');
-                                if(rawContainer) {
-                                    // Remove the placeholder if it exists
-                                    if(rawContainer.innerHTML.includes('Listening for')) {
-                                        rawContainer.innerHTML = '';
-                                    }
-                                    const rawMsg = data[i];
-                                    const div = document.createElement('div');
-                                    div.className = 'p-3 bg-white border border-gray-200 rounded-md shadow-sm break-words cursor-pointer hover:bg-gray-50 transition';
-                                    div.onclick = () => {
-                                        if (rawMsg.latitude && rawMsg.longitude) {
-                                            if(window.liveMap) window.liveMap.flyTo([rawMsg.latitude, rawMsg.longitude], 16, {duration: 1.5});
-                                        } else {
-                                            alert("No exact GPS coordinates available for this older report.");
-                                        }
-                                    };
-                                    const cat = rawMsg.category || 'Uncategorized';
-                                    const loc = rawMsg.location || rawMsg.extracted_location || 'Unknown Location';
-                                    const lang = rawMsg.original_language || '';
-                                    const ts = rawMsg.timestamp ? new Date(rawMsg.timestamp).toLocaleTimeString() : '';
-                                    div.innerHTML = `
-                                       <div class="flex items-center justify-between mb-2">
-                                         <div class="text-green-400 text-xs font-mono">▼ NEW PROPOSAL · ${ts}</div>
-                                         ${langFlag(lang)}
-                                       </div>
-                                       <div class="text-gray-900 font-medium text-sm mb-1">${rawMsg.summary || cat}</div>
-                                       <div class="text-gray-500 text-xs mb-1 truncate">${rawMsg.raw_body || rawMsg.body || ''}</div>
-                                       <div class="flex gap-2 flex-wrap mt-1">
-                                         <span class="text-[10px] bg-gray-100 px-2 py-0.5 rounded text-gray-500">${cat}</span>
-                                         <span class="text-[10px] bg-gray-100 px-2 py-0.5 rounded text-gray-500">📍 ${loc}</span>
-                                         <span class="text-[10px] font-bold ${rawMsg.priority === 'Critical' ? 'text-red-400' : rawMsg.priority === 'High' ? 'text-amber-400' : 'text-gray-500'}">${rawMsg.priority || ''}</span>
-                                       </div>`;
-                                    rawContainer.prepend(div);
-                                    
-                                    // Map Blink Effect
-                                    if (window.liveMap && rawMsg.latitude && rawMsg.longitude) {
-                                        const pulseIcon = L.divIcon({
-                                            className: 'custom-div-icon',
-                                            html: `<div class="pin-pulse"><div class="ring"></div><div class="core"></div></div>`,
-                                            iconSize: [28, 28],
-                                            iconAnchor: [14, 14]
-                                        });
-                                        const marker = L.marker([rawMsg.latitude, rawMsg.longitude], {icon: pulseIcon}).addTo(window.liveMap);
-                                        setTimeout(() => {
-                                            if(window.liveMap.hasLayer(marker)) window.liveMap.removeLayer(marker);
-                                        }, 4000);
-                                        window.liveMap.setView([rawMsg.latitude, rawMsg.longitude], 14, {animate: true});
-                                    }
-                                }
+                            }
+                            const rawMsg = data[i];
+                            if (window.liveMap && rawMsg && rawMsg.latitude && rawMsg.longitude) {
+                                const pulseIcon = L.divIcon({
+                                    className: 'custom-div-icon',
+                                    html: '<div class="pin-pulse"><div class="ring"></div><div class="core"></div></div>',
+                                    iconSize: [28, 28], iconAnchor: [14, 14]
+                                });
+                                const marker = L.marker([rawMsg.latitude, rawMsg.longitude], { icon: pulseIcon }).addTo(window.liveMap);
+                                setTimeout(() => { if (window.liveMap.hasLayer(marker)) window.liveMap.removeLayer(marker); }, 4000);
+                                window.liveMap.setView([rawMsg.latitude, rawMsg.longitude], 14, { animate: true });
                             }
                         }, i * 300);
                     }
                 }
-                
-                if (lastMessageCount === -1) {
-                    // First load, just set the counter
-                    const counter = document.getElementById('msg-counter');
-                    if(counter) counter.innerText = data.length;
-                    
-                    // Populate raw feed with existing messages on first load
-                    const rawContainer = document.getElementById('raw-feed-container');
-                    if(rawContainer && data.length > 0) {
-                        rawContainer.innerHTML = ''; // clear placeholder
-                        data.forEach(m => {
-                            const div = document.createElement('div');
-                            div.className = 'p-3 bg-white border border-gray-200 rounded-md shadow-sm break-words cursor-pointer hover:bg-gray-50 transition';
-                            if (m.latitude && m.longitude) {
-                                div.onclick = () => {
-                                    if(window.liveMap) window.liveMap.setView([m.latitude, m.longitude], 16, {animate: true});
-                                };
-                            }
-                            const cat = m.category || 'Uncategorized';
-                            const loc = m.location || m.extracted_location || 'Unknown';
-                            const lang = m.original_language || '';
-                            const ts = m.timestamp ? new Date(m.timestamp).toLocaleTimeString() : '';
-                            div.innerHTML = `
-                               <div class="flex items-center justify-between mb-2">
-                                 <div class="text-gray-500 text-xs font-mono">▼ PROPOSAL · ${ts}</div>
-                                 ${langFlag(lang)}
-                               </div>
-                               <div class="text-gray-900 font-medium text-sm mb-1">${m.summary || cat}</div>
-                               <div class="text-gray-500 text-xs mb-1 truncate">${m.raw_body || m.body || ''}</div>
-                               <div class="flex gap-2 flex-wrap mt-1">
-                                 <span class="text-[10px] bg-gray-100 px-2 py-0.5 rounded text-gray-500">${cat}</span>
-                                 <span class="text-[10px] bg-gray-100 px-2 py-0.5 rounded text-gray-500">📍 ${loc}</span>
-                                 <span class="text-[10px] font-bold ${m.priority === 'Critical' ? 'text-red-400' : m.priority === 'High' ? 'text-amber-400' : 'text-gray-500'}">${m.priority || ''}</span>
-                                 <span class="text-[10px] ${m.status === 'Sanctioned' ? 'text-green-400' : m.status === 'In Review' ? 'text-amber-400' : 'text-gray-500'}">${m.status || 'Open'}</span>
-                               </div>`;
-                            rawContainer.prepend(div);
-                        });
-                    }
-                }
-                
+
+                const counterEl = document.getElementById('msg-counter');
+                if (counterEl) counterEl.innerText = data.length;
+
                 lastMessageCount = data.length;
+
                 // --- MPLADS INSIGHTS LOGIC ---
                 let totalRequested = 0;
                 let projectsSanctioned = 0;
@@ -1622,9 +2020,11 @@
                         if(dPct) dPct.innerText = pct + '%';
                         if(dBar) dBar.style.width = pct + '%';
                     }
-
-                    const tCases = document.getElementById('tot-cases');
+                    // Declaration was lost in an earlier edit, leaving an undeclared
+                    // reference that aborted the rest of this handler.
+                    const tCases = document.getElementById('total-cases');
                     if(tCases) tCases.innerText = data.length.toLocaleString();
+
 
                     const rTime = document.getElementById('resp-time');
                     if(rTime) rTime.innerText = (Math.max(0.1, 7.4 - (data.length * 0.1))).toFixed(1) + ' H';
@@ -1800,6 +2200,7 @@
 
         function placeLiveMarkers(messages) {
             window.liveMessagesData = messages;
+            if (typeof updateSurveyAnalytics === 'function') updateSurveyAnalytics();
             if (!window.liveMap) return;
             
             // Read UI States
@@ -1851,15 +2252,18 @@
                 window.liveHexLayer = null;
             }
             
-            // Draw Hex Grid
+            // Draw Hex Grid (deferred so UI thread isn't blocked)
             if (showHex && typeof turf !== 'undefined') {
-                try {
-                    drawHexGrid(window.liveMap, filtered);
-                } catch(e) { console.error('Turf error:', e); }
+                const _filtered = filtered.slice();
+                setTimeout(() => {
+                    try { drawHexGrid(window.liveMap, _filtered); }
+                    catch(e) { console.error('Turf error:', e); }
+                }, 0);
             }
         }
 
-        function drawHexGrid(map, messages) {
+        // Create H3/Hex style grid using turf.js
+        function drawHexGrid(map, messages, layerKey = 'liveHexLayer') {
             const bbox = [80.80, 26.70, 81.10, 27.00]; // Lucknow bbox [minX, minY, maxX, maxY]
             const cellSide = 1.5; // kilometers
             const hexGrid = turf.hexGrid(bbox, cellSide, {units: 'kilometers'});
@@ -1873,10 +2277,15 @@
                 const ptsWithin = turf.pointsWithinPolygon(pts, hex);
                 hex.properties.count = ptsWithin.features.length;
                 const catCounts = {};
+                const wardCounts = {};
                 let budget = 0;
                 ptsWithin.features.forEach(pt => {
                     const c = pt.properties.category || 'Unknown';
+                    const w = pt.properties.ward_no || 'Unknown';
                     catCounts[c] = (catCounts[c] || 0) + 1;
+                    if (w !== 'Unknown') {
+                        wardCounts[w] = (wardCounts[w] || 0) + 1;
+                    }
                     if(pt.properties.estimated_budget) {
                         let b = String(pt.properties.estimated_budget).replace(/[^0-9]/g, '');
                         if(b) budget += parseInt(b);
@@ -1884,14 +2293,19 @@
                 });
                 let topCat = 'None', max = 0;
                 for (let c in catCounts) { if(catCounts[c] > max) { max = catCounts[c]; topCat = c; } }
+                
+                let topWard = 'Multiple', maxW = 0;
+                for (let w in wardCounts) { if(wardCounts[w] > maxW) { maxW = wardCounts[w]; topWard = w; } }
+                
                 hex.properties.topCategory = topCat;
+                hex.properties.topWard = topWard;
                 hex.properties.budget = budget;
             });
             
             const maxCount = Math.max(...hexGrid.features.map(f => f.properties.count), 1);
-            if (window.liveHexLayer) map.removeLayer(window.liveHexLayer);
+            if (window[layerKey]) map.removeLayer(window[layerKey]);
             
-            window.liveHexLayer = L.geoJSON(hexGrid, {
+            window[layerKey] = L.geoJSON(hexGrid, {
                 style: function(feature) {
                     const cnt = feature.properties.count;
                     if (cnt === 0) return {color: '#10b981', weight: 1, opacity: 0.15, fillOpacity: 0};
@@ -1907,17 +2321,34 @@
                             l.setStyle({ weight: 2, color: '#1d4ed8', opacity: 0.8 });
                             l.bringToFront();
                         },
-                        mouseout: function(e) { window.liveHexLayer.resetStyle(e.target); }
+                        mouseout: function(e) { window[layerKey].resetStyle(e.target); }
                     });
                     if (feature.properties.count > 0) {
                         const fmtB = feature.properties.budget > 10000000 ? '₹' + (feature.properties.budget/10000000).toFixed(1) + ' Cr' : '₹' + (feature.properties.budget/100000).toFixed(1) + ' L';
-                        const t = `
-                            <div class="font-sans min-w-[140px]">
-                                <div class="font-bold text-gray-900 border-b border-gray-200 pb-1 mb-1">Region Insights</div>
-                                <div class="text-xs text-gray-600 mb-0.5">Reports: <strong class="text-gray-900">${feature.properties.count}</strong></div>
-                                <div class="text-xs text-gray-600 mb-0.5">Top Issue: <strong class="text-gray-900">${feature.properties.topCategory}</strong></div>
-                                <div class="text-xs text-gray-600">Est. Budget: <strong class="text-gray-900">${fmtB}</strong></div>
-                            </div>`;
+                        const topWard = feature.properties.topWard || 'Unknown';
+                        const wardNum = parseInt((topWard.match(/\d+/) || [0])[0]);
+                        let officer = '';
+                        if (wardNum > 0) {
+                            if (wardNum <= 20) officer = 'Ramesh Yadav';
+                            else if (wardNum <= 40) officer = 'Priya Sharma';
+                            else if (wardNum <= 60) officer = 'Mohd. Farhan Siddiqui';
+                            else if (wardNum <= 80) officer = 'Sunita Verma';
+                            else officer = 'Ajay Kumar Singh';
+                        }
+                        const wardLine = (topWard !== 'Unknown' && topWard !== 'Multiple')
+                            ? '<div class="text-xs text-purple-700 mb-1 mt-1 pt-1 border-t border-gray-100">\uD83C\uDFD8\uFE0F Top Ward: <strong>' + topWard + '</strong></div>'
+                            : '';
+                        const officerLine = officer
+                            ? '<div class="text-xs text-green-700">\uD83D\uDC64 Officer: <strong>' + officer + '</strong></div>'
+                            : '';
+                        const t = '<div class="font-sans min-w-[160px]">'
+                            + '<div class="font-bold text-gray-900 border-b border-gray-200 pb-1 mb-2">Region Insights</div>'
+                            + '<div class="text-xs text-gray-600 mb-1">Reports: <strong class="text-gray-900">' + feature.properties.count + '</strong></div>'
+                            + '<div class="text-xs text-gray-600 mb-1">Top Issue: <strong class="text-gray-900">' + feature.properties.topCategory + '</strong></div>'
+                            + '<div class="text-xs text-gray-600 mb-1">Est. Budget: <strong class="text-gray-900">' + fmtB + '</strong></div>'
+                            + wardLine
+                            + officerLine
+                            + '</div>';
                         layer.bindTooltip(t, {direction: 'center', className: 'shadow-xl border-0 rounded-lg p-3 bg-white/95 backdrop-blur'});
                     }
                 }
@@ -1963,7 +2394,356 @@
                 // Replay live markers if we already have data
                 setTimeout(() => { if(window.liveMessagesData) placeLiveMarkers(window.liveMessagesData); }, 300);
             }
+            
+            initInsightsMap();
         }
+        
+        // ─── INSIGHTS WORKSPACE: RESIZE + COLLAPSE ───────────────────────────
+        (function() {
+            const savedW = localStorage.getItem('insights-left-width');
+            if (savedW) { const lp = document.getElementById('insights-left-panel'); if (lp) lp.style.width = savedW; }
+            const savedChH = localStorage.getItem('insights-charts-height');
+            if (savedChH) { const cs = document.getElementById('insights-charts-section'); if (cs) cs.style.height = savedChH; }
+
+            // Horizontal resize
+            const hHandle = document.getElementById('insights-resize-handle');
+            const workspace = document.getElementById('insights-workspace');
+            if (hHandle && workspace) {
+                let isDH = false;
+                hHandle.addEventListener('mousedown', e => { isDH = true; e.preventDefault(); });
+                document.addEventListener('mousemove', e => {
+                    if (!isDH) return;
+                    const rect = workspace.getBoundingClientRect();
+                    const newW = Math.max(220, Math.min(e.clientX - rect.left - 6, rect.width - 220));
+                    const lp = document.getElementById('insights-left-panel');
+                    if (lp) { lp.style.width = newW + 'px'; lp.style.flex = 'none'; }
+                    if (window.insightsMap) window.insightsMap.invalidateSize();
+                });
+                document.addEventListener('mouseup', () => {
+                    if (isDH) { const lp = document.getElementById('insights-left-panel'); if (lp) localStorage.setItem('insights-left-width', lp.style.width); }
+                    isDH = false;
+                });
+            }
+
+            // Vertical resize (map vs charts)
+            const vHandle = document.getElementById('insights-vertical-handle');
+            const rightPanel = document.getElementById('insights-right-panel');
+            if (vHandle && rightPanel) {
+                let isDV = false;
+                vHandle.addEventListener('mousedown', e => { isDV = true; e.preventDefault(); });
+                document.addEventListener('mousemove', e => {
+                    if (!isDV) return;
+                    const rect = rightPanel.getBoundingClientRect();
+                    const fromBottom = rect.bottom - e.clientY;
+                    const cs = document.getElementById('insights-charts-section');
+                    if (cs) { const newH = Math.max(40, Math.min(fromBottom - 4, rect.height - 200)); cs.style.height = newH + 'px'; }
+                    if (window.insightsMap) window.insightsMap.invalidateSize();
+                });
+                document.addEventListener('mouseup', () => {
+                    if (isDV) { const cs = document.getElementById('insights-charts-section'); if (cs) localStorage.setItem('insights-charts-height', cs.style.height); }
+                    isDV = false;
+                });
+            }
+        })();
+
+        window.toggleInsightsPanel = function(side) {
+            if (side === 'left') {
+                const lp = document.getElementById('insights-left-panel');
+                const btn = document.getElementById('collapse-left-btn');
+                if (!lp) return;
+                if (lp.dataset.collapsed === '1') {
+                    lp.style.width = localStorage.getItem('insights-left-width') || '48%';
+                    lp.style.overflow = 'hidden'; lp.style.padding = '';
+                    lp.dataset.collapsed = '0'; if (btn) btn.textContent = '◀';
+                } else {
+                    localStorage.setItem('insights-left-width', lp.style.width || '48%');
+                    lp.style.width = '0px'; lp.style.padding = '0'; lp.style.overflow = 'hidden';
+                    lp.dataset.collapsed = '1'; if (btn) btn.textContent = '▶';
+                }
+                setTimeout(() => { if (window.insightsMap) window.insightsMap.invalidateSize(); }, 300);
+            }
+            if (side === 'right') {
+                const rp = document.getElementById('insights-right-panel');
+                const btn = document.getElementById('collapse-right-btn');
+                if (!rp) return;
+                if (rp.dataset.collapsed === '1') {
+                    rp.style.flex = '1'; rp.style.overflow = '';
+                    rp.dataset.collapsed = '0'; if (btn) btn.textContent = '▶';
+                } else {
+                    rp.style.flex = '0 0 0px'; rp.style.overflow = 'hidden';
+                    rp.dataset.collapsed = '1'; if (btn) btn.textContent = '◀';
+                }
+                setTimeout(() => { if (window.insightsMap) window.insightsMap.invalidateSize(); }, 300);
+            }
+        };
+
+        let _chartsSectionCollapsed = false;
+        window.toggleChartsSection = function() {
+            const cs = document.getElementById('insights-charts-section');
+            const btn = document.getElementById('charts-toggle-btn');
+            if (!cs) return;
+            if (_chartsSectionCollapsed) {
+                cs.style.height = localStorage.getItem('insights-charts-height') || '220px';
+                if (btn) btn.textContent = '▼ Collapse'; _chartsSectionCollapsed = false;
+            } else {
+                localStorage.setItem('insights-charts-height', cs.style.height || '220px');
+                cs.style.height = '40px'; if (btn) btn.textContent = '▲ Expand'; _chartsSectionCollapsed = true;
+            }
+            setTimeout(() => { if (window.insightsMap) window.insightsMap.invalidateSize(); }, 200);
+        };
+
+        window._insightsChartInstance = null;
+        window.clearInsightsChart = function() {
+            if (window._insightsChartInstance) { window._insightsChartInstance.destroy(); window._insightsChartInstance = null; }
+            const canvas = document.getElementById('insights-chart-canvas');
+            const placeholder = document.getElementById('insights-chart-placeholder');
+            const status = document.getElementById('charts-status');
+            if (canvas) canvas.classList.add('hidden');
+            if (placeholder) placeholder.classList.remove('hidden');
+            if (status) status.textContent = 'Ask AI to generate a chart';
+        };
+
+        window.renderInsightsChart = function(labels, values, title, type) {
+            type = type || 'bar';
+            if (!window.Chart) { console.warn('Chart.js not loaded'); return; }
+            if (window._insightsChartInstance) { window._insightsChartInstance.destroy(); window._insightsChartInstance = null; }
+            const canvas = document.getElementById('insights-chart-canvas');
+            const placeholder = document.getElementById('insights-chart-placeholder');
+            const status = document.getElementById('charts-status');
+            if (!canvas) return;
+            canvas.classList.remove('hidden');
+            if (placeholder) placeholder.classList.add('hidden');
+            if (status) status.textContent = title || 'Chart';
+            if (_chartsSectionCollapsed) toggleChartsSection();
+            const COLORS = ['#6366f1','#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#f97316','#84cc16','#ec4899'];
+            window._insightsChartInstance = new window.Chart(canvas, {
+                type: type,
+                data: {
+                    labels: labels,
+                    datasets: [{ label: title || 'Count', data: values, backgroundColor: type === 'doughnut' ? COLORS : COLORS.slice(0, values.length), borderRadius: type === 'bar' ? 4 : 0, borderWidth: 1 }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: type === 'doughnut', position: 'right', labels: { font: { size: 10 } } }, title: { display: !!title, text: title, font: { size: 11 } } },
+                    scales: type === 'bar' ? { y: { beginAtZero: true, ticks: { font: { size: 9 } } }, x: { ticks: { font: { size: 9 }, maxRotation: 35, minRotation: 0 } } } : {}
+                }
+            });
+        };
+
+        // ─── CHART FROM BACKEND SPEC ─────────────────────────────────────────
+        // The server computes labels and values from the same records it used to
+        // answer the question, so the chart cannot drift from the prose. This
+        // replaced asking the model to emit chart markup, which was the main
+        // source of wrong charts.
+        window.renderChartSpec = function (spec) {
+            if (!spec || !spec.labels || !spec.labels.length) return false;
+            renderInsightsChart(spec.labels, spec.values, spec.title || 'Analysis', spec.type || 'bar');
+            return true;
+        };
+
+        // ─── AUTO CHART from liveMessagesData ────────────────────────────────
+        window.autoChartFromData = function(mapFilter) {
+            const data = window.liveMessagesData || [];
+            if (!data.length) return;
+            const category = mapFilter && mapFilter.category;
+            // Build chart: if category filter, show top wards; else show category breakdown
+            const counts = {};
+            data.forEach(m => {
+                let key = category ? (m.ward_no || 'Unknown') : (m.category || 'Other');
+                counts[key] = (counts[key] || 0) + 1;
+            });
+            const sorted = Object.entries(counts).sort((a,b) => b[1]-a[1]).slice(0, 12);
+            const labels = sorted.map(e => e[0]);
+            const values = sorted.map(e => e[1]);
+            const title = category ? (category + ' — Top Wards') : 'Complaints by Category';
+            const type = category ? 'bar' : 'doughnut';
+            renderInsightsChart(labels, values, title, type);
+        };
+
+        // ─── PRECISION MAP FILTER from JSON sidecar ──────────────────────────
+        window.updateInsightsMapFromSidecar = function(mapFilter) {
+            if (!window.insightsMap || !window.insightsMarkersLayer) return;
+            window.insightsMarkersLayer.clearLayers();
+            const { wards = [], keywords = [], category = '', priority = '', status = '', ids = null } = mapFilter || {};
+
+            let data = window.liveMessagesData || [];
+
+            // Preferred path: the backend already resolved exactly which reports
+            // answer the question, so highlight those instead of re-deriving the
+            // selection from keyword guesses on the client.
+            if (ids && ids.length) {
+                const idSet = new Set(ids);
+                data = data.filter(m => idSet.has(m.reference_id));
+            } else {
+            data = data.filter(m => {
+                if (wards.length > 0) {
+                    const wStr = String(m.ward_no || '');
+                    if (wards.some(w => String(w) === wStr)) return true;
+                    if (!category && !priority && !status && keywords.length === 0) return false;
+                }
+                if (category && !(m.category || '').toLowerCase().includes(category.toLowerCase())) return false;
+                if (priority && (m.priority || '').toLowerCase() !== priority.toLowerCase()) return false;
+                if (status) {
+                    const st = (m.status || '').toLowerCase();
+                    if (status.toLowerCase() === 'open') { if (!['open','pending','in review'].includes(st)) return false; }
+                    else if (status.toLowerCase() === 'completed') { if (!['completed','resolved','closed','sanctioned'].includes(st)) return false; }
+                    else if (st !== status.toLowerCase()) return false;
+                }
+                if (keywords.length > 0) {
+                    const txt = (m.summary || '') + ' ' + (m.raw_body || '') + ' ' + (m.location || '');
+                    if (!keywords.some(k => txt.toLowerCase().includes(k.toLowerCase()))) return false;
+                }
+                return true;
+            });
+            }
+
+            const countEl = document.getElementById('insights-map-count');
+            if (countEl) countEl.innerText = data.length + ' match' + (data.length !== 1 ? 'es' : '');
+
+            const PCOLOR = { Critical: '#ef4444', High: '#f97316', Medium: '#f59e0b', Low: '#9ca3af' };
+            const toShow = data.slice(0, 300);
+            toShow.forEach(m => {
+                if (!m.latitude || !m.longitude) return;
+                const cat = m.category || 'General';
+                let col = '#9ca3af';
+                if (cat.includes('Water') || cat.includes('Drain')) col = '#3b82f6';
+                else if (cat.includes('Road') || cat.includes('Pothole')) col = '#f59e0b';
+                else if (cat.includes('Garbage') || cat.includes('Waste')) col = '#10b981';
+                else if (cat.includes('Electric') || cat.includes('Light')) col = '#eab308';
+                else if (cat.includes('Safety') || cat.includes('Crime')) col = '#ef4444';
+                const bCol = PCOLOR[m.priority] || '#fff';
+                const marker = L.circleMarker([m.latitude, m.longitude], { radius: m.priority === 'Critical' ? 8 : 5, fillColor: col, color: bCol, weight: 2, opacity: 1, fillOpacity: 0.85 });
+                const p = m.media_urls && m.media_urls.length > 0 ? m.media_urls[0] : m.media_url;
+                const imgTag = p ? ('<img src="' + (p.includes('twilio') ? '/media-proxy?url=' + encodeURIComponent(p) : p) + '" class="w-full h-24 object-cover mt-2 rounded" onerror="this.style.display=\'none\'">') : '';
+                marker.bindPopup('<div class="text-xs font-sans p-1 min-w-[160px]"><div class="font-bold border-b pb-1 mb-1"><span style="color:' + col + '">●</span> ' + cat + '</div><div class="text-gray-600 mb-1 leading-tight">' + (m.summary || m.raw_body || 'No description') + '</div><div class="flex gap-1 mt-1">' + (m.priority ? '<span class="text-[9px] px-1.5 py-0.5 rounded" style="background:' + bCol + '20;color:' + bCol + ';border:1px solid ' + bCol + '">' + m.priority + '</span>' : '') + (m.status ? '<span class="text-[9px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">' + m.status + '</span>' : '') + '</div><div class="text-[10px] text-gray-400 font-mono mt-1">' + (m.ward_no ? 'Ward ' + m.ward_no : '') + '</div>' + imgTag + '</div>');
+                window.insightsMarkersLayer.addLayer(marker);
+            });
+            
+            // Draw Hex Grid for Insights Map (deferred so markers render first)
+            if (typeof drawHexGrid === 'function' && typeof turf !== 'undefined') {
+                const _toShow = toShow.slice();
+                setTimeout(() => {
+                    try { drawHexGrid(window.insightsMap, _toShow, 'insightsHexLayer'); }
+                    catch(e) { console.error('Insights hex error:', e); }
+                }, 0);
+            }
+
+            // Chips
+            const chips = document.getElementById('insights-filter-chips');
+            if (chips) {
+                const parts = [];
+                if (category) parts.push('<span class="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-[10px] font-bold border border-blue-200 capitalize">' + category + '</span>');
+                if (priority) parts.push('<span class="bg-orange-100 text-orange-700 px-2 py-0.5 rounded text-[10px] font-bold border border-orange-200">' + priority + '</span>');
+                if (status) parts.push('<span class="bg-green-100 text-green-700 px-2 py-0.5 rounded text-[10px] font-bold border border-green-200">' + status + '</span>');
+                keywords.forEach(k => parts.push('<span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-[10px] border border-gray-200">' + k + '</span>'));
+                wards.forEach(w => parts.push('<span class="bg-purple-100 text-purple-700 px-2 py-0.5 rounded text-[10px] font-bold border border-purple-200">Ward ' + w + '</span>'));
+                if (mapFilter && mapFilter.label) {
+                    parts.unshift('<span class="bg-purple-100 text-purple-800 px-2 py-0.5 rounded text-[10px] font-bold border border-purple-200">' + mapFilter.label + '</span>');
+                }
+                if (mapFilter && mapFilter.zone) parts.push('<span class="bg-teal-100 text-teal-700 px-2 py-0.5 rounded text-[10px] font-bold border border-teal-200">' + mapFilter.zone + '</span>');
+                if (mapFilter && mapFilter.officer) parts.push('<span class="bg-amber-100 text-amber-800 px-2 py-0.5 rounded text-[10px] font-bold border border-amber-200">' + mapFilter.officer + '</span>');
+                chips.innerHTML = parts.length > 0 ? parts.join('') : '<span class="text-[10px] text-gray-400 italic">Showing all complaints</span>';
+            }
+        };
+
+        window.insightsMap = null;
+        window.insightsMarkersLayer = null;
+
+        function initInsightsMap() {
+            if(document.getElementById('insights-map') && !window.insightsMap) {
+                const customMapStyle = 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}&apistyle=s.t:0%7Cs.e:l%7Cp.v:off%2Cs.t:0%7Cs.e:g.f%7Cp.c:0xf5f5f5%2Cs.t:4%7Cs.e:g.f%7Cp.c:0xffffff%2Cs.t:4%7Cs.e:g.s%7Cp.c:0xe0e0e0%2Cs.t:2%7Cs.e:g.f%7Cp.c:0xd0e6d0%2Cs.t:3%7Cs.e:g.f%7Cp.c:0xd0e6d0%2Cs.t:6%7Cs.e:g.f%7Cp.c:0xd4e4eb';
+                window.insightsMap = L.map('insights-map', { zoomControl: true, attributionControl: false }).setView([26.8467, 80.9462], 12);
+                applyLucknowGridAndLock(window.insightsMap, false);
+                L.tileLayer(customMapStyle, { maxZoom: 20, attribution: 'Google' }).addTo(window.insightsMap);
+                
+                window.insightsMarkersLayer = L.layerGroup().addTo(window.insightsMap);
+                
+                // Trigger initial render after a slight delay
+                setTimeout(insightsMapReset, 500);
+            }
+        }
+        
+        window.insightsMapReset = function() {
+            const chipsContainer = document.getElementById('insights-filter-chips');
+            if(chipsContainer) {
+                chipsContainer.innerHTML = '<span class="text-[10px] text-gray-400 italic">No active filters. Showing up to 300 latest complaints.</span>';
+            }
+            updateInsightsMap([]);
+        };
+        
+        window.updateInsightsMap = function(keywords = []) {
+            if (!window.insightsMap || !window.insightsMarkersLayer) return;
+            window.insightsMarkersLayer.clearLayers();
+            
+            let data = window.liveMessagesData || [];
+            
+            const fullQuery = keywords.join(' ').toLowerCase();
+            const stopWords = ['show', 'all', 'the', 'what', 'are', 'in', 'of', 'me', 'a', 'on', 'recent', 'which', 'is', 'with'];
+            let activeKw = keywords.map(k=>k.toLowerCase().replace(/[^a-z0-9]/g, '')).filter(k=> !stopWords.includes(k) && k.length > 2);
+            
+            // Edge Case Semantic Mappings
+            if (fullQuery.includes('worst') || fullQuery.includes('bad')) {
+                activeKw.push('critical', 'high', 'open', 'pending');
+            }
+            if (fullQuery.includes('best') || fullQuery.includes('good') || fullQuery.includes('solved')) {
+                activeKw.push('completed', 'resolved', 'closed', 'sanctioned');
+            }
+            if (fullQuery.includes('electricity') || fullQuery.includes('power')) {
+                activeKw.push('electric', 'light', 'power', 'wire', 'pole');
+            }
+            if (fullQuery.includes('water') || fullQuery.includes('drain')) {
+                activeKw.push('water', 'drain', 'pipe', 'leak', 'sewage');
+            }
+            
+            // Remove duplicates
+            activeKw = [...new Set(activeKw)];
+
+            if (activeKw.length > 0) {
+                data = data.filter(m => {
+                    // Enrich searchable text with explicit prefixes for robust matching
+                    const txt = `${m.summary || ''} ${m.raw_body || ''} ${m.category || ''} ward ${m.ward_no || ''} ${m.location || ''} ${m.priority || ''} ${m.status || ''}`.toLowerCase();
+                    return activeKw.some(k => txt.includes(k));
+                });
+            }
+            
+            const countEl = document.getElementById('insights-map-count');
+            if(countEl) countEl.innerText = `${data.length} match${data.length !== 1 ? 'es' : ''}`;
+            
+            const toShow = data.slice(0, 300); // cap for perf
+            
+            toShow.forEach(m => {
+                if (m.latitude && m.longitude) {
+                    const cat = m.category || 'General';
+                    let col = '#9ca3af'; // gray
+                    if(cat.includes('Water') || cat.includes('Drain')) col = '#3b82f6';
+                    else if(cat.includes('Road') || cat.includes('Pothole')) col = '#f59e0b';
+                    else if(cat.includes('Garbage') || cat.includes('Waste')) col = '#10b981';
+                    else if(cat.includes('Electric') || cat.includes('Light')) col = '#eab308';
+                    
+                    const marker = L.circleMarker([m.latitude, m.longitude], {
+                        radius: 5, fillColor: col, color: '#fff', weight: 1, opacity: 1, fillOpacity: 0.8
+                    });
+                    
+                    const p = m.media_urls && m.media_urls.length > 0 ? m.media_urls[0] : m.media_url;
+                    const imgTag = p ? `<img src="${p.includes('twilio') ? '/media-proxy?url='+encodeURIComponent(p) : p}" class="w-full h-24 object-cover mt-2 rounded">` : '';
+                    
+                    marker.bindPopup(`
+                        <div class="text-xs font-sans p-1 min-w-[150px]">
+                            <div class="font-bold text-gray-900 border-b pb-1 mb-1 border-gray-200"><span style="color:${col}">●</span> ${cat}</div>
+                            <div class="text-gray-600 mb-1 leading-tight">${m.english_translation || m.message || 'No description'}</div>
+                            <div class="text-[10px] text-gray-400 font-mono mt-2">${m.ward_no ? 'Ward ' + m.ward_no : ''}</div>
+                            ${imgTag}
+                        </div>
+                    `);
+                    window.insightsMarkersLayer.addLayer(marker);
+                }
+            });
+            
+            const chipsContainer = document.getElementById('insights-filter-chips');
+            if(chipsContainer && activeKw.length > 0) {
+                chipsContainer.innerHTML = activeKw.map(k => `<span class="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-[10px] font-bold border border-blue-200 capitalize">${k}</span>`).join('');
+            }
+        };
         setTimeout(initMaps, 1000);
         // Also init on tab switch to catch lazy-rendered maps
         window.initMaps = initMaps;
@@ -2125,9 +2905,15 @@
                     // Trigger initial fetch only after splash screen finishes
                     fetchMessages();
                     fetchRankedProjects();
-                    setInterval(fetchMessages, 2000); // Resume polling
+                    UrbanFeed.init();
+                    if (window.UrbanInsights) UrbanInsights.init();
+                    // The feed polls its own deltas every 6s. The dashboards only need
+                    // the full array occasionally, and the server caches it anyway, so
+                    // a 2s full-collection poll was pure waste once the cap came off.
+                    setInterval(fetchMessages, 30000);
                     // Re-run initMaps after data arrives (in case maps were null)
                     setTimeout(initMaps, 2000);
+
                 }, 700); // wait for CSS fade transition
             }, totalDelay + 800);
         };
@@ -2135,6 +2921,25 @@
         // Remove the existing automatic calls to fetchMessages to prevent double fetching
     
 </script>
+
+<!-- Survey Sentiment Report Modal -->
+<div id="survey-report-modal" class="fixed inset-0 bg-black/50 z-[9999] hidden items-center justify-center p-6" onclick="if(event.target===this){this.classList.add('hidden');this.classList.remove('flex');}">
+  <div class="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[88vh] overflow-y-auto custom-scrollbar">
+    <div class="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+      <div>
+        <h3 class="text-lg font-bold text-gray-900 flex items-center gap-2">
+          <span class="material-symbols-outlined text-purple-500">analytics</span> Survey Sentiment Report
+        </h3>
+        <div class="text-xs text-gray-500 mt-0.5" id="survey-report-question"></div>
+      </div>
+      <button onclick="const m=document.getElementById('survey-report-modal');m.classList.add('hidden');m.classList.remove('flex');"
+              class="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600">&#10005;</button>
+    </div>
+    <div class="p-6" id="survey-report-body">
+      <div class="text-sm text-gray-400 italic text-center py-10">Loading report...</div>
+    </div>
+  </div>
+</div>
 
 <!-- Survey Modal -->
 <!-- Projects Modal -->
@@ -2151,17 +2956,19 @@
             <div class="grid grid-cols-1 gap-4">
                 <!-- Example Active Project -->
                 <div class="p-5 border border-blue-500/30 bg-blue-900/10 rounded-xl hover:border-blue-500 transition-colors cursor-pointer group">
-                    <div class="flex justify-between items-start mb-3">
-                        <div>
-                            <span class="px-2 py-0.5 bg-blue-500/20 text-blue-400 border border-blue-500/50 rounded text-[10px] uppercase font-bold tracking-wider">Execution Phase</span>
-                            <h3 class="text-lg text-gray-900 font-medium mt-2">Central Hub Paving</h3>
-                            <p class="text-sm text-gray-500">Road infrastructure upgrade in Ward 1.</p>
+                        <div class="flex justify-between items-start mb-3">
+                            <div>
+                                <span class="px-2 py-0.5 bg-blue-500/20 text-blue-400 border border-blue-500/50 rounded text-[10px] uppercase font-bold tracking-wider">Execution Phase</span>
+                                <span class="px-2 py-0.5 bg-purple-500/20 text-purple-400 border border-purple-500/50 rounded text-[10px] uppercase font-bold tracking-wider ml-1">Ward 42</span>
+                                <span class="px-2 py-0.5 bg-indigo-500/20 text-indigo-400 border border-indigo-500/50 rounded text-[10px] uppercase font-bold tracking-wider ml-1">PWD</span>
+                                <h3 class="text-lg text-gray-900 font-medium mt-2">Central Hub Paving</h3>
+                                <p class="text-sm text-gray-500">Road infrastructure upgrade.</p>
+                            </div>
+                            <div class="text-right">
+                                <div class="text-sm text-gray-900 font-medium">₹2.4 Cr</div>
+                                <div class="text-xs text-gray-500">Allocated Budget</div>
+                            </div>
                         </div>
-                        <div class="text-right">
-                            <div class="text-sm text-gray-900 font-medium">₹2.4 Cr</div>
-                            <div class="text-xs text-gray-500">Allocated Budget</div>
-                        </div>
-                    </div>
                     <div class="w-full bg-white rounded-full h-1.5 mb-1 border border-gray-200">
                       <div class="bg-blue-500 h-1.5 rounded-full" style="width: 45%"></div>
                     </div>
@@ -2173,17 +2980,19 @@
                 
                 <!-- Example Active Project 2 -->
                 <div class="p-5 border border-amber-500/30 bg-amber-900/10 rounded-xl hover:border-amber-500 transition-colors cursor-pointer group">
-                    <div class="flex justify-between items-start mb-3">
-                        <div>
-                            <span class="px-2 py-0.5 bg-amber-500/20 text-amber-400 border border-amber-500/50 rounded text-[10px] uppercase font-bold tracking-wider">Tendering</span>
-                            <h3 class="text-lg text-gray-900 font-medium mt-2">Ward 4 School Rehab</h3>
-                            <p class="text-sm text-gray-500">Rehabilitation of primary school buildings.</p>
+                        <div class="flex justify-between items-start mb-3">
+                            <div>
+                                <span class="px-2 py-0.5 bg-amber-500/20 text-amber-400 border border-amber-500/50 rounded text-[10px] uppercase font-bold tracking-wider">Tendering</span>
+                                <span class="px-2 py-0.5 bg-purple-500/20 text-purple-400 border border-purple-500/50 rounded text-[10px] uppercase font-bold tracking-wider ml-1">Ward 14</span>
+                                <span class="px-2 py-0.5 bg-indigo-500/20 text-indigo-400 border border-indigo-500/50 rounded text-[10px] uppercase font-bold tracking-wider ml-1">Nagar Nigam</span>
+                                <h3 class="text-lg text-gray-900 font-medium mt-2">Ward 14 School Rehab</h3>
+                                <p class="text-sm text-gray-500">Rehabilitation of primary school buildings.</p>
+                            </div>
+                            <div class="text-right">
+                                <div class="text-sm text-gray-900 font-medium">₹85 L</div>
+                                <div class="text-xs text-gray-500">Allocated Budget</div>
+                            </div>
                         </div>
-                        <div class="text-right">
-                            <div class="text-sm text-gray-900 font-medium">₹85 L</div>
-                            <div class="text-xs text-gray-500">Allocated Budget</div>
-                        </div>
-                    </div>
                     <div class="w-full bg-white rounded-full h-1.5 mb-1 border border-gray-200">
                       <div class="bg-amber-500 h-1.5 rounded-full" style="width: 15%"></div>
                     </div>
@@ -2195,17 +3004,19 @@
 
                 <!-- Example Active Project 3 -->
                 <div class="p-5 border border-green-500/30 bg-green-900/10 rounded-xl hover:border-green-500 transition-colors cursor-pointer group">
-                    <div class="flex justify-between items-start mb-3">
-                        <div>
-                            <span class="px-2 py-0.5 bg-green-500/20 text-green-400 border border-green-500/50 rounded text-[10px] uppercase font-bold tracking-wider">Planning</span>
-                            <h3 class="text-lg text-gray-900 font-medium mt-2">South Zone Drainage</h3>
-                            <p class="text-sm text-gray-500">Stormwater drainage system overhaul.</p>
+                        <div class="flex justify-between items-start mb-3">
+                            <div>
+                                <span class="px-2 py-0.5 bg-green-500/20 text-green-400 border border-green-500/50 rounded text-[10px] uppercase font-bold tracking-wider">Planning</span>
+                                <span class="px-2 py-0.5 bg-purple-500/20 text-purple-400 border border-purple-500/50 rounded text-[10px] uppercase font-bold tracking-wider ml-1">Ward 88</span>
+                                <span class="px-2 py-0.5 bg-indigo-500/20 text-indigo-400 border border-indigo-500/50 rounded text-[10px] uppercase font-bold tracking-wider ml-1">Jal Sansthan</span>
+                                <h3 class="text-lg text-gray-900 font-medium mt-2">South Zone Drainage</h3>
+                                <p class="text-sm text-gray-500">Stormwater drainage system overhaul.</p>
+                            </div>
+                            <div class="text-right">
+                                <div class="text-sm text-gray-900 font-medium">₹1.2 Cr</div>
+                                <div class="text-xs text-gray-500">Allocated Budget</div>
+                            </div>
                         </div>
-                        <div class="text-right">
-                            <div class="text-sm text-gray-900 font-medium">₹1.2 Cr</div>
-                            <div class="text-xs text-gray-500">Allocated Budget</div>
-                        </div>
-                    </div>
                     <div class="w-full bg-white rounded-full h-1.5 mb-1 border border-gray-200">
                       <div class="bg-green-500 h-1.5 rounded-full" style="width: 5%"></div>
                     </div>
@@ -2222,21 +3033,228 @@
 
 
 <script>
+    // =====================================================================
+    // SURVEYAUDIENCE - who receives a survey
+    // =====================================================================
+    // Recipients are derived from the grievance history rather than a separate
+    // contact list, so "everyone in Ward 46 with an unresolved water complaint"
+    // is expressible directly. The audience is resolved server-side and previewed
+    // before sending, because a WhatsApp broadcast cannot be recalled.
+    window.SurveyAudience = (function () {
+        let previewTimer = null;
+        let lastCount = 0;
+        const el = id => document.getElementById(id);
+        const multi = id => Array.from((el(id) || {}).selectedOptions || []).map(o => o.value);
+
+        function build() {
+            const wardsRaw = (el('aud-wards') || {}).value || '';
+            const wards = wardsRaw.split(',').map(w => w.trim()).filter(Boolean);
+            const status = (el('aud-status') || {}).value || '';
+            const sentiment = (el('aud-sentiment') || {}).value || '';
+            return {
+                wards: wards,
+                zones: multi('aud-zones'),
+                categories: multi('aud-categories'),
+                officers: multi('aud-officers'),
+                statuses: status ? [status] : [],
+                sentiments: sentiment ? [sentiment] : [],
+                semantic_tags: [], priorities: [], departments: [],
+                min_reports: parseInt((el('aud-minreports') || {}).value || '1', 10) || 1,
+                range: (el('aud-range') || {}).value || 'all',
+                anchor: 'now',
+            };
+        }
+
+        async function doPreview() {
+            try {
+                const res = await authFetch('/surveys/audience/preview', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(build()),
+                });
+                const d = await res.json();
+                lastCount = d.recipient_count;
+                if (el('aud-count')) el('aud-count').textContent = d.recipient_count;
+                if (el('aud-label')) el('aud-label').textContent = d.label;
+                if (el('aud-detail')) {
+                    el('aud-detail').textContent =
+                        d.matched_reports + ' matching reports of ' + d.scoped_reports +
+                        ' in ' + (d.range ? d.range.label : 'window');
+                }
+                const chips = el('aud-chips');
+                if (chips) {
+                    const top = (d.breakdown && d.breakdown.wards || []).slice(0, 6)
+                        .map(w => '<span class="px-1.5 py-0.5 bg-indigo-50 border border-indigo-200 rounded text-[9px] text-indigo-700">' +
+                                  w.key + ' (' + w.total + ')</span>').join('');
+                    chips.innerHTML = top || '';
+                }
+            } catch (e) {
+                if (el('aud-count')) el('aud-count').textContent = '?';
+                console.warn('[SurveyAudience] preview failed', e);
+            }
+        }
+
+        return {
+            build,
+            count() { return lastCount; },
+            preview() { clearTimeout(previewTimer); previewTimer = setTimeout(doPreview, 300); },
+            reset() {
+                ['aud-wards'].forEach(id => { if (el(id)) el(id).value = ''; });
+                ['aud-zones', 'aud-categories', 'aud-officers'].forEach(id => {
+                    if (el(id)) Array.from(el(id).options).forEach(o => o.selected = false);
+                });
+                if (el('aud-status')) el('aud-status').value = '';
+                if (el('aud-sentiment')) el('aud-sentiment').value = '';
+                if (el('aud-range')) el('aud-range').value = 'all';
+                if (el('aud-minreports')) el('aud-minreports').value = '1';
+                doPreview();
+            },
+            // Populate the pickers from live data so the options always match what
+            // is actually in the database rather than a hardcoded list.
+            async populate() {
+                try {
+                    const res = await authFetch('/api/analytics?range=all');
+                    const d = await res.json();
+                    const fill = (id, rows) => {
+                        const sel = el(id);
+                        if (!sel || sel.options.length) return;
+                        sel.innerHTML = rows.map(r =>
+                            '<option value="' + r.key + '">' + r.key + ' (' + r.total + ')</option>').join('');
+                    };
+                    fill('aud-zones', d.zones || []);
+                    fill('aud-categories', d.categories || []);
+                    fill('aud-officers', (d.officers || []).map(o => ({ key: o.officer, total: o.total })));
+                    doPreview();
+                } catch (e) { console.warn('[SurveyAudience] populate failed', e); }
+            },
+        };
+    })();
+
+    // ─── SURVEY SENTIMENT REPORT ──────────────────────────────────────────
+    window.showSurveyReport = async function (id) {
+        const modal = document.getElementById('survey-report-modal');
+        const body = document.getElementById('survey-report-body');
+        if (!modal || !body) return;
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        body.innerHTML = '<div class="text-sm text-gray-400 italic text-center py-10">Loading report...</div>';
+        try {
+            const res = await authFetch('/surveys/' + id + '/report');
+            const d = await res.json();
+            document.getElementById('survey-report-question').textContent = d.question || '';
+
+            const pct = v => (v == null ? '-' : Math.round(v * 100) + '%');
+            const optRows = (d.option_insight || []).map(o => `
+                <tr class="border-b border-gray-100">
+                  <td class="py-1.5 pr-3 font-medium text-gray-900">${o.option}</td>
+                  <td class="py-1.5 pr-3 text-right font-bold">${o.votes}</td>
+                  <td class="py-1.5 pr-3 text-right">${pct(o.share)}</td>
+                  <td class="py-1.5 pr-3 text-right ${o.negative_share > 0.5 ? 'text-red-600 font-semibold' : 'text-gray-600'}">${pct(o.negative_share)}</td>
+                  <td class="py-1.5 pr-3 text-right">${pct(o.respondent_resolution_rate)}</td>
+                  <td class="py-1.5 text-right text-gray-500">${o.respondent_open}/${o.respondent_reports}</td>
+                </tr>`).join('');
+
+            const crossTable = (rows, title) => {
+                if (!rows || !rows.length) return '';
+                const opts = d.options || [];
+                return `
+                  <div class="mt-4">
+                    <div class="text-xs font-bold text-gray-700 uppercase tracking-wide mb-1.5">${title}</div>
+                    <div class="overflow-x-auto">
+                    <table class="w-full text-[11px] border-collapse">
+                      <thead><tr class="bg-gray-50 text-gray-600">
+                        <th class="text-left py-1.5 px-2 border border-gray-200">Segment</th>
+                        ${opts.map(o => `<th class="text-right py-1.5 px-2 border border-gray-200">${o}</th>`).join('')}
+                        <th class="text-right py-1.5 px-2 border border-gray-200">Total</th>
+                      </tr></thead>
+                      <tbody>
+                        ${rows.map(r => `<tr>
+                          <td class="py-1 px-2 border border-gray-200 font-medium">${r.key}</td>
+                          ${opts.map(o => `<td class="py-1 px-2 border border-gray-200 text-right">${r.options[o] || 0}</td>`).join('')}
+                          <td class="py-1 px-2 border border-gray-200 text-right font-bold">${r.total}</td>
+                        </tr>`).join('')}
+                      </tbody>
+                    </table></div>
+                  </div>`;
+            };
+
+            const p = d.respondent_profile || {};
+            body.innerHTML = `
+              <div class="grid grid-cols-4 gap-3 mb-5">
+                <div class="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                  <div class="text-[10px] text-gray-500 uppercase">Sent to</div>
+                  <div class="text-xl font-bold text-gray-900">${d.sent_count}</div></div>
+                <div class="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                  <div class="text-[10px] text-gray-500 uppercase">Responses</div>
+                  <div class="text-xl font-bold text-blue-600">${d.response_count}</div></div>
+                <div class="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                  <div class="text-[10px] text-gray-500 uppercase">Response rate</div>
+                  <div class="text-xl font-bold text-green-600">${pct(d.response_rate)}</div></div>
+                <div class="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                  <div class="text-[10px] text-gray-500 uppercase">Negative sentiment</div>
+                  <div class="text-xl font-bold text-red-600">${pct(p.negative_rate)}</div></div>
+              </div>
+
+              <div class="bg-indigo-50 border border-indigo-200 rounded-lg px-3 py-2 mb-4 text-xs text-indigo-800">
+                <span class="font-bold">Audience:</span> ${d.audience_label || 'All citizens'}
+                ${d.sent_at ? ' &middot; sent ' + new Date(d.sent_at).toLocaleString() : ''}
+              </div>
+
+              <div class="text-xs font-bold text-gray-700 uppercase tracking-wide mb-1.5">Answers vs. respondents' own case history</div>
+              <div class="overflow-x-auto">
+              <table class="w-full text-[11px]">
+                <thead><tr class="text-gray-500 border-b border-gray-200">
+                  <th class="text-left py-1.5 pr-3">Option</th>
+                  <th class="text-right py-1.5 pr-3">Votes</th>
+                  <th class="text-right py-1.5 pr-3">Share</th>
+                  <th class="text-right py-1.5 pr-3">Negative sentiment</th>
+                  <th class="text-right py-1.5 pr-3">Their resolution rate</th>
+                  <th class="text-right py-1.5">Open/Total</th>
+                </tr></thead>
+                <tbody>${optRows || '<tr><td colspan="6" class="py-4 text-center text-gray-400 italic">No responses yet</td></tr>'}</tbody>
+              </table></div>
+              <div class="text-[10px] text-gray-500 mt-1.5 italic">
+                "Their resolution rate" is how many of each cohort's own complaints were actually resolved &mdash; the link between service delivery and how people answered.
+              </div>
+
+              ${crossTable(d.cross_tab && d.cross_tab.by_ward, 'By ward')}
+              ${crossTable(d.cross_tab && d.cross_tab.by_zone, 'By locality')}
+              ${crossTable(d.cross_tab && d.cross_tab.by_category, 'By problem type')}
+
+              <div class="mt-5 bg-gray-50 border border-gray-200 rounded-lg p-3">
+                <div class="text-xs font-bold text-gray-700 uppercase mb-1.5">Respondent profile</div>
+                <div class="text-[11px] text-gray-600 leading-relaxed">
+                  ${p.total_reports || 0} reports filed by respondents &middot; ${p.open || 0} still open &middot;
+                  resolution rate ${pct(p.resolution_rate)} &middot; average open case age ${p.avg_open_age_days || 0} days.
+                  ${(p.top_issues || []).length ? '<br>Most common issues: ' + p.top_issues.map(t => t[0] + ' (' + t[1] + ')').join(', ') : ''}
+                </div>
+              </div>`;
+        } catch (e) {
+            body.innerHTML = '<div class="text-sm text-red-500 text-center py-10">Could not load report: ' + e.message + '</div>';
+        }
+    };
+
     async function loadSurveys() {
+        const listEl = document.getElementById('survey-list');
+        if (listEl) listEl.innerHTML = '<div class="text-xs text-gray-400 text-center py-10 italic flex flex-col items-center gap-2"><span class="material-symbols-outlined animate-spin text-blue-300" style="font-size:28px;">autorenew</span>Loading surveys...</div>';
         try {
             let res = await authFetch('/surveys');
+            if (!res.ok) throw new Error(`Server returned ${res.status}`);
             let data = await res.json();
             let html = '';
             data.forEach(s => {
                 let activeBadge = s.is_active ? `<span class="px-2 py-0.5 bg-green-500/20 text-green-400 border border-green-500/50 rounded text-[10px] uppercase font-bold">Active</span>` : '';
+                let reportBtn = `<button onclick="showSurveyReport('${s.id}')" class="px-3 py-1 bg-purple-100 hover:bg-purple-200 border border-purple-300 rounded text-xs text-purple-700 transition font-bold flex items-center justify-center gap-1"><span class="material-symbols-outlined" style="font-size:14px;">analytics</span> Report</button>`;
                 let actionBtns = s.is_active 
                     ? `<div class="flex gap-2 mt-2">
                         <button onclick="broadcastSurvey('${s.id}')" class="flex-1 px-3 py-1 bg-blue-600 hover:bg-blue-500 rounded text-xs text-gray-900 transition font-bold flex items-center justify-center gap-1"><span class="material-symbols-outlined" style="font-size:14px;">send</span> Broadcast</button>
+                        ${reportBtn}
                         <button onclick="stopSurvey('${s.id}')" class="px-3 py-1 bg-amber-600/30 hover:bg-amber-600/50 border border-amber-600/50 rounded text-xs text-amber-400 transition font-bold flex items-center justify-center gap-1"><span class="material-symbols-outlined" style="font-size:14px;">stop_circle</span> Stop</button>
                         <button onclick="deleteSurvey('${s.id}')" class="px-3 py-1 bg-red-600/20 hover:bg-red-600/40 border border-red-600/40 rounded text-xs text-red-400 transition font-bold flex items-center justify-center gap-1"><span class="material-symbols-outlined" style="font-size:14px;">delete</span></button>
                       </div>`
                     : `<div class="flex gap-2 mt-2">
                         <button onclick="activateSurvey('${s.id}')" class="flex-1 px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded text-xs text-gray-900 transition border border-gray-300">Set Active</button>
+                        ${reportBtn}
                         <button onclick="deleteSurvey('${s.id}')" class="px-3 py-1 bg-red-600/20 hover:bg-red-600/40 border border-red-600/40 rounded text-xs text-red-400 transition font-bold flex items-center justify-center gap-1"><span class="material-symbols-outlined" style="font-size:14px;">delete</span></button>
                       </div>`;
                 
@@ -2254,6 +3272,11 @@
                     <div class="flex flex-wrap gap-1 mt-1 mb-1">
                         ${s.options.map(o => `<span class="px-1.5 py-0.5 bg-gray-100 rounded text-[10px] text-gray-500 border border-gray-200">${o}</span>`).join('')}
                     </div>
+                    <div class="flex flex-wrap gap-1 items-center mb-1">
+                        <span class="px-1.5 py-0.5 bg-indigo-50 border border-indigo-200 rounded text-[10px] text-indigo-700 font-semibold">&#128101; ${s.audience_label || 'All citizens'}</span>
+                        ${s.sent_count ? `<span class="px-1.5 py-0.5 bg-gray-100 border border-gray-200 rounded text-[10px] text-gray-600">sent to ${s.sent_count}</span>` : ''}
+                        ${s.response_rate != null ? `<span class="px-1.5 py-0.5 bg-green-50 border border-green-200 rounded text-[10px] text-green-700 font-semibold">${Math.round(s.response_rate*100)}% replied</span>` : ''}
+                    </div>
                     <div class="bg-white/30 rounded p-2 mb-1">
                         <div class="text-[10px] text-gray-500 font-bold uppercase mb-1">Responses</div>
                         ${resHtml || '<div class="text-[10px] text-gray-500 italic">No responses yet</div>'}
@@ -2261,9 +3284,108 @@
                     ${actionBtns}
                 </div>`;
             });
-            document.getElementById('survey-list').innerHTML = html;
+            if (listEl) listEl.innerHTML = html || '<div class="text-xs text-gray-400 text-center py-10 italic">No surveys yet. Create one on the right →</div>';
+            
+            // --- NEW: Survey Analytics & Sentiment ---
+            updateSurveyAnalytics();
         } catch(e) {
             console.error(e);
+            if (listEl) {
+                listEl.innerHTML = `<div class="text-xs text-red-400 text-center py-10 italic flex flex-col items-center gap-2">
+                    <span class="material-symbols-outlined text-red-300" style="font-size:28px;">cloud_off</span>
+                    Could not load surveys — ${e.message || 'network error'}.
+                    <button onclick="loadSurveys()" class="mt-1 px-3 py-1 bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded text-xs text-gray-700 transition">Retry</button>
+                </div>`;
+            }
+        }
+    }
+    
+    function updateSurveyAnalytics() {
+        let analyticsDiv = document.getElementById('survey-analytics');
+        if(analyticsDiv && window.liveMessagesData && window.liveMessagesData.length > 0) {
+            let catCounts = {};
+            let catUpset = {};
+            
+            window.liveMessagesData.forEach(m => {
+                let c = m.category || 'Uncategorized';
+                if(!catCounts[c]) { catCounts[c] = 0; catUpset[c] = 0; }
+                catCounts[c]++;
+                if(m.priority === 'Critical' || m.priority === 'High') {
+                    catUpset[c]++;
+                }
+            });
+            
+            let sortedCats = [];
+            for(let c in catCounts) {
+                if(catCounts[c] >= 2) { // lowered threshold to ensure data shows up in dev/demo
+                    let ratio = catUpset[c] / catCounts[c];
+                    let score = 100 - (ratio * 100);
+                    sortedCats.push({ cat: c, score: score, total: catCounts[c], upset: catUpset[c] });
+                }
+            }
+            
+            // Sort by score ascending (lowest positive score = most upset first)
+            sortedCats.sort((a, b) => a.score - b.score);
+            
+            let sentimentHtml = '';
+            sortedCats.forEach(item => {
+                let colorClass = item.score >= 60 ? 'bg-emerald-500' : (item.score >= 40 ? 'bg-amber-500' : 'bg-red-500');
+                let textClass = item.score >= 60 ? 'text-emerald-600' : (item.score >= 40 ? 'text-amber-600' : 'text-red-600');
+                sentimentHtml += `
+                    <div class="flex flex-col gap-1 mt-1 mb-2">
+                        <div class="flex justify-between items-center text-xs">
+                            <span class="text-gray-700 font-medium truncate pr-2">${item.cat} <span class="text-[9px] text-gray-400 font-normal ml-1">(${item.total} reports)</span></span> 
+                            <span class="font-bold ${textClass}">${Math.round(item.score)}% <span class="font-normal text-gray-400">Pos</span></span>
+                        </div>
+                        <div class="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                            <div class="${colorClass} h-1.5 rounded-full transition-all duration-500" style="width: ${item.score}%"></div>
+                        </div>
+                    </div>`;
+            });
+            
+            let mostUpsetHtml = '';
+            if (sortedCats.length > 0) {
+                let worst = sortedCats[0];
+                mostUpsetHtml = `
+                    <div class="flex items-center gap-3 mb-2">
+                        <div class="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+                            <span class="material-symbols-outlined text-red-500" style="font-size: 20px;">warning</span>
+                        </div>
+                        <div>
+                            <div class="text-lg font-bold text-red-700 leading-tight">${worst.cat}</div>
+                            <div class="text-[11px] text-red-500 font-medium">${worst.upset} Critical/High Alerts</div>
+                        </div>
+                    </div>
+                    <div class="text-[10px] text-red-400 bg-red-50 p-2 rounded border border-red-100 mt-auto">
+                        Recommendation: Target your next survey at <strong>${worst.cat}</strong> to understand specific citizen pain points.
+                    </div>
+                `;
+            } else {
+                mostUpsetHtml = `<div class="text-xs text-gray-400 italic mt-2">Not enough data.</div>`;
+            }
+            
+            analyticsDiv.innerHTML = `
+                <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm flex flex-col">
+                    <div class="flex items-center gap-1.5 mb-3 border-b border-gray-100 pb-2">
+                        <span class="material-symbols-outlined text-blue-500" style="font-size: 16px;">monitoring</span>
+                        <div class="text-xs text-gray-700 font-bold uppercase tracking-wider">Public Sentiment</div>
+                    </div>
+                    <div class="flex flex-col flex-1 justify-center">${sentimentHtml || '<div class="text-xs text-gray-400 italic">Not enough data to calculate sentiment.</div>'}</div>
+                </div>
+                <div class="bg-gradient-to-br from-red-50 to-white border border-red-200 rounded-xl p-4 shadow-sm flex flex-col relative overflow-hidden">
+                    <div class="absolute -right-4 -top-4 text-red-100 opacity-50 transform rotate-12">
+                        <span class="material-symbols-outlined" style="font-size: 80px;">campaign</span>
+                    </div>
+                    <div class="flex items-center gap-1.5 mb-3 border-b border-red-100 pb-2 relative z-10">
+                        <span class="material-symbols-outlined text-red-500" style="font-size: 16px;">trending_down</span>
+                        <div class="text-xs text-red-600 font-bold uppercase tracking-wider">Most Upset About</div>
+                    </div>
+                    <div class="flex flex-col flex-1 relative z-10">
+                        ${mostUpsetHtml}
+                    </div>
+                </div>
+            `;
+            analyticsDiv.className = 'grid grid-cols-1 md:grid-cols-2 gap-4 mb-4';
         }
     }
     
@@ -2281,10 +3403,11 @@
         
         try {
             // Step 1: Create — send options as comma-joined string (backend expects str)
+            const audience = window.SurveyAudience ? SurveyAudience.build() : null;
             let res = await authFetch('/surveys', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({question: q, options: optionsArr.join(', ')})
+                body: JSON.stringify({question: q, options: optionsArr.join(', '), audience: audience})
             });
             if (!res.ok) {
                 const errText = await res.text();
@@ -2298,8 +3421,28 @@
             await authFetch(`/surveys/${newId}/activate`, {method: 'POST'});
             
             // Step 3: Broadcast
+            // Resolve the audience first and confirm the real recipient count. A
+            // broadcast cannot be undone, so the operator sees the number before
+            // anyone's phone rings.
+            if(btn) btn.textContent = 'Resolving audience...';
+            let dryRes = await authFetch(`/surveys/${newId}/broadcast`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({audience: audience, dry_run: true})
+            });
+            let dry = await dryRes.json();
+            if (!confirm(`Send this survey to ${dry.would_send_to} citizen(s)?\n\nAudience: ${dry.audience_label}\nMatching reports: ${dry.matched_reports}\n\nThis sends real WhatsApp messages and cannot be undone.`)) {
+                if(btn) { btn.disabled = false; btn.innerHTML = '<span class="material-symbols-outlined text-[18px]">send</span> Create & Launch via WhatsApp'; }
+                loadSurveys();
+                return;
+            }
+
             if(btn) btn.textContent = 'Broadcasting...';
-            let bRes = await authFetch(`/surveys/${newId}/broadcast`, {method: 'POST'});
+            let bRes = await authFetch(`/surveys/${newId}/broadcast`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({audience: audience, dry_run: false})
+            });
             let bData = await bRes.json();
             
             document.getElementById('survey-q').value = '';
@@ -2321,13 +3464,26 @@
     
     
     async function broadcastSurvey(id) {
-        if(!confirm("Are you sure you want to broadcast this survey to all constituents via WhatsApp Direct Message?")) return;
-        
         try {
-            let res = await authFetch(`/surveys/${id}/broadcast`, {method: 'POST'});
+            // Dry run first so the confirmation names the real audience and count
+            // rather than asking about "all constituents".
+            let dryRes = await authFetch(`/surveys/${id}/broadcast`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({dry_run: true})
+            });
+            let dry = await dryRes.json();
+            if(!confirm(`Broadcast to ${dry.would_send_to} citizen(s)?\n\nAudience: ${dry.audience_label}\nMatching reports: ${dry.matched_reports}\n\nThis sends real WhatsApp messages and cannot be undone.`)) return;
+
+            let res = await authFetch(`/surveys/${id}/broadcast`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({dry_run: false})
+            });
             let data = await res.json();
             if(data.status === 'success') {
-                alert(`Broadcast sent successfully to ${data.broadcast_count} citizens!`);
+                alert(`Broadcast sent to ${data.broadcast_count} citizens (${data.audience_label}).` + (data.failed_count ? `\n${data.failed_count} failed.` : ''));
+                loadSurveys();
             } else {
                 alert("Broadcast failed.");
             }
@@ -2337,29 +3493,131 @@
     }
     
     async function stopSurvey(id) {
-        await authFetch(`/surveys/${id}/stop`, {method: 'POST'});
-        loadSurveys();
+        try {
+            const res = await authFetch(`/surveys/${id}/stop`, {method: 'POST'});
+            if (!res.ok) throw new Error(`Server returned ${res.status}`);
+            loadSurveys();
+        } catch(e) {
+            alert('Could not stop survey: ' + e.message);
+        }
     }
 
     async function deleteSurvey(id) {
         if(!confirm('Delete this survey permanently? This cannot be undone.')) return;
-        await authFetch(`/surveys/${id}`, {method: 'DELETE'});
-        loadSurveys();
+        try {
+            const res = await authFetch(`/surveys/${id}`, {method: 'DELETE'});
+            if (!res.ok) throw new Error(`Server returned ${res.status}`);
+            loadSurveys();
+        } catch(e) {
+            alert('Could not delete survey: ' + e.message);
+        }
     }
     
     async function activateSurvey(id) {
-        await authFetch(`/surveys/${id}/activate`, {method: 'POST'});
-        // Also broadcast immediately on activation
         try {
-            let bRes = await authFetch(`/surveys/${id}/broadcast`, {method: 'POST'});
-            let bData = await bRes.json();
-            if(bData.broadcast_count > 0) {
-                alert(`✅ Survey activated & broadcast to ${bData.broadcast_count} citizens!`);
+            await authFetch(`/surveys/${id}/activate`, {method: 'POST'});
+            // Dry-run to show audience size before broadcasting — same safety gate as broadcastSurvey.
+            let dryRes = await authFetch(`/surveys/${id}/broadcast`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({dry_run: true})
+            });
+            let dry = await dryRes.json();
+            if (dry.would_send_to > 0) {
+                if (!confirm(`Broadcast to ${dry.would_send_to} citizen(s)?\n\nAudience: ${dry.audience_label}\nMatching reports: ${dry.matched_reports}\n\nThis sends real WhatsApp messages and cannot be undone.`)) {
+                    loadSurveys();
+                    return;
+                }
+                let bRes = await authFetch(`/surveys/${id}/broadcast`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({dry_run: false})
+                });
+                let bData = await bRes.json();
+                if(bData.broadcast_count > 0) {
+                    alert(`✅ Survey activated & broadcast to ${bData.broadcast_count} citizens!`);
+                }
             }
-        } catch(e) { /* silent */ }
+        } catch(e) {
+            alert('Could not activate survey: ' + e.message);
+        }
         loadSurveys();
     }
     
+    // =====================================================================
+    // URBANINSIGHTS - timeline scoping for the RAG agent
+    // =====================================================================
+    // The timeline here is not just a display filter: it is passed to
+    // /api/chat, so the agent literally cannot see reports outside the window
+    // when "Scope AI to this timeline" is on. That is what makes "in the last
+    // 7 days" answerable rather than approximated. A timeframe stated inside
+    // the question itself still wins over this selector.
+    window.UrbanInsights = (function () {
+        const state = { range: 'all', anchor: 'now', scope: true, started: false };
+        const el = id => document.getElementById(id);
+
+        function paint() {
+            document.querySelectorAll('.ins-range-btn').forEach(b => {
+                const on = b.dataset.range === state.range;
+                b.classList.toggle('bg-white', on);
+                b.classList.toggle('text-gray-900', on);
+                b.classList.toggle('shadow-sm', on);
+                b.classList.toggle('text-gray-600', !on);
+            });
+        }
+
+        async function refresh() {
+            try {
+                const res = await authFetch('/api/analytics?range=' + state.range + '&anchor=' + state.anchor);
+                const d = await res.json();
+                const h = d.headline || {};
+                const set = (id, v) => { const e = el(id); if (e) e.textContent = v; };
+                set('ins-kpi-total', h.total != null ? h.total : '-');
+                set('ins-kpi-open', h.open != null ? h.open : '-');
+                set('ins-kpi-critical', h.critical != null ? h.critical : '-');
+                set('ins-kpi-resolution', h.resolution_rate != null ? Math.round(h.resolution_rate * 100) + '%' : '-');
+                const note = el('insights-window-note');
+                if (note) {
+                    note.textContent = (d.range ? d.range.label : '') +
+                        ' \u2014 ' + (h.total || 0) + ' reports' +
+                        (state.scope ? ' visible to the AI' : ' shown; AI reads all history') +
+                        (h.sla_breached ? ' \u00b7 ' + h.sla_breached + ' past SLA' : '');
+                }
+                window._insightsAnalytics = d;
+            } catch (e) { console.warn('[UrbanInsights] analytics refresh failed', e); }
+        }
+
+        return {
+            init() {
+                if (state.started) return;
+                state.started = true;
+                paint();
+                refresh();
+            },
+            setRange(r, silent) {
+                state.range = r;
+                paint();
+                refresh();
+                if (!silent && window.UrbanFeed && UrbanFeed.getRange().range !== r) UrbanFeed.setRange(r);
+            },
+            setAnchor(a, silent) {
+                state.anchor = a;
+                const t = el('insights-anchor-toggle');
+                if (t) t.checked = (a === 'data');
+                refresh();
+                if (!silent && window.UrbanFeed) UrbanFeed.setAnchor(a);
+            },
+            setScope(v) { state.scope = !!v; refresh(); },
+            get() { return { range: state.range, anchor: state.anchor, scope_to_timeline: state.scope }; },
+            refresh,
+            ask(q) {
+                const input = el('ai-chat-input');
+                if (input) input.value = q;
+                sendAIChatMessage();
+            },
+        };
+    })();
+
     let aiChatHistory = [];
     async function sendAIChatMessage() {
         const input = document.getElementById('ai-chat-input');
@@ -2399,21 +3657,54 @@
         historyContainer.scrollTop = historyContainer.scrollHeight;
         
         try {
+            const tl = (window.UrbanInsights ? UrbanInsights.get() : {range: 'all', anchor: 'now', scope_to_timeline: true});
             const res = await authFetch('/api/chat', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({query: text, history: aiChatHistory})
+                body: JSON.stringify({
+                    query: text,
+                    history: aiChatHistory.slice(-8),
+                    range: tl.range,
+                    anchor: tl.anchor,
+                    scope_to_timeline: tl.scope_to_timeline
+                })
             });
-            const data = await res.json();
-            
-            // Remove typing indicator
+
+            // Always remove typing indicator first
             const typingEl = document.getElementById(typingId);
             if (typingEl) typingEl.remove();
+
+            if (!res.ok) {
+                let errDetail = `Server error ${res.status}`;
+                try { const errJson = await res.json(); errDetail = errJson.detail || errDetail; } catch(_) {}
+                throw new Error(errDetail);
+            }
+
+            const data = await res.json();
             
             aiChatHistory.push({role: "user", content: text});
             aiChatHistory.push({role: "model", content: data.response});
             
-            const rawHtml = marked.parse(data.response);
+            // ── Map + chart come from the backend, already computed ──
+            let cleanResponse = String(data.response || '').replace(/```json[\s\S]*?```/g, '').trim();
+            const mapFilter = data.map_filter || null;
+
+            if (typeof updateInsightsMapFromSidecar === 'function') {
+                updateInsightsMapFromSidecar(mapFilter || {});
+            }
+            if (!(data.chart && typeof renderChartSpec === 'function' && renderChartSpec(data.chart))) {
+                if (typeof autoChartFromData === 'function') autoChartFromData(mapFilter);
+            }
+            if (data.range && typeof UrbanInsights !== 'undefined') {
+                const note = document.getElementById('insights-window-note');
+                if (note) {
+                    note.textContent = data.range.label + ' — ' + data.range.scoped_total +
+                        ' of ' + data.range.grand_total + ' reports analysed' +
+                        (data.range.matched_timeframe ? ' (timeframe taken from your question)' : '');
+                }
+            }
+            
+            const rawHtml = marked.parse(cleanResponse);
             const safeHtml = DOMPurify.sanitize(rawHtml);
             
             // Format response container with markdown styles
@@ -2449,9 +3740,17 @@
             });
             
         } catch(e) {
-            console.error(e);
+            console.error('[AI Chat]', e);
+            // Ensure typing indicator is removed on error too
+            const typingEl2 = document.getElementById(typingId);
+            if (typingEl2) typingEl2.remove();
             historyContainer.insertAdjacentHTML('beforeend', `
-                <div class="text-xs text-red-400 text-center italic mt-2">Failed to get response.</div>
+                <div class="flex flex-col gap-1 items-start mb-2">
+                    <div class="text-[10px] text-gray-500 uppercase tracking-wider font-bold ml-1">UrbanOS AI</div>
+                    <div class="bg-red-50 border border-red-200 text-xs text-red-600 px-4 py-3 rounded-2xl rounded-tl-sm max-w-[85%]">
+                        <span class="font-bold">Error:</span> ${e.message || 'Could not reach the AI backend.'}
+                    </div>
+                </div>
             `);
         } finally {
             input.disabled = false;

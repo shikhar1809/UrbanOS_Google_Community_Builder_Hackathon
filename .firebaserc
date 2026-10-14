@@ -1,5 +1,15 @@
 {
   "projects": {
     "default": "urbanos101"
-  }
+  },
+  "targets": {
+    "urbanos101": {
+      "hosting": {
+        "sandbox": [
+          "urbanos-whatsapp-sandbox"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }

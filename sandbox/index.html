@@ -1,0 +1,1176 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>UrbanOS WhatsApp Sandbox</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='16' fill='%2300a884'/%3E%3C/svg%3E">
+<style>
+  /* Light and dark tokens follow WhatsApp Web's palette. */
+  :root {
+    --green: #00a884;
+    --green-deep: #008069;
+    --panel: #ffffff;
+    --app-bg: #f0f2f5;
+    --header-bg: #f0f2f5;
+    --border: #e9edef;
+    --text: #111b21;
+    --text-2: #667781;
+    --bubble-out: #d9fdd3;
+    --bubble-in: #ffffff;
+    --chat-bg: #efeae2;
+    --chat-pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='260' viewBox='0 0 260 260'%3E%3Cg fill='none' stroke='%23000' stroke-opacity='0.06' stroke-width='1.2'%3E%3Ccircle cx='30' cy='42' r='6'/%3E%3Cpath d='M120 34 l10 -10 l10 10 z'/%3E%3Cpath d='M60 170 q10 -12 20 0 t20 0'/%3E%3Crect x='170' y='150' width='14' height='14' rx='3'/%3E%3Cpath d='M205 60 l12 0 M211 54 l0 12'/%3E%3Ccircle cx='100' cy='220' r='3'/%3E%3C/g%3E%3C/svg%3E");
+    --input-bg: #ffffff;
+    --hover: #f5f6f6;
+    --selected: #f0f2f5;
+    --tick: #8696a0;
+    --tick-read: #53bdeb;
+    --danger: #ea0038;
+    --pill-bg: #ffffff;
+    --notice-bg: #ffeecd;
+    --notice-text: #54656f;
+    --shadow: 0 1px 0.5px rgba(11, 20, 26, 0.13);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --panel: #111b21;
+      --app-bg: #111b21;
+      --header-bg: #202c33;
+      --border: #222d34;
+      --text: #e9edef;
+      --text-2: #8696a0;
+      --bubble-out: #005c4b;
+      --bubble-in: #202c33;
+      --chat-bg: #0b141a;
+      --chat-pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='260' viewBox='0 0 260 260'%3E%3Cg fill='none' stroke='%23fff' stroke-opacity='0.05' stroke-width='1.2'%3E%3Ccircle cx='30' cy='42' r='6'/%3E%3Cpath d='M120 34 l10 -10 l10 10 z'/%3E%3Cpath d='M60 170 q10 -12 20 0 t20 0'/%3E%3Crect x='170' y='150' width='14' height='14' rx='3'/%3E%3Cpath d='M205 60 l12 0 M211 54 l0 12'/%3E%3Ccircle cx='100' cy='220' r='3'/%3E%3C/g%3E%3C/svg%3E");
+      --input-bg: #2a3942;
+      --hover: #202c33;
+      --selected: #2a3942;
+      --tick: #8696a0;
+      --pill-bg: #182229;
+      --notice-bg: #182229;
+      --notice-text: #ffd279;
+      --shadow: 0 1px 0.5px rgba(11, 20, 26, 0.4);
+    }
+  }
+  :root[data-theme="dark"] {
+    --panel: #111b21;
+    --app-bg: #111b21;
+    --header-bg: #202c33;
+    --border: #222d34;
+    --text: #e9edef;
+    --text-2: #8696a0;
+    --bubble-out: #005c4b;
+    --bubble-in: #202c33;
+    --chat-bg: #0b141a;
+    --input-bg: #2a3942;
+    --hover: #202c33;
+    --selected: #2a3942;
+    --pill-bg: #182229;
+    --notice-bg: #182229;
+    --notice-text: #ffd279;
+    --shadow: 0 1px 0.5px rgba(11, 20, 26, 0.4);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    background: var(--app-bg);
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+  }
+  body.signed-in::before {
+    content: "";
+    position: fixed; top: 0; left: 0; right: 0; height: 127px;
+    background: var(--green);
+  }
+  button, input { font: inherit; color: inherit; }
+  [hidden] { display: none !important; }
+
+  /* ---------- Sign-in ---------- */
+  .gate {
+    position: relative; min-height: 100vh; min-height: 100dvh;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 24px 16px;
+    background: linear-gradient(to bottom, var(--green) 0 220px, var(--app-bg) 220px);
+  }
+  .gate-card {
+    width: min(560px, 100%);
+    background: var(--panel);
+    border-radius: 12px;
+    box-shadow: 0 6px 18px rgba(11, 20, 26, 0.12);
+    padding: 36px 40px 32px;
+  }
+  .gate-card h1 { font-size: 26px; font-weight: 300; margin: 0 0 8px; }
+  .gate-card p { color: var(--text-2); font-size: 14px; line-height: 20px; margin: 0 0 22px; }
+  .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+  .field label { font-size: 13px; color: var(--text-2); }
+  .field input {
+    height: 44px; padding: 0 12px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--input-bg); outline: none;
+  }
+  .field input:focus { border-color: var(--green); box-shadow: 0 0 0 1px var(--green); }
+  .btn-primary {
+    width: 100%; height: 44px; border: 0; border-radius: 22px;
+    background: var(--green); color: #fff; font-weight: 600; font-size: 15px; cursor: pointer;
+  }
+  .btn-primary:disabled { opacity: 0.6; cursor: default; }
+  .form-error { color: var(--danger); font-size: 13px; min-height: 18px; margin: 0 0 10px; }
+  .gate-foot { margin-top: 18px; font-size: 12px; color: var(--text-2); text-align: center; }
+
+  /* ---------- App shell ---------- */
+  .shell {
+    position: relative; z-index: 1;
+    height: calc(100% - 38px); margin: 19px auto; max-width: 1600px;
+    display: flex; background: var(--panel);
+    box-shadow: 0 6px 18px rgba(11, 20, 26, 0.12);
+  }
+
+  /* Sidebar */
+  .side {
+    width: min(30%, 430px); min-width: 300px;
+    display: flex; flex-direction: column;
+    border-right: 1px solid var(--border);
+    background: var(--panel);
+  }
+  .side-head {
+    height: 59px; padding: 0 16px; flex: none;
+    display: flex; align-items: center; gap: 8px;
+    background: var(--header-bg);
+  }
+  .side-head .grow { flex: 1; }
+  .side-search { padding: 8px 12px; flex: none; }
+  .search-box {
+    height: 35px; display: flex; align-items: center; gap: 14px; padding: 0 14px;
+    border-radius: 8px; background: var(--header-bg); color: var(--text-2); font-size: 14px;
+  }
+  .search-box input {
+    border: 0; background: transparent; outline: none; flex: 1; color: var(--text-2);
+  }
+  .chat-list { overflow-y: auto; flex: 1; }
+  .chat-row {
+    width: 100%; height: 72px; padding: 0 13px; border: 0; background: var(--selected);
+    display: flex; align-items: center; gap: 13px; text-align: left; cursor: pointer;
+  }
+  .chat-row .info { flex: 1; min-width: 0; }
+  .chat-row .top, .chat-row .bottom { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .chat-row .name { font-size: 17px; font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chat-row .time { font-size: 12px; color: var(--text-2); flex: none; }
+  .chat-row .preview {
+    font-size: 14px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    margin-top: 2px;
+  }
+  .side-foot {
+    margin: 0; padding: 14px 18px; font-size: 12.5px; color: var(--text-2); text-align: center;
+    border-top: 1px solid var(--border);
+  }
+
+  /* Avatars */
+  .avatar {
+    width: 49px; height: 49px; border-radius: 50%; flex: none;
+    display: grid; place-items: center; color: #fff; font-weight: 600; font-size: 17px;
+    background: linear-gradient(135deg, #00a884, #008069);
+  }
+  .avatar.me { width: 40px; height: 40px; background: #8696a0; font-size: 15px; }
+  .avatar.small { width: 40px; height: 40px; font-size: 15px; }
+
+  /* Chat pane */
+  .pane { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
+  .chat-head {
+    height: 59px; padding: 0 16px; flex: none;
+    display: flex; align-items: center; gap: 13px;
+    background: var(--header-bg);
+  }
+  .chat-head .who { flex: 1; min-width: 0; }
+  .chat-head .who .name { font-size: 16px; line-height: 20px; }
+  .chat-head .who .status { font-size: 13px; color: var(--text-2); line-height: 18px; }
+  .chat-head .status.typing { color: var(--green); }
+  .icon-btn {
+    width: 40px; height: 40px; border: 0; border-radius: 50%; background: transparent;
+    display: inline-grid; place-items: center; cursor: pointer; color: var(--text-2); flex: none;
+    position: relative;
+  }
+  .icon-btn:hover { background: var(--hover); }
+  .icon-btn svg { width: 22px; height: 22px; fill: currentColor; }
+  .icon-btn.round { background: var(--green); color: #fff; }
+  .icon-btn.round:hover { background: var(--green-deep); }
+  .icon-btn.round svg { fill: #fff; }
+  .icon-btn.ghost-danger { color: var(--danger); }
+
+  .messages {
+    flex: 1; overflow-y: auto; padding: 14px 7vw 10px;
+    background-color: var(--chat-bg);
+    background-image: var(--chat-pattern);
+    display: flex; flex-direction: column; gap: 3px;
+  }
+  .notice {
+    align-self: center; max-width: 520px; text-align: center;
+    background: var(--notice-bg); color: var(--notice-text);
+    font-size: 12.5px; line-height: 17px; padding: 6px 12px; border-radius: 7.5px;
+    box-shadow: var(--shadow); margin: 6px 0 10px;
+  }
+  .day {
+    align-self: center; margin: 8px 0 6px;
+    background: var(--pill-bg); color: var(--text-2);
+    font-size: 12.5px; padding: 5px 12px; border-radius: 7.5px; box-shadow: var(--shadow);
+    text-transform: uppercase; letter-spacing: 0.2px;
+  }
+
+  .row { display: flex; margin-bottom: 2px; }
+  .row.out { justify-content: flex-end; }
+  .row.in { justify-content: flex-start; }
+  .bubble {
+    position: relative; max-width: 65%; min-width: 88px;
+    padding: 6px 7px 8px 9px; border-radius: 7.5px; box-shadow: var(--shadow);
+    font-size: 14.2px; line-height: 19px; word-wrap: break-word; overflow-wrap: anywhere;
+  }
+  .bubble.out { background: var(--bubble-out); border-top-right-radius: 0; }
+  .bubble.in { background: var(--bubble-in); border-top-left-radius: 0; }
+  .bubble.out::after {
+    content: ""; position: absolute; top: 0; right: -8px;
+    border-top: 8px solid var(--bubble-out); border-right: 8px solid transparent;
+  }
+  .bubble.in::before {
+    content: ""; position: absolute; top: 0; left: -8px;
+    border-top: 8px solid var(--bubble-in); border-left: 8px solid transparent;
+  }
+  .bubble.media { padding: 4px 4px 6px; }
+  .bubble.media .text { padding: 4px 5px 0; }
+  .text b { font-weight: 700; }
+  .text i { font-style: italic; }
+  .text s { text-decoration: line-through; }
+  .text code {
+    font-family: ui-monospace, Consolas, monospace; font-size: 13px;
+    background: rgba(0, 0, 0, 0.06); padding: 1px 4px; border-radius: 3px;
+  }
+  .meta {
+    float: right; margin: 6px 0 -4px 10px;
+    display: flex; align-items: center; gap: 3px;
+    font-size: 11px; line-height: 15px; color: var(--text-2); user-select: none;
+  }
+  .ticks { display: inline-flex; color: var(--tick); }
+  .ticks svg { width: 16px; height: 11px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+  .ticks.read { color: var(--tick-read); }
+  .ticks.failed { color: var(--danger); font-weight: 700; }
+  .ticks.sending svg { width: 13px; height: 13px; }
+  .retry {
+    align-self: flex-end; margin: 2px 4px 6px 0; border: 0; background: transparent;
+    color: var(--danger); font-size: 12px; cursor: pointer; text-decoration: underline;
+  }
+
+  .photo { display: block; width: min(260px, 100%); border-radius: 6px; }
+  .photo-caption { padding: 6px 4px 0; }
+
+  .voice { display: flex; align-items: center; gap: 8px; min-width: 230px; padding: 4px 2px 2px; }
+  .voice .play {
+    width: 36px; height: 36px; border: 0; border-radius: 50%; flex: none; cursor: pointer;
+    background: var(--green); display: grid; place-items: center; color: #fff;
+  }
+  .voice .play svg { width: 18px; height: 18px; fill: currentColor; }
+  .voice .wave { flex: 1; display: flex; align-items: center; gap: 2px; height: 28px; }
+  .voice .wave span { flex: 1; min-width: 2px; background: var(--text-2); opacity: 0.6; border-radius: 2px; }
+  .voice .dur { font-size: 12px; color: var(--text-2); flex: none; min-width: 34px; text-align: right; }
+
+  .loc { display: flex; align-items: center; gap: 10px; min-width: 220px; padding: 2px 2px 2px 0; }
+  .loc .pin {
+    width: 42px; height: 42px; border-radius: 8px; flex: none;
+    background: var(--green); display: grid; place-items: center;
+  }
+  .loc .pin svg { width: 22px; height: 22px; fill: #fff; }
+  .loc-title { font-weight: 600; }
+  .loc-coord { font-size: 12.5px; color: var(--text-2); }
+
+  .typing-row .bubble { padding: 12px 14px; }
+  .dots { display: inline-flex; gap: 4px; }
+  .dots span {
+    width: 7px; height: 7px; border-radius: 50%; background: var(--text-2);
+    animation: blink 1.2s infinite ease-in-out;
+  }
+  .dots span:nth-child(2) { animation-delay: 0.2s; }
+  .dots span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes blink { 0%, 80%, 100% { opacity: 0.25; } 40% { opacity: 1; } }
+
+  /* Composer */
+  .composer {
+    position: relative; flex: none; min-height: 62px; padding: 8px 16px;
+    display: flex; align-items: center; gap: 6px; background: var(--header-bg);
+  }
+  .composer-main { flex: 1; min-width: 0; display: flex; }
+  .input-wrap {
+    flex: 1; min-height: 42px; display: flex; align-items: center;
+    background: var(--input-bg); border-radius: 8px; padding: 0 12px;
+  }
+  .input-wrap input {
+    flex: 1; border: 0; outline: none; background: transparent; font-size: 15px; height: 42px;
+  }
+  .input-wrap input::placeholder { color: var(--text-2); }
+  .rec-bar {
+    flex: 1; height: 42px; display: flex; align-items: center; gap: 10px;
+    padding: 0 14px; border-radius: 8px; background: var(--input-bg); color: var(--text-2); font-size: 14px;
+  }
+  .rec-dot {
+    width: 10px; height: 10px; border-radius: 50%; background: var(--danger);
+    animation: blink 1s infinite ease-in-out;
+  }
+  .rec-time { color: var(--text); font-variant-numeric: tabular-nums; min-width: 40px; }
+  .composer-actions { position: relative; display: flex; }
+
+  .pop {
+    position: absolute; bottom: 58px; left: 0; z-index: 5;
+    background: var(--panel); border-radius: 10px; box-shadow: 0 4px 16px rgba(11, 20, 26, 0.25);
+    padding: 6px; min-width: 210px;
+  }
+  .pop button {
+    display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 12px;
+    border: 0; background: transparent; border-radius: 8px; cursor: pointer; text-align: left;
+    color: var(--text);
+  }
+  .pop button:hover { background: var(--hover); }
+  .pop .sub-title { padding: 8px 12px 4px; font-size: 12px; color: var(--text-2); }
+  .emoji-pop { width: 320px; padding: 8px; }
+  .emoji-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; }
+  .emoji-grid button {
+    width: 34px; height: 34px; border: 0; background: transparent; border-radius: 6px;
+    font-size: 20px; cursor: pointer; padding: 0;
+  }
+  .emoji-grid button:hover { background: var(--hover); }
+  .menu-pop { right: 8px; left: auto; top: 52px; bottom: auto; min-width: 220px; }
+
+  .toast {
+    position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%) translateY(20px);
+    background: #222e35; color: #e9edef; padding: 10px 16px; border-radius: 8px;
+    font-size: 14px; opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s;
+    z-index: 20; max-width: min(90vw, 460px); text-align: center;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* Narrow screens: one pane at a time, like the WhatsApp mobile app. */
+  @media (max-width: 760px) {
+    body.signed-in::before { display: none; }
+    .shell { height: 100%; margin: 0; max-width: none; box-shadow: none; }
+    .side { display: none; }
+    .messages { padding: 10px 12px; }
+    .bubble { max-width: 82%; }
+    .gate-card { padding: 26px 20px 24px; }
+    .gate { background: var(--app-bg); justify-content: flex-start; padding-top: 48px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Sign-in -->
+<section id="gate" class="gate" hidden>
+  <form id="signin" class="gate-card" novalidate>
+    <h1>UrbanOS WhatsApp sandbox</h1>
+    <p>Chat with the UrbanOS intake bot as a citizen would. Messages run through the real intake pipeline, but nothing is sent over WhatsApp or Twilio.</p>
+    <div class="field">
+      <label for="phone">Your phone number, with country code</label>
+      <input id="phone" name="phone" inputmode="tel" autocomplete="tel" placeholder="91 98765 43210">
+    </div>
+    <div class="field">
+      <label for="code">Sandbox access code</label>
+      <input id="code" name="code" type="password" autocomplete="off" placeholder="Access code">
+    </div>
+    <p id="form-error" class="form-error" role="alert"></p>
+    <button id="continue" class="btn-primary" type="submit">Open chat</button>
+    <p class="gate-foot">Test data only. Your number is used as the chat identity in the sandbox database.</p>
+  </form>
+</section>
+
+<!-- Chat -->
+<div id="shell" class="shell" hidden>
+  <aside class="side" aria-label="Chats">
+    <header class="side-head">
+      <div class="avatar me" id="me-avatar">Y</div>
+      <div class="grow"></div>
+      <button class="icon-btn" type="button" id="btn-side-menu" aria-label="Menu" data-menu="main">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
+      </button>
+    </header>
+    <div class="side-search">
+      <div class="search-box">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+        <input type="search" placeholder="Search or start a new chat" disabled aria-label="Search">
+      </div>
+    </div>
+    <div class="chat-list">
+      <button class="chat-row" type="button" aria-current="true">
+        <div class="avatar">UO</div>
+        <div class="info">
+          <div class="top"><span class="name">UrbanOS</span><span class="time" id="list-time"></span></div>
+          <div class="bottom"><span class="preview" id="list-preview">Say hi to start</span></div>
+        </div>
+      </button>
+    </div>
+    <p class="side-foot">Sandbox · test data only</p>
+  </aside>
+
+  <main class="pane">
+    <header class="chat-head">
+      <div class="avatar small">UO</div>
+      <div class="who">
+        <div class="name">UrbanOS</div>
+        <div class="status" id="status">online</div>
+      </div>
+      <button class="icon-btn" type="button" id="btn-head-menu" aria-label="Chat menu" data-menu="main">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
+      </button>
+      <div class="pop menu-pop" id="pop-menu" hidden>
+        <button type="button" data-action="restart">Restart conversation</button>
+        <button type="button" data-action="signout">Sign out</button>
+      </div>
+    </header>
+
+    <div id="messages" class="messages" role="log" aria-live="polite"></div>
+
+    <form id="composer" class="composer" autocomplete="off">
+      <div class="composer-actions">
+        <button class="icon-btn" type="button" id="btn-emoji" aria-label="Emoji" aria-expanded="false">
+          <svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zM8.5 10a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zm7 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zM12 17.5c2.3 0 4.2-1.6 4.6-3.6H7.4c.4 2 2.3 3.6 4.6 3.6z"/></svg>
+        </button>
+        <div class="pop emoji-pop" id="pop-emoji" hidden><div class="emoji-grid" id="emoji-grid"></div></div>
+      </div>
+      <div class="composer-actions">
+        <button class="icon-btn" type="button" id="btn-attach" aria-label="Attach" aria-expanded="false">
+          <svg viewBox="0 0 24 24"><path d="M16.5 6.5v9.8a4.5 4.5 0 0 1-9 0V5.2a3 3 0 0 1 6 0v10.6a1.5 1.5 0 0 1-3 0V6.5h-1.5v9.3a3 3 0 0 0 6 0V5.2a4.5 4.5 0 0 0-9 0v11.1a6 6 0 0 0 12 0V6.5z"/></svg>
+        </button>
+        <div class="pop attach-pop" id="pop-attach" hidden>
+          <button type="button" data-attach="photo">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="#7f66ff"><path d="M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zm1 2v9.6l4-4 3 3 5-5 3 3V7H5zm3 2.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z"/></svg>
+            Photo
+          </button>
+          <button type="button" data-attach="location">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="#00a884"><path d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7zm0 9.5a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5z"/></svg>
+            My location
+          </button>
+          <button type="button" data-attach="pins">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="#e7a300"><path d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7zm0 9.5a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5z"/></svg>
+            Test pin
+          </button>
+          <div id="pins" hidden></div>
+        </div>
+      </div>
+
+      <div class="composer-main">
+        <div class="input-wrap" id="input-wrap">
+          <input id="text" type="text" maxlength="1000" placeholder="Type a message" aria-label="Type a message">
+        </div>
+        <div class="rec-bar" id="rec-bar" hidden>
+          <span class="rec-dot" aria-hidden="true"></span>
+          <span class="rec-time" id="rec-time">0:00</span>
+          <span>Recording. Tap send to deliver.</span>
+        </div>
+      </div>
+
+      <button class="icon-btn ghost-danger" type="button" id="btn-cancel-rec" aria-label="Cancel voice note" hidden>
+        <svg viewBox="0 0 24 24"><path d="M9 3h6l1 2h4v2H4V5h4l1-2zm-2 6h2v9H7V9zm4 0h2v9h-2V9zm4 0h2v9h-2V9zM6 8h12l-1 13H7L6 8z"/></svg>
+      </button>
+      <button class="icon-btn round" type="button" id="btn-voice" aria-label="Record voice note">
+        <svg viewBox="0 0 24 24"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.9V21h2v-3.1A7 7 0 0 0 19 11h-2z"/></svg>
+      </button>
+      <button class="icon-btn round" type="submit" id="btn-send" aria-label="Send" hidden>
+        <svg viewBox="0 0 24 24"><path d="M3.4 20.4 21 12 3.4 3.6 3.3 10l12.6 2-12.6 2z"/></svg>
+      </button>
+    </form>
+  </main>
+</div>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<input id="file-photo" type="file" accept="image/*" hidden>
+
+<script>
+(() => {
+  'use strict';
+
+  // ---------- constants ----------
+  const STORAGE_KEY = 'urbanos-sandbox-v1';
+  const MAX_THREAD = 200;
+  const MAX_UPLOAD_BYTES = 700 * 1024;
+  const MAX_VOICE_SECONDS = 120;
+  const PINS = [
+    { label: 'Hazratganj (inside Lucknow)', lat: 26.8467, lng: 80.9462 },
+    { label: 'Gomti Nagar (inside Lucknow)', lat: 26.8534, lng: 80.9981 },
+    { label: 'Kanpur (outside. Should be rejected)', lat: 26.4499, lng: 80.3319 },
+  ];
+  const EMOJIS = ['😀','😂','😊','😍','🙏','👍','👏','🎉','❤️','🔥','😢','😡','🤔','👋','✅','❌','📍','📷','🚧','💧','💡','🌳','🏥','🏫','🚌','🙌','😎','🥲','👀','💬','⚠️','🛣️','🗑️','🌧️','🔌','🚰','🪧','📢','🤝','😅'];
+
+  // ---------- icons ----------
+  const ICON = {
+    play: '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>',
+    pause: '<svg viewBox="0 0 24 24"><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>',
+    tick: '<svg viewBox="0 0 16 11"><path d="M1 5.5 4.5 9 11 1.5"/></svg>',
+    ticks: '<svg viewBox="0 0 16 11"><path d="M1 5.5 4.5 9 11 1.5"/><path d="M5 5.5 8.5 9 15 1.5"/></svg>',
+    clock: '<svg viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+    failed: '<svg viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2.2"><circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 16.5v.5"/></svg>',
+    pin: '<svg viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7zm0 9.5a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5z"/></svg>',
+  };
+
+  // ---------- helpers ----------
+  const $ = (sel) => document.querySelector(sel);
+  const el = (tag, className, text) => {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  };
+  const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const digits = (s) => (s || '').replace(/\D/g, '');
+  const escapeHtml = (s) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+  // WhatsApp text markup: *bold*, _italic_, ~strike~, ```mono```, and line breaks.
+  function formatWa(raw) {
+    let html = escapeHtml(raw);
+    html = html.replace(/```([\s\S]+?)```/g, '<code>$1</code>');
+    html = html.replace(/(^|[\s(])\*([^*\n]+?)\*(?=$|[\s).,!?:;])/g, '$1<b>$2</b>');
+    html = html.replace(/(^|[\s(])_([^_\n]+?)_(?=$|[\s).,!?:;])/g, '$1<i>$2</i>');
+    html = html.replace(/(^|[\s(])~([^~\n]+?)~(?=$|[\s).,!?:;])/g, '$1<s>$2</s>');
+    return html.replace(/\n/g, '<br>');
+  }
+  const plain = (s) => (s || '').replace(/[*_~`]/g, '').replace(/\s+/g, ' ').trim();
+
+  function timeLabel(ts) {
+    return new Date(ts).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
+  }
+  function dayLabel(ts) {
+    const d = new Date(ts);
+    const today = new Date();
+    const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
+    const same = (a, b) => a.toDateString() === b.toDateString();
+    if (same(d, today)) return 'Today';
+    if (same(d, yesterday)) return 'Yesterday';
+    return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  }
+  const durationLabel = (sec) => {
+    const s = Math.max(0, Math.round(sec || 0));
+    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  };
+  const formatPhone = (p) => `+${p.slice(0, 2)} ${p.slice(2)}`;
+
+  // Deterministic waveform so a bubble looks the same after every re-render.
+  function waveHeights(seed, count) {
+    let h = 0;
+    for (const c of seed) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+    const out = [];
+    for (let i = 0; i < count; i++) {
+      h = (h * 1103515245 + 12345) >>> 0;
+      out.push(18 + (h % 80));
+    }
+    return out;
+  }
+
+  // ---------- storage (per-viewer convenience only) ----------
+  function loadSession() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+      if (!saved || !saved.phone) return null;
+      saved.thread = (saved.thread || []).map((m) =>
+        m.status === 'sending' ? { ...m, status: 'failed', error: 'Not delivered' } : m);
+      return saved;
+    } catch { return null; }
+  }
+  function saveSession() {
+    if (!session) return;
+    const thread = session.thread.slice(-MAX_THREAD).map((m) => ({
+      ...m,
+      url: m.url && m.url.startsWith('blob:') ? null : m.url,
+    }));
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...session, thread })); } catch { /* private mode */ }
+  }
+  function clearSession() {
+    try { localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
+  }
+
+  // ---------- state ----------
+  let session = loadSession();
+  let pending = 0;
+  let recording = null;
+  let playing = null;
+
+  // ---------- network ----------
+  async function api(path, options = {}) {
+    const res = await fetch(path, {
+      method: options.method || 'GET',
+      headers: { 'Content-Type': 'application/json', 'X-Sim-Code': (session && session.code) || '' },
+      body: options.body,
+    });
+    let data = {};
+    try { data = await res.json(); } catch { /* empty body */ }
+    if (res.status === 401) {
+      const err = new Error('Access code rejected');
+      err.auth = true;
+      throw err;
+    }
+    if (!res.ok) throw new Error(typeof data.detail === 'string' ? data.detail : `Request failed (${res.status})`);
+    return data;
+  }
+
+  // ---------- screens ----------
+  function showGate(message) {
+    $('#shell').hidden = true;
+    document.body.classList.remove('signed-in');
+    $('#gate').hidden = false;
+    $('#form-error').textContent = message || '';
+    $('#phone').value = session ? digits(session.phone) : '';
+    $('#code').value = '';
+    $('#phone').focus();
+  }
+
+  function showApp() {
+    $('#gate').hidden = true;
+    $('#shell').hidden = false;
+    document.body.classList.add('signed-in');
+    $('#me-avatar').textContent = digits(session.phone).slice(-2);
+    renderAll();
+    $('#text').focus();
+  }
+
+  function signOut(message) {
+    session = null;
+    pending = 0;
+    clearSession();
+    showGate(message);
+  }
+
+  // ---------- rendering ----------
+  function renderAll() {
+    renderThread();
+    renderSidebar();
+    renderHeader();
+  }
+
+  function renderHeader() {
+    const status = $('#status');
+    status.textContent = pending > 0 ? 'typing…' : 'online';
+    status.classList.toggle('typing', pending > 0);
+  }
+
+  function renderSidebar() {
+    const last = session.thread[session.thread.length - 1];
+    $('#list-preview').textContent = last ? previewText(last) : 'Say hi to start';
+    $('#list-time').textContent = last ? timeLabel(last.ts) : '';
+  }
+
+  function previewText(m) {
+    if (m.type === 'image') return '📷 Photo';
+    if (m.type === 'audio') return '🎤 Voice note';
+    if (m.type === 'location') return '📍 Location';
+    return plain(m.text);
+  }
+
+  function renderThread() {
+    const box = $('#messages');
+    box.textContent = '';
+    box.append(el('div', 'notice', '🔒 Sandbox chat. Messages run through the UrbanOS intake pipeline with test storage. Nothing is sent over WhatsApp.'));
+
+    let lastDay = '';
+    for (const m of session.thread) {
+      const day = dayLabel(m.ts);
+      if (day !== lastDay) { box.append(el('div', 'day', day)); lastDay = day; }
+      box.append(bubbleEl(m));
+    }
+    if (session.thread.length === 0) {
+      box.append(el('div', 'notice', 'Say hi to start. Try: hi, then 1 to log an issue.'));
+    }
+    if (pending > 0) box.append(typingRow());
+    renderHeader();
+    box.scrollTop = box.scrollHeight;
+  }
+
+  function typingRow() {
+    const row = el('div', 'row in typing-row');
+    const bubble = el('div', 'bubble in');
+    const dots = el('div', 'dots');
+    dots.append(el('span'), el('span'), el('span'));
+    bubble.append(dots);
+    row.append(bubble);
+    return row;
+  }
+
+  function bubbleEl(m) {
+    const out = m.dir === 'out';
+    const row = el('div', `row ${out ? 'out' : 'in'}`);
+    row.dataset.id = m.id;
+    const bubble = el('div', `bubble ${out ? 'out' : 'in'}${m.type === 'image' ? ' media' : ''}`);
+
+    if (m.type === 'image') {
+      const img = el('img', 'photo');
+      img.alt = 'Photo sent in chat';
+      img.src = m.url || '';
+      bubble.append(img);
+      if (m.text) bubble.append(textEl(m.text, 'photo-caption'));
+    } else if (m.type === 'audio') {
+      bubble.append(voiceEl(m));
+    } else if (m.type === 'location') {
+      bubble.append(locationEl(m));
+    } else {
+      bubble.append(textEl(m.text));
+    }
+
+    const meta = el('div', 'meta');
+    meta.append(el('span', '', timeLabel(m.ts)));
+    if (out) {
+      const ticks = el('span', `ticks ${m.status || 'sending'}`);
+      ticks.setAttribute('aria-label', m.status || 'sending');
+      ticks.innerHTML = m.status === 'sending' ? ICON.clock
+        : m.status === 'failed' ? ICON.failed
+        : m.status === 'read' ? ICON.ticks
+        : m.status === 'delivered' ? ICON.ticks
+        : ICON.tick;
+      meta.append(ticks);
+    }
+    bubble.append(meta);
+    row.append(bubble);
+
+    if (out && m.status === 'failed' && m.payload) {
+      const retry = el('button', 'retry', 'Not delivered. Tap to retry');
+      retry.type = 'button';
+      retry.addEventListener('click', () => dispatch(m, m.payload));
+      const wrap = el('div', 'row out');
+      wrap.append(retry);
+      const container = el('div', 'row-wrap');
+      container.append(row, wrap);
+      return container;
+    }
+    return row;
+  }
+
+  function textEl(text, className = 'text') {
+    const node = el('div', className);
+    node.innerHTML = formatWa(text || '');
+    return node;
+  }
+
+  function voiceEl(m) {
+    const wrap = el('div', 'voice');
+    const btn = el('button', 'play');
+    btn.type = 'button';
+    btn.setAttribute('aria-label', 'Play voice note');
+    btn.innerHTML = ICON.play;
+    const wave = el('div', 'wave');
+    for (const h of waveHeights(m.id, 32)) {
+      const bar = el('span');
+      bar.style.height = `${h}%`;
+      wave.append(bar);
+    }
+    const dur = el('span', 'dur', durationLabel(m.durationSec));
+    wrap.append(btn, wave, dur);
+
+    let audio = null;
+    btn.addEventListener('click', () => {
+      if (!m.url) return;
+      if (!audio) {
+        audio = new Audio(m.url);
+        audio.addEventListener('ended', () => { btn.innerHTML = ICON.play; playing = null; });
+        audio.addEventListener('error', () => toast('This voice note could not be played.'));
+      }
+      if (audio.paused) {
+        if (playing && playing !== audio) playing.pause();
+        playing = audio;
+        audio.play().catch(() => toast('Playback was blocked by the browser.'));
+        btn.innerHTML = ICON.pause;
+      } else {
+        audio.pause();
+        btn.innerHTML = ICON.play;
+      }
+    });
+    return wrap;
+  }
+
+  function locationEl(m) {
+    const wrap = el('div', 'loc');
+    const pin = el('span', 'pin');
+    pin.innerHTML = ICON.pin;
+    const info = el('div');
+    info.append(el('div', 'loc-title', m.label || 'Location'));
+    info.append(el('div', 'loc-coord', `${Number(m.lat).toFixed(5)}, ${Number(m.lng).toFixed(5)}`));
+    wrap.append(pin, info);
+    return wrap;
+  }
+
+  function toast(message) {
+    const node = $('#toast');
+    node.textContent = message;
+    node.classList.add('show');
+    clearTimeout(toast.timer);
+    toast.timer = setTimeout(() => node.classList.remove('show'), 3500);
+  }
+
+  // ---------- messages ----------
+  function outgoing(fields) {
+    return { id: uid(), dir: 'out', ts: new Date().toISOString(), status: 'sending', ...fields };
+  }
+  function incoming(text) {
+    return { id: uid(), dir: 'in', ts: new Date().toISOString(), type: 'text', text };
+  }
+
+  function replyDelay(text) {
+    return Math.min(1200, 450 + (text || '').length * 6);
+  }
+
+  // Sends one payload to the bot and streams its replies in like a real chat.
+  async function dispatch(out, payload) {
+    out.payload = payload;
+    out.status = 'sending';
+    out.error = null;
+    if (!session.thread.includes(out)) session.thread.push(out);
+    pending += 1;
+    renderThread();
+    try {
+      const data = await api('/sim/api/message', {
+        method: 'POST',
+        body: JSON.stringify({ phone: session.phone, ...payload }),
+      });
+      out.status = 'delivered';
+      renderThread();
+      for (const reply of data.replies || []) {
+        await sleep(replyDelay(reply.text));
+        session.thread.push(incoming(reply.text));
+        saveSession();
+        renderThread();
+      }
+      out.status = 'read';
+    } catch (err) {
+      if (err.auth) { signOut('That access code is not right. Please sign in again.'); return; }
+      out.status = 'failed';
+      out.error = err.message;
+      toast(err.message);
+    } finally {
+      pending = Math.max(0, pending - 1);
+      if (session) {
+        saveSession();
+        renderAll();
+      }
+    }
+  }
+
+  function sendText() {
+    const input = $('#text');
+    const body = input.value.trim();
+    if (!body) return;
+    input.value = '';
+    syncComposer();
+    dispatch(outgoing({ type: 'text', text: body }), { body });
+  }
+
+  function sendLocation(lat, lng, label) {
+    const out = outgoing({ type: 'location', lat, lng, label });
+    dispatch(out, { latitude: lat, longitude: lng });
+  }
+
+  // ---------- uploads ----------
+  function blobToBase64(blob) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result).split(',')[1]);
+      reader.onerror = () => reject(new Error('Could not read the file'));
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  function loadImage(src) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error('Image could not be decoded'));
+      img.src = src;
+    });
+  }
+
+  // Downscale and re-encode so a photo fits the sandbox upload limit.
+  async function compressImage(file) {
+    const objectUrl = URL.createObjectURL(file);
+    try {
+      const img = await loadImage(objectUrl);
+      const scale = Math.min(1, 1280 / Math.max(img.naturalWidth, img.naturalHeight));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.naturalWidth * scale);
+      canvas.height = Math.round(img.naturalHeight * scale);
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      for (const quality of [0.85, 0.7, 0.55]) {
+        const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality));
+        if (blob && blob.size <= MAX_UPLOAD_BYTES) return blob;
+      }
+      throw new Error('That photo is too large, even after shrinking it.');
+    } finally {
+      URL.revokeObjectURL(objectUrl);
+    }
+  }
+
+  async function uploadMedia(blob) {
+    const up = await api('/sim/api/media', {
+      method: 'POST',
+      body: JSON.stringify({ content_type: blob.type, data: await blobToBase64(blob) }),
+    });
+    return up;
+  }
+
+  async function sendPhoto(file) {
+    if (!file || !file.type.startsWith('image/')) return toast('Choose an image file.');
+    let blob;
+    try {
+      blob = await compressImage(file);
+    } catch (err) {
+      return toast(err.message);
+    }
+    const out = outgoing({ type: 'image', text: '', url: URL.createObjectURL(blob), mime: blob.type });
+    session.thread.push(out);
+    renderThread();
+    try {
+      const up = await uploadMedia(blob);
+      out.url = up.url;
+      await dispatch(out, { media_id: up.id, media_type: blob.type, body: '' });
+    } catch (err) {
+      if (err.auth) { signOut('That access code is not right. Please sign in again.'); return; }
+      out.status = 'failed';
+      toast(err.message);
+      renderAll();
+    }
+  }
+
+  // ---------- voice notes ----------
+  function pickRecorderType() {
+    const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4'];
+    return candidates.find((t) => window.MediaRecorder && MediaRecorder.isTypeSupported(t)) || '';
+  }
+
+  async function startRecording() {
+    if (!window.MediaRecorder || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      return toast('This browser cannot record voice notes.');
+    }
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch {
+      return toast('Microphone access was blocked.');
+    }
+    const type = pickRecorderType();
+    const rec = type ? new MediaRecorder(stream, { mimeType: type }) : new MediaRecorder(stream);
+    const state = { rec, stream, chunks: [], started: Date.now(), cancelled: false, timer: null };
+    rec.addEventListener('dataavailable', (e) => { if (e.data && e.data.size) state.chunks.push(e.data); });
+    rec.addEventListener('stop', () => finishRecording(state));
+    recording = state;
+    rec.start(250);
+    state.timer = setInterval(() => {
+      const seconds = (Date.now() - state.started) / 1000;
+      $('#rec-time').textContent = durationLabel(seconds);
+      if (seconds >= MAX_VOICE_SECONDS) stopRecording(true);
+    }, 250);
+    syncComposer();
+  }
+
+  function stopRecording(send) {
+    if (!recording) return;
+    recording.cancelled = !send;
+    if (recording.rec.state !== 'inactive') recording.rec.stop();
+    else finishRecording(recording);
+  }
+
+  async function finishRecording(state) {
+    clearInterval(state.timer);
+    state.stream.getTracks().forEach((t) => t.stop());
+    if (recording === state) recording = null;
+    syncComposer();
+    if (state.cancelled || state.chunks.length === 0) return;
+
+    const seconds = (Date.now() - state.started) / 1000;
+    if (seconds < 1) return toast('Hold on a moment longer to record a voice note.');
+
+    const mime = (state.rec.mimeType || 'audio/webm').split(';')[0];
+    const blob = new Blob(state.chunks, { type: mime });
+    const out = outgoing({ type: 'audio', url: URL.createObjectURL(blob), durationSec: seconds, mime });
+    session.thread.push(out);
+    renderThread();
+    try {
+      const up = await uploadMedia(blob);
+      out.url = up.url;
+      await dispatch(out, { media_id: up.id, media_type: mime, body: '' });
+    } catch (err) {
+      if (err.auth) { signOut('That access code is not right. Please sign in again.'); return; }
+      out.status = 'failed';
+      toast(err.message);
+      renderAll();
+    }
+  }
+
+  // ---------- composer ----------
+  function syncComposer() {
+    const hasText = $('#text').value.trim().length > 0;
+    const isRec = !!recording;
+    $('#input-wrap').hidden = isRec;
+    $('#rec-bar').hidden = !isRec;
+    $('#btn-cancel-rec').hidden = !isRec;
+    $('#btn-voice').hidden = isRec || hasText;
+    $('#btn-send').hidden = !(isRec || hasText);
+    $('#btn-attach').disabled = isRec;
+    $('#btn-emoji').disabled = isRec;
+  }
+
+  function closePopovers(except) {
+    for (const id of ['#pop-emoji', '#pop-attach', '#pop-menu']) {
+      if (id !== except) $(id).hidden = true;
+    }
+    $('#btn-emoji').setAttribute('aria-expanded', String(!$('#pop-emoji').hidden));
+    $('#btn-attach').setAttribute('aria-expanded', String(!$('#pop-attach').hidden));
+  }
+
+  function togglePopover(id) {
+    const pop = $(id);
+    const open = pop.hidden;
+    closePopovers();
+    pop.hidden = !open;
+    closePopovers(open ? id : null);
+  }
+
+  function renderEmojis() {
+    const grid = $('#emoji-grid');
+    for (const emoji of EMOJIS) {
+      const b = el('button', '', emoji);
+      b.type = 'button';
+      b.setAttribute('aria-label', `Insert ${emoji}`);
+      b.addEventListener('click', () => {
+        const input = $('#text');
+        const start = input.selectionStart ?? input.value.length;
+        input.value = input.value.slice(0, start) + emoji + input.value.slice(input.selectionEnd ?? start);
+        input.focus();
+        input.setSelectionRange(start + emoji.length, start + emoji.length);
+        syncComposer();
+      });
+      grid.append(b);
+    }
+  }
+
+  function renderPins() {
+    const box = $('#pins');
+    box.textContent = '';
+    box.append(el('div', 'sub-title', 'Test pins'));
+    for (const pin of PINS) {
+      const b = el('button', '', pin.label);
+      b.type = 'button';
+      b.addEventListener('click', () => {
+        closePopovers();
+        sendLocation(pin.lat, pin.lng, pin.label);
+      });
+      box.append(b);
+    }
+    box.hidden = false;
+  }
+
+  function shareMyLocation() {
+    closePopovers();
+    if (!navigator.geolocation) return toast('Location is not available in this browser.');
+    navigator.geolocation.getCurrentPosition(
+      (pos) => sendLocation(pos.coords.latitude, pos.coords.longitude, 'My location'),
+      () => toast('Location permission was denied. Use a test pin instead.'),
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
+  }
+
+  // ---------- sign-in ----------
+  async function onSignIn(event) {
+    event.preventDefault();
+    const phone = digits($('#phone').value);
+    const code = $('#code').value.trim();
+    const error = $('#form-error');
+    error.textContent = '';
+    if (phone.length < 8 || phone.length > 15) {
+      error.textContent = 'Enter a full number with country code, for example 91 98765 43210.';
+      return;
+    }
+    const button = $('#continue');
+    button.disabled = true;
+    session = { phone, code, thread: [] };
+    try {
+      await api('/sim/api/status');
+    } catch (err) {
+      session = null;
+      error.textContent = err.auth ? 'That access code is not right.' : `Could not reach the sandbox. ${err.message}`;
+      button.disabled = false;
+      return;
+    }
+    button.disabled = false;
+    saveSession();
+    showApp();
+  }
+
+  // ---------- wiring ----------
+  function wire() {
+    $('#signin').addEventListener('submit', onSignIn);
+
+    $('#composer').addEventListener('submit', (event) => {
+      event.preventDefault();
+      if (recording) return stopRecording(true);
+      sendText();
+    });
+    $('#text').addEventListener('input', syncComposer);
+
+    $('#btn-voice').addEventListener('click', () => startRecording());
+    $('#btn-cancel-rec').addEventListener('click', () => stopRecording(false));
+
+    $('#btn-emoji').addEventListener('click', () => togglePopover('#pop-emoji'));
+    $('#btn-attach').addEventListener('click', () => togglePopover('#pop-attach'));
+    $('#btn-head-menu').addEventListener('click', () => togglePopover('#pop-menu'));
+    $('#btn-side-menu').addEventListener('click', () => togglePopover('#pop-menu'));
+
+    document.querySelectorAll('[data-attach]').forEach((b) => b.addEventListener('click', (event) => {
+      const kind = event.currentTarget.dataset.attach;
+      if (kind === 'photo') { closePopovers(); $('#file-photo').click(); }
+      if (kind === 'location') shareMyLocation();
+      if (kind === 'pins') renderPins();
+    }));
+    $('#file-photo').addEventListener('change', (event) => {
+      const file = event.target.files[0];
+      event.target.value = '';
+      sendPhoto(file);
+    });
+
+    document.querySelectorAll('#pop-menu [data-action]').forEach((b) => b.addEventListener('click', async (event) => {
+      const action = event.currentTarget.dataset.action;
+      closePopovers();
+      if (action === 'signout') return signOut('');
+      if (action === 'restart') {
+        try {
+          await api('/sim/api/reset', { method: 'POST', body: JSON.stringify({ phone: session.phone }) });
+          session.thread = [];
+          saveSession();
+          renderAll();
+          toast('Conversation restarted.');
+        } catch (err) {
+          if (err.auth) return signOut('That access code is not right. Please sign in again.');
+          toast(err.message);
+        }
+      }
+    }));
+
+    document.addEventListener('click', (event) => {
+      if (!event.target.closest('.composer-actions, .pop, #btn-head-menu, #btn-side-menu')) closePopovers();
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') closePopovers();
+    });
+  }
+
+  // ---------- boot ----------
+  async function boot() {
+    renderEmojis();
+    wire();
+    syncComposer();
+    if (!session) return showGate('');
+    showApp();
+    try {
+      await api('/sim/api/status');
+    } catch (err) {
+      if (err.auth) signOut('Access code changed. Please sign in again.');
+    }
+  }
+
+  boot();
+})();
+</script>
+</body>
+</html>
