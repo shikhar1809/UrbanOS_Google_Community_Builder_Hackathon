@@ -18,6 +18,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 import analytics as AN
 import guardrails as GR
 import idempotency as IDEM
+import jobs as JOBS
 import sim
 import triage as TRIAGE
 from dotenv import load_dotenv
@@ -719,16 +720,29 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db):
         
         # AI Triage. Extracted to triage.py so the same classification can run
         # from a worker instead of inside the webhook request.
-        image_part = fetch_twilio_media_part(photo_url, photo_type)
-        _t = TRIAGE.run_triage(
-            gemini_client,
-            description=description,
-            location_raw=location_raw,
-            loc_source=loc_source,
-            image_part=image_part,
-            lat=lat,
-            lng=lng,
-        )
+        #
+        # When TRIAGE_BACKEND defers it, the report is filed untriaged and
+        # classified after the citizen has been answered. The receipt then shows
+        # the same generic values it already shows whenever the model is
+        # unavailable, and the fields are filled in moments later.
+        defer_triage = JOBS.backend() != JOBS.BACKEND_INLINE
+        if defer_triage:
+            _t = dict(TRIAGE.DEFAULTS)
+            _t["extracted_location"] = location_raw if loc_source == "text" else None
+            _pinned = TRIAGE.ward_from_coordinates(lat, lng)
+            if _pinned:
+                _t["ward_no"], _t["ward_officer"] = _pinned
+        else:
+            image_part = fetch_twilio_media_part(photo_url, photo_type)
+            _t = TRIAGE.run_triage(
+                gemini_client,
+                description=description,
+                location_raw=location_raw,
+                loc_source=loc_source,
+                image_part=image_part,
+                lat=lat,
+                lng=lng,
+            )
         category = _t["category"]
         priority = _t["priority"]
         feasibility = _t["feasibility"]
@@ -771,9 +785,17 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db):
             "ward_officer": ward_officer,
             "reference_id": ref_id,
             "status": "Open",
+            "triage_status": JOBS.STATUS_PENDING if defer_triage else (
+                JOBS.STATUS_DONE if _t.get("ok") else JOBS.STATUS_FAILED
+            ),
             "id": doc_ref.id
         }
         doc_ref.set(new_message)
+        if defer_triage:
+            JOBS.dispatch(db, doc_ref.id, background_tasks,
+                          runner=lambda _db, _id: JOBS.process_triage(
+                              _db, _id, gemini_client=gemini_client,
+                              media_loader=fetch_twilio_media_part))
         # Bust RAG + messages cache so new report is immediately visible
         _RAG_CACHE["data"] = None
         _RAG_CACHE["at"] = 0.0
@@ -1908,6 +1930,31 @@ def media_redirect_is_allowed(raw_url: str) -> bool:
     """True when a redirect target may be fetched (always without credentials)."""
     host = _media_host(raw_url)
     return any(host == s.lstrip(".") or host.endswith(s) for s in MEDIA_REDIRECT_SUFFIXES)
+
+
+@app.post("/admin/retriage")
+async def retriage_reports(limit: int = 100, db = Depends(get_db), admin = Depends(verify_admin)):
+    """Re-run triage over reports that were never classified.
+
+    Reports filed while the model was unavailable are stored with generic
+    values and marked failed. This drains that backlog, so an outage costs a
+    delay rather than permanently unclassified civic data. Idempotent: reports
+    already triaged are skipped.
+    """
+    if limit < 1 or limit > 500:
+        raise HTTPException(status_code=400, detail="limit must be between 1 and 500")
+
+    result = await asyncio.to_thread(
+        JOBS.retriage_pending, db, limit,
+        gemini_client=gemini_client,
+        media_loader=fetch_twilio_media_part,
+    )
+    if result["triaged"]:
+        AN.invalidate_snapshot()
+        _RANKED_CACHE["data"] = None
+        _RANKED_CACHE["at"] = 0.0
+        _RANKED_CACHE["version"] = None
+    return result
 
 
 @app.get("/media-proxy")
