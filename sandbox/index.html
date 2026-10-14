@@ -425,6 +425,9 @@
         <div class="name">UrbanOS</div>
         <div class="status" id="status">online</div>
       </div>
+      <button class="icon-btn" type="button" id="btn-reset" aria-label="Reset conversation" title="Reset conversation">
+        <svg viewBox="0 0 24 24"><path d="M12 5V2L8 6l4 4V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7z"/></svg>
+      </button>
       <button class="icon-btn" type="button" id="btn-head-menu" aria-label="Chat menu" data-menu="main">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
       </button>
@@ -1110,6 +1113,25 @@
     showApp();
   }
 
+  // Clears the bot's server-side conversation state and the local thread, so the
+  // next message starts the flow from the greeting again.
+  async function resetConversation() {
+    const button = $('#btn-reset');
+    button.disabled = true;
+    try {
+      await api('/sim/api/reset', { method: 'POST', body: JSON.stringify({ phone: session.phone }) });
+      session.thread = [];
+      saveSession();
+      renderAll();
+      toast('Conversation reset.');
+    } catch (err) {
+      if (err.auth) return signOut('That access code is not right. Please sign in again.');
+      toast(err.message);
+    } finally {
+      button.disabled = false;
+    }
+  }
+
   // ---------- wiring ----------
   function wire() {
     $('#signin').addEventListener('submit', onSignIn);
@@ -1141,22 +1163,13 @@
       sendPhoto(file);
     });
 
-    document.querySelectorAll('#pop-menu [data-action]').forEach((b) => b.addEventListener('click', async (event) => {
+    $('#btn-reset').addEventListener('click', resetConversation);
+
+    document.querySelectorAll('#pop-menu [data-action]').forEach((b) => b.addEventListener('click', (event) => {
       const action = event.currentTarget.dataset.action;
       closePopovers();
       if (action === 'signout') return signOut('');
-      if (action === 'restart') {
-        try {
-          await api('/sim/api/reset', { method: 'POST', body: JSON.stringify({ phone: session.phone }) });
-          session.thread = [];
-          saveSession();
-          renderAll();
-          toast('Conversation restarted.');
-        } catch (err) {
-          if (err.auth) return signOut('That access code is not right. Please sign in again.');
-          toast(err.message);
-        }
-      }
+      if (action === 'restart') resetConversation();
     }));
 
     document.addEventListener('click', (event) => {
