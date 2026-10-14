@@ -19,6 +19,7 @@ import analytics as AN
 import guardrails as GR
 import idempotency as IDEM
 import sim
+import triage as TRIAGE
 from dotenv import load_dotenv
 from twilio.request_validator import RequestValidator
 
@@ -137,31 +138,7 @@ except Exception as _ge:
     logger.warning(f"Groq client init failed: {_ge}")
     _groq_client = None
 
-class TriageResult(BaseModel):
-    category: Literal["Construction Development", "Land Development", "Infrastructure Upgrade", "Public Utility Works", "Environmental Project", "Maintenance & Repair", "Other"] = Field(description="Must be one of the strictly provided categories.")
-    priority: Literal["Low", "Medium", "High", "Critical"] = Field(description="Priority severity level.")
-    feasibility: Literal["High", "Moderate", "Complex", "Unknown"] = Field(alias="sentiment", description="Maps to the old sentiment DB column.")
-    extracted_location: str = Field(description="Street name, landmark, or area extracted from text. Empty string if none.")
-    summary: str = Field(description="Short 4-5 word summary title of the project proposal.")
-    original_language: str = Field(description="The language the user originally submitted their request in (e.g., Hindi, English, Spanish).")
-    constituency_zone: Literal["North", "South", "East", "West", "Central"] = Field(description="Infer this constituency zone from the location context. Default to Central if unknown.")
-    estimated_budget: int = Field(description="An integer representing the estimated cost in INR based on the project scale (e.g., 500000 for small, 50000000 for large capital works).")
-    responsible_body: str = Field(default="Municipal Corporation", description="The city department responsible for handling this issue (e.g. 'Public Works Department (PWD)', 'Jal Sansthan (Water Board)', 'Municipal Corporation').")
-    ward_no: str = Field(default="Ward 1", description="Assign a demo municipal ward number (e.g. 'Ward 14') appropriate for the location.")
-    ward_officer: str = Field(default="Rajeev Singh", description="Assign a demo Indian name for the responsible ward officer.")
-    semantic_tag: str = Field(
-        description=(
-            "A normalized snake_case topic tag (2-3 words) that semantically groups this proposal "
-            "with similar ones regardless of phrasing. Be CONSISTENT â€” the same real-world issue "
-            "must always produce the same tag. Examples: 'road_repair', 'school_construction', "
-            "'water_supply', 'street_lighting', 'drainage_improvement', 'park_development', "
-            "'hospital_upgrade', 'bridge_construction', 'sanitation_works', 'electricity_supply'. "
-            "Two proposals about 'MG Road is dark' and 'need streetlights on main road' must share 'street_lighting'."
-        )
-    )
-    visual_evidence: str = Field(default="", description="If a photo was provided, describe the visible civic evidence in 6-12 words. Empty string if no photo or not relevant.")
-    estimated_latitude: float | None = Field(default=None, description="If location text is provided, guess the approximate latitude for a map marker in Lucknow, India. Otherwise null.")
-    estimated_longitude: float | None = Field(default=None, description="If location text is provided, guess the approximate longitude for a map marker in Lucknow, India. Otherwise null.")
+TriageResult = TRIAGE.TriageResult  # kept for backwards compatibility
 
 # ---------------------------------------------------------------------------
 # MULTILINGUAL SUPPORT
@@ -740,82 +717,31 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db):
         # Generate unique Reference ID
         ref_id = f"UO{uuid.uuid4().hex[:6].upper()}"
         
-        # AI Triage
-        category = None
-        priority = None
-        feasibility = None
-        extracted_location = location_raw if loc_source == "text" else None
-        summary = None
-        original_language = None
-        constituency_zone = None
-        estimated_budget = None
-        semantic_tag = None
-        visual_evidence = ""
-        responsible_body = "Municipal Corporation"
-        ward_no = "Ward 1"
-        ward_officer = "Duty Officer"
-        
-        if gemini_client and description:
-            try:
-                prompt = (
-                    "You are an AI triage system for Lucknow Municipal civic grievances via WhatsApp.\n"
-                    "Analyze this citizen complaint and extract all structured fields.\n"
-                    "Context: Lucknow has Nagar Nigam, Jal Sansthan (Water Board), PWD, LDA, LESA, Traffic Police.\n"
-                    "Potholes in gali/mohalla → Nagar Nigam. On highway → PWD.\n"
-                    "Water/sewage → Jal Sansthan. Electricity → LESA. Building → LDA.\n"
-                    "If an image is attached, use it as civic evidence to support the report.\n\n"
-                    f"Complaint Text: {description}\n"
-                    f"Submitted Location: {location_raw or 'Not provided'}"
-                )
-                contents = [prompt]
-                image_part = fetch_twilio_media_part(photo_url, photo_type)
-                if image_part:
-                    contents.append(image_part)
-                response = gemini_client.models.generate_content(
-                    model='gemini-2.5-flash',
-                    contents=contents,
-                    config={
-                        'response_mime_type': 'application/json',
-                        'response_schema': TriageResult,
-                    },
-                )
-                triage = response.parsed
-                category = triage.category
-                priority = triage.priority
-                feasibility = triage.feasibility
-                original_language = triage.original_language
-                responsible_body = triage.responsible_body
-                ward_no = triage.ward_no
-                ward_officer = triage.ward_officer
-                
-                # --- STRICT H3 HEX JURISDICTION OVERRIDE ---
-                if lat and lng:
-                    try:
-                        import h3
-                        import hashlib
-                        hex_id = h3.latlng_to_cell(lat, lng, 8)
-                        # Deterministic hash to one of the 110 wards
-                        hash_val = int(hashlib.md5(hex_id.encode()).hexdigest(), 16)
-                        w_num = (hash_val % 110) + 1
-                        ward_no = f"Ward {w_num}"
-                        if w_num <= 20: ward_officer = "Ramesh Yadav"
-                        elif w_num <= 40: ward_officer = "Priya Sharma"
-                        elif w_num <= 60: ward_officer = "Mohd. Farhan Siddiqui"
-                        elif w_num <= 80: ward_officer = "Sunita Verma"
-                        else: ward_officer = "Ajay Kumar Singh"
-                        logger.info(f"[H3 MAPPING] Location {lat},{lng} falls in Hex {hex_id} -> {ward_no} ({ward_officer})")
-                    except Exception as hex_err:
-                        logger.error(f"[H3 ERROR] Could not map hex: {hex_err}")
-
-                if loc_source == "text":
-                    extracted_location = triage.extracted_location or location_raw
-                summary = triage.summary
-                constituency_zone = triage.constituency_zone
-                estimated_budget = triage.estimated_budget
-                semantic_tag = triage.semantic_tag
-                visual_evidence = triage.visual_evidence or ""
-            except Exception as e:
-                logger.error(f"[AI ERROR] Gemini Triage Failed: {e}", exc_info=True)
+        # AI Triage. Extracted to triage.py so the same classification can run
+        # from a worker instead of inside the webhook request.
+        image_part = fetch_twilio_media_part(photo_url, photo_type)
+        _t = TRIAGE.run_triage(
+            gemini_client,
+            description=description,
+            location_raw=location_raw,
+            loc_source=loc_source,
+            image_part=image_part,
+            lat=lat,
+            lng=lng,
+        )
+        category = _t["category"]
+        priority = _t["priority"]
+        feasibility = _t["feasibility"]
+        extracted_location = _t["extracted_location"]
+        summary = _t["summary"]
+        original_language = _t["original_language"]
+        constituency_zone = _t["constituency_zone"]
+        estimated_budget = _t["estimated_budget"]
+        semantic_tag = _t["semantic_tag"]
+        visual_evidence = _t["visual_evidence"]
+        responsible_body = _t["responsible_body"]
+        ward_no = _t["ward_no"]
+        ward_officer = _t["ward_officer"]
 
                 
         # Add to firestore
