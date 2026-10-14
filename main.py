@@ -44,19 +44,39 @@ import firebase_admin
 from firebase_admin import credentials, firestore, auth
 
 security = HTTPBearer()
+
+
+def admin_emails() -> list[str]:
+    """The allowlist, read per request so it can change without a redeploy."""
+    return [e.strip().lower() for e in os.getenv("ADMIN_EMAILS", "").split(",") if e.strip()]
+
+
 def verify_admin(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Authenticate the caller and check them against the admin allowlist.
+
+    Fails CLOSED. An empty ADMIN_EMAILS used to mean "any Google account on
+    earth may read every citizen report and sanction projects", which is not a
+    sane default for a system holding civic grievance data. With no allowlist
+    configured, nobody is an admin.
+    """
+    allowed = admin_emails()
+    if not allowed:
+        logger.error("[SECURITY] ADMIN_EMAILS is not set, so no account can be an admin.")
+        raise HTTPException(
+            status_code=503,
+            detail="Admin access is not configured. Set ADMIN_EMAILS to the allowed addresses.",
+        )
+
     try:
-        token = credentials.credentials
-        decoded_token = auth.verify_id_token(token)
-        allowed_admins = [email.strip().lower() for email in os.getenv("ADMIN_EMAILS", "").split(",") if email.strip()]
-        user_email = (decoded_token.get("email") or "").lower()
-        if allowed_admins and user_email not in allowed_admins:
-            raise HTTPException(status_code=403, detail="Authenticated user is not an UrbanOS admin.")
-        return decoded_token
-    except HTTPException:
-        raise
+        decoded_token = auth.verify_id_token(credentials.credentials)
     except Exception as e:
         raise HTTPException(status_code=401, detail=f"Invalid authentication credentials: {str(e)}")
+
+    user_email = (decoded_token.get("email") or "").lower()
+    if user_email not in allowed:
+        logger.warning(f"[SECURITY] Rejected non-admin sign-in for {user_email or 'unknown address'}.")
+        raise HTTPException(status_code=403, detail="Authenticated user is not an UrbanOS admin.")
+    return decoded_token
 
 # Initialize Firebase
 try:
@@ -944,7 +964,7 @@ def _audience_window(snap, audience: dict):
 
 
 @app.get("/surveys")
-async def get_surveys(db = Depends(get_db)):
+async def get_surveys(db = Depends(get_db), admin = Depends(verify_admin)):
     surveys = [d.to_dict() for d in db.collection('surveys').stream()]
     results = []
     for s in surveys:
@@ -974,7 +994,7 @@ async def get_surveys(db = Depends(get_db)):
 
 
 @app.post("/surveys")
-async def create_survey(survey: SurveyCreate, db = Depends(get_db)):
+async def create_survey(survey: SurveyCreate, db = Depends(get_db), admin = Depends(verify_admin)):
     audience = survey.audience.model_dump() if survey.audience else {}
     doc_ref = db.collection('surveys').document()
     doc_ref.set({
@@ -990,7 +1010,7 @@ async def create_survey(survey: SurveyCreate, db = Depends(get_db)):
 
 
 @app.post("/surveys/audience/preview")
-async def preview_audience(audience: AudienceFilter, db = Depends(get_db)):
+async def preview_audience(audience: AudienceFilter, db = Depends(get_db), admin = Depends(verify_admin)):
     """How many people would this reach, and who are they?
 
     Exists so targeting is verifiable before anyone's phone buzzes - a broadcast
@@ -1017,7 +1037,7 @@ async def preview_audience(audience: AudienceFilter, db = Depends(get_db)):
 
 
 @app.get("/surveys/{survey_id}/report")
-async def survey_report(survey_id: str, db = Depends(get_db)):
+async def survey_report(survey_id: str, db = Depends(get_db), admin = Depends(verify_admin)):
     """Detailed sentiment report: answers cross-tabulated against the grievance
     history of the people who gave them."""
     doc = db.collection('surveys').document(survey_id).get()
@@ -1030,7 +1050,7 @@ async def survey_report(survey_id: str, db = Depends(get_db)):
 
 
 @app.post("/surveys/{survey_id}/activate")
-async def activate_survey(survey_id: str, db = Depends(get_db)):
+async def activate_survey(survey_id: str, db = Depends(get_db), admin = Depends(verify_admin)):
     # Deactivate all
     docs = db.collection('surveys').where('is_active', '==', True).stream()
     for doc in docs:
@@ -1041,19 +1061,19 @@ async def activate_survey(survey_id: str, db = Depends(get_db)):
 
 
 @app.post("/surveys/{survey_id}/stop")
-async def stop_survey(survey_id: str, db = Depends(get_db)):
+async def stop_survey(survey_id: str, db = Depends(get_db), admin = Depends(verify_admin)):
     db.collection('surveys').document(survey_id).update({"is_active": False})
     return {"status": "success"}
 
 
 @app.delete("/surveys/{survey_id}")
-async def delete_survey(survey_id: str, db = Depends(get_db)):
+async def delete_survey(survey_id: str, db = Depends(get_db), admin = Depends(verify_admin)):
     db.collection('surveys').document(survey_id).delete()
     return {"status": "success"}
 
 
 @app.post("/surveys/{survey_id}/broadcast")
-async def broadcast_survey(survey_id: str, req: BroadcastRequest | None = None, db = Depends(get_db)):
+async def broadcast_survey(survey_id: str, req: BroadcastRequest | None = None, db = Depends(get_db), admin = Depends(verify_admin)):
     """Send a survey to its targeted audience.
 
     Recipients come from the survey's saved audience unless the request overrides
@@ -1128,7 +1148,7 @@ class ChatRequest(BaseModel):
     scope_to_timeline: bool = True
 
 @app.post("/api/upload-dataset")
-async def upload_dataset(file: UploadFile = File(...), db = Depends(get_db)):
+async def upload_dataset(file: UploadFile = File(...), db = Depends(get_db), admin = Depends(verify_admin)):
     try:
         content = await file.read()
         text_content = content.decode('utf-8')
@@ -1227,7 +1247,7 @@ def _cached_briefing(scoped: list, window: dict, version: int, extra_key: str = 
 
 
 @app.post("/api/chat")
-async def api_chat(req: ChatRequest, db = Depends(get_db)):
+async def api_chat(req: ChatRequest, db = Depends(get_db), admin = Depends(verify_admin)):
     """Retrieval-augmented civic analyst.
 
     The important property here is that the model never does arithmetic. The
@@ -1440,6 +1460,7 @@ async def api_feed(
     start: str = "",
     end: str = "",
     db = Depends(get_db),
+    admin = Depends(verify_admin),
 ):
     """Paginated, filtered, timeline-scoped feed, newest first.
 
@@ -1499,7 +1520,7 @@ async def api_feed(
 
 
 @app.get("/api/feed/stats")
-async def api_feed_stats(range: str = "all", anchor: str = "now", db = Depends(get_db)):
+async def api_feed_stats(range: str = "all", anchor: str = "now", db = Depends(get_db), admin = Depends(verify_admin)):
     """Header counts plus the size of every timeline window, so the control can
     show how much data sits behind each option before it is clicked."""
     snap = AN.get_snapshot(db)
@@ -1532,6 +1553,7 @@ async def api_analytics(
     zone: str = "",
     bucket: str = "day",
     db = Depends(get_db),
+    admin = Depends(verify_admin),
 ):
     """Deterministic analytics for the insights dashboards.
 
@@ -1570,6 +1592,7 @@ async def get_messages(
     anchor: str = "now",
     limit: int = 0,
     db = Depends(get_db),
+    admin = Depends(verify_admin),
 ):
     """Compatibility endpoint: a plain array of reports, newest first.
 
@@ -1663,7 +1686,7 @@ _RANKED_CACHE: dict = {"data": None, "at": 0.0}
 CACHE_TTL_SECONDS = 300  # 5 minutes
 
 @app.get("/projects/ranked")
-async def get_ranked_projects(db = Depends(get_db)):
+async def get_ranked_projects(db = Depends(get_db), admin = Depends(verify_admin)):
     """Groups messages into projects, scores them, and generates AI justification.
     Results are cached in-process for 5 minutes to reduce Gemini API cost at scale."""
     now = time.time()
@@ -1796,7 +1819,7 @@ class SanctionRequest(BaseModel):
     senders: list
 
 @app.post("/projects/sanction")
-async def sanction_project(req: SanctionRequest, db = Depends(get_db)):
+async def sanction_project(req: SanctionRequest, db = Depends(get_db), admin = Depends(verify_admin)):
     """Sanctions a project cluster, updates message statuses, notifies citizens."""
     # Update all messages in this cluster to Sanctioned
     all_docs = list(db.collection('messages').stream())
