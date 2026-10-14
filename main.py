@@ -1688,7 +1688,7 @@ def project_gap_signal(category: str, semantic_tag: str, title: str, demo: dict)
 # Gemini justifications on every dashboard load. Cache is per-process
 # (warm Cloud Function instances); invalidated on timeout or new sanction.
 # ---------------------------------------------------------------------------
-_RANKED_CACHE: dict = {"data": None, "at": 0.0}
+_RANKED_CACHE: dict = {"data": None, "at": 0.0, "version": None}
 CACHE_TTL_SECONDS = 300  # 5 minutes
 
 @app.get("/projects/ranked")
@@ -1696,13 +1696,25 @@ async def get_ranked_projects(db = Depends(get_db), admin = Depends(verify_admin
     """Groups messages into projects, scores them, and generates AI justification.
     Results are cached in-process for 5 minutes to reduce Gemini API cost at scale."""
     now = time.time()
-    if _RANKED_CACHE["data"] and (now - _RANKED_CACHE["at"]) < CACHE_TTL_SECONDS:
+    snap = AN.get_snapshot(db)
+    version = snap.get("version")
+    fresh = _RANKED_CACHE["data"] and (now - _RANKED_CACHE["at"]) < CACHE_TTL_SECONDS
+    if fresh and _RANKED_CACHE.get("version") == version:
         logger.info("[CACHE HIT] Returning cached ranked projects (age: %.0fs)", now - _RANKED_CACHE["at"])
         return JSONResponse(content=_RANKED_CACHE["data"])
 
     logger.info("[CACHE MISS] Recomputing ranked projects...")
-    all_docs = list(db.collection('messages').limit(500).stream())
-    messages = [d.to_dict() for d in all_docs]
+    # Ranking reads the shared snapshot rather than issuing its own query.
+    #
+    # It used to take `limit(500)` with no ordering, which Firestore answers in
+    # document-id order: once the collection passed 500 reports the ranking that
+    # drives sanctioning was computed on an arbitrary half of the data. The
+    # snapshot is ordered newest-first, bounded, and already in memory, so this
+    # is both deterministic and one less full read.
+    #
+    # Its records are normalized, so ranking now sees the same categories and
+    # zones the rest of the dashboard shows instead of the raw legacy values.
+    messages = snap["records"] or []
 
     # ---------------------------------------------------------------------------
     # SEMANTIC CLUSTERING
@@ -1813,6 +1825,7 @@ async def get_ranked_projects(db = Depends(get_db), admin = Depends(verify_admin
     # Cache results before returning
     _RANKED_CACHE["data"] = top
     _RANKED_CACHE["at"] = time.time()
+    _RANKED_CACHE["version"] = version
     logger.info("[CACHE SET] Ranked projects cached for %ds", CACHE_TTL_SECONDS)
     return JSONResponse(content=top)
 
@@ -1868,6 +1881,7 @@ def mark_sanctioned(db, refs: list) -> int:
         written += len(chunk)
     _RANKED_CACHE["data"] = None
     _RANKED_CACHE["at"] = 0.0
+    _RANKED_CACHE["version"] = None
     AN.invalidate_snapshot()
     return written
 
