@@ -29,6 +29,7 @@ Design principles
 
 from __future__ import annotations
 
+import os
 import re
 import time
 import threading
@@ -39,6 +40,20 @@ from typing import Any, Iterable
 logger = logging.getLogger(__name__)
 
 SNAPSHOT_TTL = 60.0  # seconds
+
+# Hard ceiling on how many reports are held in memory at once.
+#
+# The snapshot used to read the whole `messages` collection on every rebuild.
+# That is fine at a few thousand reports and fatal at scale: the records are
+# held in a 1GB function, and because this cache is per process, every Cloud
+# Run instance rebuilds it independently, so the read cost multiplies by the
+# instance count every TTL. A cap makes the worst case a function of this
+# constant instead of a function of how long the product has been live.
+#
+# Reports are fetched newest-first, so the cap trims the oldest tail. Exact
+# totals still come from a count() aggregation, which does not pay per
+# document, and `truncated` tells callers the list is not the whole history.
+SNAPSHOT_MAX_RECORDS = int(os.getenv("SNAPSHOT_MAX_RECORDS", "5000"))
 
 # ---------------------------------------------------------------------------
 # VOCABULARY NORMALIZATION
@@ -302,6 +317,42 @@ def invalidate_snapshot() -> None:
         _SNAPSHOT["at"] = 0.0
 
 
+def count_reports(db) -> int | None:
+    """Exact report count via a count() aggregation.
+
+    Firestore bills an aggregation by index entries scanned rather than per
+    document returned, so this stays cheap as the collection grows and lets the
+    dashboard show a true total even when the snapshot holds only a window.
+    Returns None if the aggregation is unavailable, and callers fall back to
+    the length of what they actually read.
+    """
+    try:
+        result = db.collection("messages").count().get()
+        # The SDK returns a list of result rows, each a list of aggregations.
+        row = result[0]
+        agg = row[0] if isinstance(row, (list, tuple)) else row
+        return int(agg.value)
+    except Exception as e:
+        logger.warning(f"[SNAPSHOT] count aggregation unavailable: {e}")
+        return None
+
+
+def _read_reports(db, cap: int, ordered: bool = True) -> list[dict]:
+    """Read at most `cap` reports, newest first when the backend supports it."""
+    query = db.collection("messages")
+    if ordered:
+        query = query.order_by("timestamp", direction="DESCENDING")
+    query = query.limit(cap)
+
+    records: list[dict] = []
+    for doc in query.stream():
+        try:
+            records.append(normalize_record(doc.id, doc.to_dict() or {}))
+        except Exception as e:  # one bad doc must not kill the feed
+            logger.warning(f"[SNAPSHOT] skipped doc {doc.id}: {e}")
+    return records
+
+
 def get_snapshot(db, force: bool = False) -> dict[str, Any]:
     """Return the shared, normalized, timestamp-DESC snapshot of all reports."""
     now = time.time()
@@ -316,13 +367,33 @@ def get_snapshot(db, force: bool = False) -> dict[str, Any]:
             return _SNAPSHOT
 
         records: list[dict] = []
+        total_count = None
+        truncated = False
         if db is not None:
+            total_count = count_reports(db)
             try:
-                for doc in db.collection("messages").stream():
-                    try:
-                        records.append(normalize_record(doc.id, doc.to_dict() or {}))
-                    except Exception as e:  # one bad doc must not kill the feed
-                        logger.warning(f"[SNAPSHOT] skipped doc {doc.id}: {e}")
+                records = _read_reports(db, SNAPSHOT_MAX_RECORDS)
+
+                # order_by("timestamp") silently omits documents that have no
+                # timestamp field, which older records may not. If fewer came
+                # back than exist and we are not simply at the cap, re-read
+                # without the ordering so those reports are not lost.
+                if (total_count is not None
+                        and len(records) < min(total_count, SNAPSHOT_MAX_RECORDS)):
+                    logger.warning(
+                        "[SNAPSHOT] ordered read returned %d of %d reports; "
+                        "re-reading unordered to include records with no timestamp",
+                        len(records), total_count,
+                    )
+                    records = _read_reports(db, SNAPSHOT_MAX_RECORDS, ordered=False)
+
+                truncated = total_count is not None and total_count > len(records)
+                if truncated:
+                    logger.warning(
+                        "[SNAPSHOT] holding the %d most recent of %d reports. "
+                        "Analytics below cover that window, not all history.",
+                        len(records), total_count,
+                    )
             except Exception as e:
                 logger.error(f"[SNAPSHOT] Firestore read failed: {e}")
                 if cached is not None:
@@ -337,6 +408,8 @@ def get_snapshot(db, force: bool = False) -> dict[str, Any]:
         _SNAPSHOT["version"] = _SNAPSHOT.get("version", 0) + 1
         _SNAPSHOT["latest_ts"] = max(stamps) if stamps else None
         _SNAPSHOT["earliest_ts"] = min(stamps) if stamps else None
+        _SNAPSHOT["total_count"] = total_count if total_count is not None else len(records)
+        _SNAPSHOT["truncated"] = truncated
         logger.info(f"[SNAPSHOT] rebuilt: {len(records)} records (v{_SNAPSHOT['version']})")
         return _SNAPSHOT
 

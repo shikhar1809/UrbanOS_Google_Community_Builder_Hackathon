@@ -1540,6 +1540,12 @@ async def api_feed_stats(range: str = "all", anchor: str = "now", db = Depends(g
         "categories": AN.breakdown(scoped, "category"),
         "latest": snap["latest_ts"].isoformat() if snap.get("latest_ts") else None,
         "earliest": snap["earliest_ts"].isoformat() if snap.get("earliest_ts") else None,
+        # When the collection outgrows the snapshot cap these stats describe the
+        # most recent window rather than all history. Say so instead of quietly
+        # reporting a smaller number than the true total.
+        "total_reports": snap.get("total_count", len(records)),
+        "window_truncated": bool(snap.get("truncated")),
+        "window_size": len(records),
     })
 
 
@@ -1811,6 +1817,86 @@ async def get_ranked_projects(db = Depends(get_db), admin = Depends(verify_admin
     return JSONResponse(content=top)
 
 
+# Firestore caps a batched write at 500 operations.
+FIRESTORE_BATCH_LIMIT = 500
+
+
+def cluster_members(db, zone: str, semantic_tag: str | None, category: str) -> list:
+    """Reports belonging to one project cluster.
+
+    Scoped to the zone in the query rather than read from the whole collection.
+    The old version pulled every report in the database on each sanction, which
+    at scale cannot finish inside the request timeout. The tag-or-category test
+    stays in Python because Firestore cannot express that OR, but it now runs
+    over one zone instead of all history.
+    """
+    query = db.collection('messages')
+    try:
+        from google.cloud.firestore_v1.base_query import FieldFilter
+        query = query.where(filter=FieldFilter("constituency_zone", "==", zone))
+    except Exception:
+        query = query.where("constituency_zone", "==", zone)
+
+    members = []
+    for doc in query.stream():
+        msg = doc.to_dict() or {}
+        msg_tag = msg.get("semantic_tag") or msg.get("category")
+        if (semantic_tag and msg_tag == semantic_tag) or (not semantic_tag and msg.get("category") == category):
+            members.append(doc)
+    return members
+
+
+def mark_sanctioned(db, refs: list) -> int:
+    """Flip a cluster to Sanctioned in batched writes rather than one call per
+    report, so a large cluster is a handful of round trips instead of hundreds."""
+    written = 0
+    for start in range(0, len(refs), FIRESTORE_BATCH_LIMIT):
+        chunk = refs[start:start + FIRESTORE_BATCH_LIMIT]
+        try:
+            batch = db.batch()
+            for ref in chunk:
+                batch.update(ref, {"status": "Sanctioned"})
+            batch.commit()
+        except Exception as e:
+            logger.warning(f"[SANCTION] batch write failed, falling back per document: {e}")
+            for ref in chunk:
+                try:
+                    ref.update({"status": "Sanctioned"})
+                except Exception as inner:
+                    logger.error(f"[SANCTION] could not update a report: {inner}")
+                    continue
+        written += len(chunk)
+    _RANKED_CACHE["data"] = None
+    _RANKED_CACHE["at"] = 0.0
+    AN.invalidate_snapshot()
+    return written
+
+
+def notify_sanctioned(senders: list, title: str, project_id: str) -> int:
+    """Tell citizens their proposal was sanctioned. Runs after the response."""
+    if not senders:
+        return 0
+    if not (TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN and TWILIO_WHATSAPP_NUMBER):
+        logger.warning("[SANCTION] Twilio is not configured, so no citizen was notified.")
+        return 0
+
+    client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+    body = (
+        f"🎉 Great news! Your proposal regarding '{title}' has been *SANCTIONED* by your MP's office. "
+        f"Reference: {project_id}. Work will begin as per the planning schedule. "
+        "Thank you for making your voice heard! — UrbanOS"
+    )
+    sent = 0
+    for sender in senders:
+        try:
+            client.messages.create(from_=TWILIO_WHATSAPP_NUMBER, to=sender, body=body)
+            sent += 1
+        except Exception as e:
+            logger.error(f"WhatsApp notify failed for {_mask_phone(sender)}: {e}")
+    logger.info(f"[SANCTION] notified {sent} of {len(senders)} citizens for {project_id}")
+    return sent
+
+
 class SanctionRequest(BaseModel):
     project_id: str
     title: str
@@ -1819,43 +1905,28 @@ class SanctionRequest(BaseModel):
     senders: list
 
 @app.post("/projects/sanction")
-async def sanction_project(req: SanctionRequest, db = Depends(get_db), admin = Depends(verify_admin)):
+async def sanction_project(req: SanctionRequest, background_tasks: BackgroundTasks, db = Depends(get_db), admin = Depends(verify_admin)):
     """Sanctions a project cluster, updates message statuses, notifies citizens."""
-    # Update all messages in this cluster to Sanctioned
-    all_docs = list(db.collection('messages').stream())
-    notified = 0
-    notified_senders = set()
     cluster_tag = None
     cluster_zone = req.zone
     if "|" in req.project_id:
         cluster_tag, cluster_zone = req.project_id.rsplit("|", 1)
 
-    twilio_client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN) if TWILIO_ACCOUNT_SID else None
+    members = cluster_members(db, cluster_zone, cluster_tag, req.category)
+    mark_sanctioned(db, [doc.reference for doc in members])
 
-    for doc in all_docs:
-        msg = doc.to_dict()
-        msg_tag = msg.get("semantic_tag") or msg.get("category")
-        same_cluster = (
-            msg.get("constituency_zone") == cluster_zone and
-            ((cluster_tag and msg_tag == cluster_tag) or (not cluster_tag and msg.get("category") == req.category))
-        )
-        if same_cluster:
-            doc.reference.update({"status": "Sanctioned"})
-            sender = msg.get("sender")
-            if sender and sender not in notified_senders and twilio_client and TWILIO_WHATSAPP_NUMBER:
-                try:
-                    twilio_client.messages.create(
-                        from_=TWILIO_WHATSAPP_NUMBER,
-                        to=sender,
-                        body=(
-                            f"ðŸŽ‰ Great news! Your proposal regarding '{req.title}' has been *SANCTIONED* by your MP's office. "
-                            f"Reference: {req.project_id}. Work will begin as per the planning schedule. Thank you for making your voice heard! â€” UrbanOS"
-                        )
-                    )
-                    notified_senders.add(sender)
-                    notified += 1
-                except Exception as e:
-                    logger.error(f"WhatsApp notify failed for {sender}: {e}")
+    senders = []
+    seen = set()
+    for doc in members:
+        sender = (doc.to_dict() or {}).get("sender")
+        if sender and sender not in seen:
+            seen.add(sender)
+            senders.append(sender)
+
+    # Sending is a network call per citizen. Doing it inline meant a large
+    # cluster could outlast the request timeout, leaving some citizens notified
+    # and others not, with no record of where it stopped.
+    background_tasks.add_task(notify_sanctioned, senders, req.title, req.project_id)
 
     # Log sanction in a separate collection
     db.collection('sanctioned_projects').add({
@@ -1865,13 +1936,11 @@ async def sanction_project(req: SanctionRequest, db = Depends(get_db), admin = D
         "category": req.category,
         "semantic_tag": cluster_tag,
         "sanctioned_at": datetime.now().isoformat(),
-        "citizens_notified": notified,
+        "citizens_notified": len(senders),
     })
-
-    _RANKED_CACHE["data"] = None
-    _RANKED_CACHE["at"] = 0.0
-
-    return {"status": "sanctioned", "citizens_notified": notified}
+    # `citizens_notified` is the number queued: delivery happens after this
+    # response, and per-citizen failures are logged by notify_sanctioned.
+    return {"status": "sanctioned", "citizens_notified": len(senders), "reports_updated": len(members)}
 
 
 # Only these hosts may receive the Twilio credentials. Without this the proxy
