@@ -3,6 +3,7 @@ import httpx
 import time
 import uuid
 from datetime import datetime
+from urllib.parse import urlparse
 from fastapi import FastAPI, Request, HTTPException, Depends, BackgroundTasks, UploadFile, File
 from twilio.twiml.messaging_response import MessagingResponse
 from twilio.rest import Client
@@ -16,6 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 import analytics as AN
 import guardrails as GR
+import idempotency as IDEM
 import sim
 from dotenv import load_dotenv
 from twilio.request_validator import RequestValidator
@@ -94,6 +96,9 @@ TWILIO_WHATSAPP_NUMBER = os.getenv("TWILIO_WHATSAPP_NUMBER")
 TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
 twilio_validator = RequestValidator(TWILIO_AUTH_TOKEN) if TWILIO_AUTH_TOKEN else None
+# Escape hatch for debugging a webhook URL mismatch. Leave enabled in production:
+# without it anyone can forge citizen reports and spend model quota.
+TWILIO_VALIDATE_SIGNATURE = os.getenv("TWILIO_VALIDATE_SIGNATURE", "true").strip().lower() not in ("0", "false", "no")
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
@@ -292,36 +297,64 @@ async def service_worker():
 async def favicon():
     return FileResponse("public/favicon.svg", media_type="image/svg+xml")
 
+EMPTY_TWIML = "<Response></Response>"
+
+
+def twilio_signature_ok(request: Request, form_data) -> bool:
+    """Verify the request really came from Twilio.
+
+    Twilio signs each webhook with the exact URL it called. Behind Firebase
+    Hosting the app sees the rewritten URL rather than the public one, so both
+    are checked. Returns True when validation is not configured, which keeps
+    local runs and the sandbox working.
+    """
+    if not twilio_validator or not TWILIO_VALIDATE_SIGNATURE:
+        return True
+
+    signature = request.headers.get("X-Twilio-Signature", "")
+    url = str(request.url)
+    if "x-forwarded-host" in request.headers:
+        proto = request.headers.get("x-forwarded-proto", "http")
+        host = request.headers.get("x-forwarded-host")
+        url = f"{proto}://{host}{request.url.path}"
+    public_url = "https://urbanos.web.app" + request.url.path
+
+    post_vars = {k: v for k, v in form_data.items()}
+    return (twilio_validator.validate(url, post_vars, signature)
+            or twilio_validator.validate(public_url, post_vars, signature))
+
+
 @app.post("/webhook/sms")
 @app.post("/webhook/whatsapp")
 async def receive_whatsapp(request: Request, background_tasks: BackgroundTasks, db = Depends(get_db)):
     form_data = await request.form()
-    
-    # Twilio security validation
-    if twilio_validator:
-        signature = request.headers.get("X-Twilio-Signature", "")
-        url = str(request.url)
-        public_url = "https://urbanos.web.app" + request.url.path
-        
-        if "x-forwarded-host" in request.headers:
-            proto = request.headers.get("x-forwarded-proto", "http")
-            host = request.headers.get("x-forwarded-host")
-            url = f"{proto}://{host}{request.url.path}"
-            
-        post_vars = {k: v for k, v in form_data.items()}
-        
-        is_valid = twilio_validator.validate(url, post_vars, signature)
-        is_valid_public = twilio_validator.validate(public_url, post_vars, signature)
-        
-        logger.info(f"[DEBUG TWILIO] url={url} public_url={public_url} sig={signature} valid={is_valid} valid_pub={is_valid_public}")
-        
-        if not is_valid and not is_valid_public:
-            logger.warning(f"[SECURITY] Invalid Twilio signature from {request.client.host}. Dropping request.")
-            # TEMPORARILY disable the 403 so the sandbox works for the user while we debug
-            # raise HTTPException(status_code=403, detail="Forbidden")
 
-    # Offload the blocking DB logic to a threadpool to prevent freezing the asyncio event loop
-    return await asyncio.to_thread(_process_whatsapp_sync, form_data, background_tasks, db)
+    if not twilio_signature_ok(request, form_data):
+        client_host = request.client.host if request.client else "unknown"
+        logger.warning(f"[SECURITY] Invalid Twilio signature from {client_host}. Rejecting request.")
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    # Twilio redelivers on timeout, and triage is slow enough that timeouts
+    # happen under load. Without this, each redelivery files another report for
+    # the same citizen message and inflates the demand count behind sanctioning.
+    message_id = form_data.get("MessageSid") or form_data.get("SmsMessageSid")
+    ticket = IDEM.claim(db, message_id)
+    if not ticket.granted:
+        return HTMLResponse(content=ticket.reply or EMPTY_TWIML, media_type="application/xml")
+
+    try:
+        # Offload the blocking DB logic to a threadpool to prevent freezing the asyncio event loop
+        response = await asyncio.to_thread(_process_whatsapp_sync, form_data, background_tasks, db)
+    except Exception:
+        # Let the retry through rather than having it swallowed as a duplicate.
+        IDEM.release(db, message_id)
+        raise
+
+    try:
+        IDEM.record_reply(db, message_id, bytes(response.body).decode("utf-8", "replace"))
+    except Exception as exc:
+        logger.error(f"[IDEMPOTENCY] could not record reply: {exc}")
+    return response
 
 def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db):
     sender = form_data.get("From", "")
@@ -1818,23 +1851,61 @@ async def sanction_project(req: SanctionRequest, db = Depends(get_db)):
     return {"status": "sanctioned", "citizens_notified": notified}
 
 
+# Only these hosts may receive the Twilio credentials. Without this the proxy
+# forwards the account SID and auth token to any host a caller names.
+MEDIA_CREDENTIALED_HOSTS = frozenset({"api.twilio.com"})
+# Twilio answers with a 307 to a pre-signed CDN URL. That hop needs no
+# credentials, but it still must not be an arbitrary attacker-chosen address.
+MEDIA_REDIRECT_SUFFIXES = (".twiliocdn.com", ".twilio.com", ".amazonaws.com")
+MEDIA_MAX_REDIRECTS = 3
+
+
+def _media_host(raw_url: str) -> str:
+    parsed = urlparse(raw_url or "")
+    if parsed.scheme != "https":
+        raise HTTPException(status_code=400, detail="Only https media URLs are allowed.")
+    return (parsed.hostname or "").lower()
+
+
+def media_url_is_credentialed(raw_url: str) -> bool:
+    """True when this URL may be fetched WITH the Twilio credentials."""
+    return _media_host(raw_url) in MEDIA_CREDENTIALED_HOSTS
+
+
+def media_redirect_is_allowed(raw_url: str) -> bool:
+    """True when a redirect target may be fetched (always without credentials)."""
+    host = _media_host(raw_url)
+    return any(host == s.lstrip(".") or host.endswith(s) for s in MEDIA_REDIRECT_SUFFIXES)
+
+
 @app.get("/media-proxy")
 async def media_proxy(url: str):
     if not TWILIO_ACCOUNT_SID or not TWILIO_AUTH_TOKEN:
         raise HTTPException(status_code=500, detail="Twilio credentials not configured.")
-        
+
+    if not media_url_is_credentialed(url):
+        logger.warning(f"[SECURITY] Refused media proxy to non-Twilio host: {_media_host(url)}")
+        raise HTTPException(status_code=400, detail="Media URL is not a Twilio media URL.")
+
     async def media_stream():
-        # Twilio answers media requests with a 307 to its CDN, so the redirect
-        # has to be followed or every proxied image 500s.
-        async with httpx.AsyncClient(follow_redirects=True, timeout=30.0) as client:
-            async with client.stream(
-                "GET",
-                url,
-                auth=(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
-            ) as response:
-                response.raise_for_status()
-                async for chunk in response.aiter_bytes(chunk_size=8192):
-                    yield chunk
+        # Redirects are followed by hand so the credentials are sent only to the
+        # Twilio API, never to whatever host the redirect points at.
+        async with httpx.AsyncClient(follow_redirects=False, timeout=30.0) as client:
+            target, auth = url, (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+            for _ in range(MEDIA_MAX_REDIRECTS):
+                async with client.stream("GET", target, auth=auth) as response:
+                    if response.is_redirect:
+                        target = str(response.headers.get("location", ""))
+                        if not media_redirect_is_allowed(target):
+                            logger.warning("[SECURITY] Refused media redirect off the Twilio CDN.")
+                            return
+                        auth = None  # the pre-signed CDN URL needs no credentials
+                        continue
+                    response.raise_for_status()
+                    async for chunk in response.aiter_bytes(chunk_size=8192):
+                        yield chunk
+                    return
+            logger.warning("[MEDIA] Too many redirects while proxying media.")
 
     return StreamingResponse(media_stream(), media_type="image/jpeg")
 
