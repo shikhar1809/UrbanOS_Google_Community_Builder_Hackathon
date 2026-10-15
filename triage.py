@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import re
 from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field
@@ -27,6 +28,9 @@ logger = logging.getLogger(__name__)
 TRIAGE_MODEL = "gemini-2.5-flash"
 
 # 110 municipal wards, each with a duty officer band.
+# A ward the model actually decided, as opposed to "Unknown" or prose.
+_WARD_RE = re.compile(r"Ward \d{1,3}")
+
 WARD_COUNT = 110
 H3_RESOLUTION = 8
 
@@ -120,10 +124,40 @@ def ward_from_coordinates(lat, lng) -> Optional[tuple[str, str]]:
         return None
 
 
+def _classify(client, prompt: str, image_part, model: str) -> TriageResult:
+    """Run the schema-constrained call, whichever backend `client` is.
+
+    `client` is normally an llm.Provider. A raw google-genai client is still
+    accepted because evals and the worker hand one around directly, and a report
+    classified by either route is indistinguishable afterwards.
+    """
+    if hasattr(client, "classify"):
+        image = image_part if image_part.__class__.__name__ == "ImageRef" else None
+        if image_part is not None and image is None:
+            # A vendor-specific part cannot be handed to another provider; the
+            # description alone still triages, so drop the photo rather than fail.
+            logger.warning("[TRIAGE] ignoring evidence photo of type %s", type(image_part).__name__)
+        return client.classify(prompt, TriageResult, image=image)
+
+    contents = [prompt]
+    if image_part:
+        contents.append(image_part)
+    response = client.models.generate_content(
+        model=model,
+        contents=contents,
+        config={"response_mime_type": "application/json", "response_schema": TriageResult},
+    )
+    return response.parsed
+
+
 def run_triage(client, description: str, location_raw: str = "", loc_source: str = "",
                image_part=None, lat=None, lng=None, model: str = TRIAGE_MODEL) -> dict:
     """Classify one report. Never raises: on failure the defaults are returned
-    so the report is still filed and can be triaged again later."""
+    so the report is still filed and can be triaged again later.
+
+    `model` applies only to the legacy google-genai path; an llm.Provider picks
+    its own model from configuration.
+    """
     result = dict(DEFAULTS)
     result["extracted_location"] = location_raw if loc_source == "text" else None
 
@@ -132,34 +166,32 @@ def run_triage(client, description: str, location_raw: str = "", loc_source: str
 
     if client and description:
         try:
-            contents = [build_prompt(description, location_raw)]
-            if image_part:
-                contents.append(image_part)
-            response = client.models.generate_content(
-                model=model,
-                contents=contents,
-                config={"response_mime_type": "application/json", "response_schema": TriageResult},
-            )
-            parsed = response.parsed
+            parsed = _classify(client, build_prompt(description, location_raw), image_part, model)
             result.update({
                 "category": parsed.category,
                 "priority": parsed.priority,
                 "feasibility": parsed.feasibility,
                 "original_language": parsed.original_language,
                 "responsible_body": parsed.responsible_body,
-                "ward_no": parsed.ward_no,
-                "ward_officer": parsed.ward_officer,
                 "summary": parsed.summary,
                 "constituency_zone": parsed.constituency_zone,
                 "estimated_budget": parsed.estimated_budget,
                 "semantic_tag": parsed.semantic_tag,
                 "visual_evidence": parsed.visual_evidence or "",
             })
+            # The model is asked for a ward, but a model that does not know says
+            # so ("Unknown", ""), and a non-answer on screen is worse than the
+            # placeholder. A GPS pin overrides either one just below.
+            if _WARD_RE.fullmatch((parsed.ward_no or "").strip()):
+                result["ward_no"] = parsed.ward_no.strip()
+                officer = (parsed.ward_officer or "").strip()
+                if officer and officer.lower() != "unknown":
+                    result["ward_officer"] = officer
             if loc_source == "text":
                 result["extracted_location"] = parsed.extracted_location or location_raw
             result["ok"] = True
         except Exception as e:
-            logger.error(f"[AI ERROR] Gemini Triage Failed: {e}", exc_info=True)
+            logger.error(f"[AI ERROR] Triage failed: {e}", exc_info=True)
             result["ok"] = False
     else:
         result["ok"] = False

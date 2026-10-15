@@ -64,7 +64,7 @@ def dispatch(db, doc_id: str, background_tasks=None, runner=None) -> str:
     return BACKEND_INLINE
 
 
-def process_triage(db, doc_id: str, triage_module=None, gemini_client=None, media_loader=None) -> bool:
+def process_triage(db, doc_id: str, triage_module=None, client=None, media_loader=None) -> bool:
     """Classify an already-filed report and write the fields back.
 
     Returns True when the report ends up triaged. Never raises: this runs
@@ -96,7 +96,7 @@ def process_triage(db, doc_id: str, triage_module=None, gemini_client=None, medi
             logger.warning("[JOBS] could not load evidence photo for %s: %s", doc_id, e)
 
     result = triage_module.run_triage(
-        gemini_client,
+        client,
         description=report.get("body") or "",
         location_raw=report.get("extracted_location") or "",
         loc_source=report.get("location_source") or "",

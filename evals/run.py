@@ -79,8 +79,10 @@ def run_guardrails() -> dict:
 
 
 def _client():
-    import main
-    return main.gemini_client
+    """The same provider production triages with, so an eval score describes the
+    model that is actually deployed rather than whichever one came first."""
+    import llm
+    return llm.get_provider()
 
 
 def run_triage(limit: int | None = None) -> dict:

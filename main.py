@@ -19,6 +19,7 @@ import analytics as AN
 import guardrails as GR
 import idempotency as IDEM
 import jobs as JOBS
+import llm as LLM
 import sim
 import triage as TRIAGE
 from dotenv import load_dotenv
@@ -257,6 +258,11 @@ def get_reply(key: str, lang: str, **kwargs) -> str:
     return text.format(**kwargs) if kwargs else text
 
 def fetch_twilio_media_part(media_url: str, mime_type: str):
+    """Download an evidence photo as a provider-neutral llm.ImageRef.
+
+    Returns bytes rather than a vendor part type so the same photo can go to
+    whichever model is configured for triage.
+    """
     if not media_url or not mime_type.startswith("image/"):
         return None
     try:
@@ -274,7 +280,7 @@ def fetch_twilio_media_part(media_url: str, mime_type: str):
         if len(data) > 5 * 1024 * 1024:
             logger.warning("[MEDIA] Photo skipped because it exceeds 5MB.")
             return None
-        return types.Part.from_bytes(data=data, mime_type=mime_type)
+        return LLM.ImageRef(data=data, mime_type=mime_type)
     except Exception as e:
         logger.warning(f"[MEDIA] Could not fetch photo for multimodal triage: {e}")
         return None
@@ -735,7 +741,7 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db):
         else:
             image_part = fetch_twilio_media_part(photo_url, photo_type)
             _t = TRIAGE.run_triage(
-                gemini_client,
+                LLM.get_provider(),
                 description=description,
                 location_raw=location_raw,
                 loc_source=loc_source,
@@ -794,7 +800,7 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db):
         if defer_triage:
             JOBS.dispatch(db, doc_ref.id, background_tasks,
                           runner=lambda _db, _id: JOBS.process_triage(
-                              _db, _id, gemini_client=gemini_client,
+                              _db, _id, client=LLM.get_provider(),
                               media_loader=fetch_twilio_media_part))
         # Bust RAG + messages cache so new report is immediately visible
         _RAG_CACHE["data"] = None
@@ -1256,7 +1262,9 @@ async def api_chat(req: ChatRequest, db = Depends(get_db), admin = Depends(verif
             "intent": plan["intent"],
         }
 
-    if not gemini_client and not _groq_client:
+    provider = LLM.get_provider()
+    if provider is None:
+        # Nothing to narrate with, so skip building a prompt no model will read.
         return _reply(fallback_response)
 
     sanctions, datasets = [], []
@@ -1312,21 +1320,15 @@ async def api_chat(req: ChatRequest, db = Depends(get_db), admin = Depends(verif
         + ("\n\n" + "\n".join(datasets) if datasets else "")
     )
 
-    # Using Groq exclusively as requested
-    if _groq_client:
-        try:
-            groq_msgs = [{"role": "system", "content": sys_prompt}]
-            for h in req.history[-8:]:
-                groq_msgs.append({"role": "user" if h.role == "user" else "assistant", "content": h.content})
-            groq_msgs.append({"role": "user", "content": req.query})
-            completion = _groq_client.chat.completions.create(
-                messages=groq_msgs, model=GROQ_MODEL, max_tokens=2048, temperature=0.2,
-            )
-            return _reply(completion.choices[0].message.content.strip())
-        except Exception as e:
-            logger.error(f"Groq chat failed: {e}")
-            from fastapi import HTTPException
-            raise HTTPException(status_code=500, detail=f"Groq API Error: {str(e)}")
+    # Narration only. Every figure in the prompt is already computed, so a model
+    # outage costs the operator the prose and not the answer: fall through to the
+    # deterministic reply rather than returning an error for a cosmetic failure.
+    try:
+        history = [LLM.Turn("user" if h.role == "user" else "assistant", h.content)
+                   for h in req.history[-8:]]
+        return _reply(provider.narrate(sys_prompt, history, req.query))
+    except Exception as e:
+        logger.error(f"[CHAT] {provider.name} narration failed: {e}", exc_info=True)
 
     return _reply(fallback_response)
 
@@ -1946,7 +1948,7 @@ async def retriage_reports(limit: int = 100, db = Depends(get_db), admin = Depen
 
     result = await asyncio.to_thread(
         JOBS.retriage_pending, db, limit,
-        gemini_client=gemini_client,
+        client=LLM.get_provider(),
         media_loader=fetch_twilio_media_part,
     )
     if result["triaged"]:

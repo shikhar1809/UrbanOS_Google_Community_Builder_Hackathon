@@ -62,7 +62,7 @@ def report(db):
 
 
 def test_triage_fills_in_the_structured_fields(db):
-    ok = jobs.process_triage(db, DOC, gemini_client=FakeClient())
+    ok = jobs.process_triage(db, DOC, client=FakeClient())
 
     assert ok is True
     r = report(db)
@@ -75,14 +75,14 @@ def test_triage_fills_in_the_structured_fields(db):
 
 def test_a_repeated_job_does_not_call_the_model_again(db):
     client = FakeClient()
-    jobs.process_triage(db, DOC, gemini_client=client)
-    jobs.process_triage(db, DOC, gemini_client=client)
+    jobs.process_triage(db, DOC, client=client)
+    jobs.process_triage(db, DOC, client=client)
 
     assert client.calls == 1, "a duplicate job must not re-bill the model"
 
 
 def test_a_model_failure_leaves_the_report_retriable(db):
-    ok = jobs.process_triage(db, DOC, gemini_client=FakeClient(error=RuntimeError("429 quota")))
+    ok = jobs.process_triage(db, DOC, client=FakeClient(error=RuntimeError("429 quota")))
 
     assert ok is False
     r = report(db)
@@ -92,16 +92,16 @@ def test_a_model_failure_leaves_the_report_retriable(db):
 
 
 def test_a_failed_report_is_picked_up_by_a_later_run(db):
-    jobs.process_triage(db, DOC, gemini_client=FakeClient(error=RuntimeError("429 quota")))
+    jobs.process_triage(db, DOC, client=FakeClient(error=RuntimeError("429 quota")))
 
-    recovered = jobs.process_triage(db, DOC, gemini_client=FakeClient())
+    recovered = jobs.process_triage(db, DOC, client=FakeClient())
 
     assert recovered is True
     assert report(db)["triage_status"] == jobs.STATUS_DONE
 
 
 def test_a_missing_report_is_not_an_error(db):
-    assert jobs.process_triage(db, "does-not-exist", gemini_client=FakeClient()) is False
+    assert jobs.process_triage(db, "does-not-exist", client=FakeClient()) is False
 
 
 def test_pending_and_failed_reports_are_both_listed(db):
@@ -116,13 +116,13 @@ def test_pending_and_failed_reports_are_both_listed(db):
 def test_draining_the_backlog_reports_what_it_did(db):
     db.data["messages"]["r2"] = {"id": "r2", "body": "broken pipe", "triage_status": jobs.STATUS_FAILED}
 
-    result = jobs.retriage_pending(db, limit=10, gemini_client=FakeClient())
+    result = jobs.retriage_pending(db, limit=10, client=FakeClient())
 
     assert result == {"found": 2, "triaged": 2, "still_pending": 0}
 
 
 def test_draining_reports_what_it_could_not_fix(db):
-    result = jobs.retriage_pending(db, limit=10, gemini_client=FakeClient(error=RuntimeError("429")))
+    result = jobs.retriage_pending(db, limit=10, client=FakeClient(error=RuntimeError("429")))
 
     assert result["found"] == 1
     assert result["triaged"] == 0
@@ -180,7 +180,7 @@ def test_an_unknown_backend_falls_back_to_inline(monkeypatch):
 def test_a_gps_pin_still_sets_the_ward_without_the_model(db):
     db.data["messages"][DOC].update({"latitude": 26.8467, "longitude": 80.9462})
 
-    jobs.process_triage(db, DOC, gemini_client=FakeClient(error=RuntimeError("down")))
+    jobs.process_triage(db, DOC, client=FakeClient(error=RuntimeError("down")))
 
     expected = triage.ward_from_coordinates(26.8467, 80.9462)
     assert expected is not None
