@@ -943,7 +943,12 @@ def compute_answer(plan: dict, records: list[dict], window: dict, now: datetime 
 
     if not scope:
         lines.append("RESULT: No records match this scope. Say so plainly; do not estimate.")
-        return {"facts": "\n".join(lines), "chart": None, "map_ids": [], "headline": "No matching records"}
+        # `no_match` is a structural signal, not a string to match on: the chat
+        # endpoint skips narration entirely in this case, because a model asked
+        # to describe an empty result tends to answer from the surrounding
+        # briefing instead of reporting the absence.
+        return {"facts": "\n".join(lines), "chart": None, "map_ids": [],
+                "headline": "No matching records", "no_match": True}
 
     if intent == "officer_ranking":
         cards = officer_scorecard(scope, now)

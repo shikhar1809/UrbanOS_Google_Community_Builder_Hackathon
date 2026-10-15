@@ -1262,6 +1262,21 @@ async def api_chat(req: ChatRequest, db = Depends(get_db), admin = Depends(verif
             "intent": plan["intent"],
         }
 
+    # An empty result is reported, never narrated. Asked to describe a scope with
+    # nothing in it, a model reaches for the surrounding briefing and answers a
+    # question nobody asked: llama3.1:8b did this on every attempt, naming a
+    # ranked ward as the answer to a query that matched no records. The figures
+    # it borrowed were real, which is what makes it dangerous -- the reply reads
+    # exactly like a finding. There is no prose worth that risk here, because
+    # the honest answer is one sentence and the system already knows it.
+    if computed.get("no_match"):
+        return _reply(
+            "**" + computed["headline"] + "**\n\n"
+            + "No reports match that question in the selected window. "
+            + "Widening the timeline or removing a filter may return results.\n\n"
+            + "```text\n" + computed["facts"] + "\n```"
+        )
+
     provider = LLM.get_provider()
     if provider is None:
         # Nothing to narrate with, so skip building a prompt no model will read.
