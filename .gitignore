@@ -42,3 +42,11 @@ survey.html
 
 # Firebase cache
 .firebase/
+
+# Triage fine-tune. The exported dataset is a derivative of a live database and
+# goes stale the moment a report arrives; the GGUF and the checkpoints are
+# rebuilt from the adapter by finetune/export_gguf.py. The PEFT adapter itself
+# is deliberately NOT ignored -- it is the trained artefact.
+finetune/data/
+finetune/adapter/checkpoints/
+finetune/adapter/*.gguf
