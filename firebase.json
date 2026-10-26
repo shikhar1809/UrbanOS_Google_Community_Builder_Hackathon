@@ -57,6 +57,7 @@
     "source": ".",
     "runtime": "python311",
     "secretEnvironmentVariables": [
+      { "key": "ADMIN_EMAILS", "secret": "ADMIN_EMAILS" },
       { "key": "GEMINI_API_KEY", "secret": "GEMINI_API_KEY" },
       { "key": "TWILIO_ACCOUNT_SID", "secret": "TWILIO_ACCOUNT_SID" },
       { "key": "TWILIO_AUTH_TOKEN", "secret": "TWILIO_AUTH_TOKEN" },

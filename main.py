@@ -147,7 +147,7 @@ TriageResult = TRIAGE.TriageResult  # kept for backwards compatibility
 # ---------------------------------------------------------------------------
 # Detects language via Unicode script ranges (no API call needed).
 # Covers the 6 most common Indian WhatsApp languages.
-# Supported: Hindi, Urdu, Bengali, Tamil, Telugu, Kannada â†’ fallback: English
+# Supported: Hindi, Urdu, Bengali, Tamil, Telugu, Kannada → fallback: English
 # ---------------------------------------------------------------------------
 
 REPLY_TEMPLATES = {
@@ -1592,21 +1592,21 @@ async def get_messages(
 # TOTAL Lucknow District Population (Census 2011): 4,589,838
 # Lucknow Urban Agglomeration: 2,902,920
 #
-# This layer is PLUGGABLE â€” replace with live Census API calls at:
-#   â†’ data.gov.in  (Open Government Data Platform India)
-#   â†’ udiseplus.gov.in (school density data)
-#   â†’ nhm.gov.in (health infrastructure data)
+# This layer is PLUGGABLE — replace with live Census API calls at:
+#   → data.gov.in  (Open Government Data Platform India)
+#   → udiseplus.gov.in (school density data)
+#   → nhm.gov.in (health infrastructure data)
 # ---------------------------------------------------------------------------
 DEMO_DEMOGRAPHICS = {
-    # North Lucknow: Sarojini Nagar, Bakshi Ka Talab â€” peri-urban, lower infra density
+    # North Lucknow: Sarojini Nagar, Bakshi Ka Talab — peri-urban, lower infra density
     "North":   {"population": 312000, "youth_pct": 36, "nearest_school_km": 7.8, "nearest_hospital_km": 11.2, "literacy_rate": 69, "road_gap_index": 7.1, "water_gap_index": 6.8, "sanitation_gap_index": 7.4, "utility_gap_index": 6.2, "environment_gap_index": 6.6, "civic_amenity_gap_index": 7.0},
-    # South Lucknow: Cantonment, Alambagh â€” mixed urban, better infra
+    # South Lucknow: Cantonment, Alambagh — mixed urban, better infra
     "South":   {"population": 328000, "youth_pct": 27, "nearest_school_km": 2.9, "nearest_hospital_km": 4.8,  "literacy_rate": 79, "road_gap_index": 4.4, "water_gap_index": 4.8, "sanitation_gap_index": 5.2, "utility_gap_index": 4.1, "environment_gap_index": 4.5, "civic_amenity_gap_index": 4.7},
-    # East Lucknow: Gomti Nagar, Indira Nagar â€” newer development zones
+    # East Lucknow: Gomti Nagar, Indira Nagar — newer development zones
     "East":    {"population": 287000, "youth_pct": 30, "nearest_school_km": 4.1, "nearest_hospital_km": 6.5,  "literacy_rate": 76, "road_gap_index": 5.3, "water_gap_index": 6.1, "sanitation_gap_index": 6.4, "utility_gap_index": 5.2, "environment_gap_index": 5.8, "civic_amenity_gap_index": 5.5},
-    # West Lucknow: Chinhat, Amausi â€” industrial-adjacent, developing
+    # West Lucknow: Chinhat, Amausi — industrial-adjacent, developing
     "West":    {"population": 241000, "youth_pct": 32, "nearest_school_km": 5.6, "nearest_hospital_km": 8.3,  "literacy_rate": 72, "road_gap_index": 6.5, "water_gap_index": 5.9, "sanitation_gap_index": 6.9, "utility_gap_index": 6.7, "environment_gap_index": 7.2, "civic_amenity_gap_index": 6.3},
-    # Central Lucknow: Hazratganj, Chowk, Aminabad â€” dense urban core
+    # Central Lucknow: Hazratganj, Chowk, Aminabad — dense urban core
     "Central": {"population": 421000, "youth_pct": 24, "nearest_school_km": 1.6, "nearest_hospital_km": 2.4,  "literacy_rate": 85, "road_gap_index": 3.8, "water_gap_index": 3.5, "sanitation_gap_index": 4.2, "utility_gap_index": 3.1, "environment_gap_index": 4.0, "civic_amenity_gap_index": 3.6},
 }
 
@@ -1685,7 +1685,7 @@ async def get_ranked_projects(db = Depends(get_db), admin = Depends(verify_admin
     # SEMANTIC CLUSTERING
     # Cluster by (semantic_tag, zone) instead of raw (category, zone).
     # semantic_tag is a normalized snake_case key assigned by Gemini during
-    # triage â€” it groups proposals about the *same real-world issue* together
+    # triage — it groups proposals about the *same real-world issue* together
     # regardless of how they were phrased or which broad category they fell into.
     # Falls back to category for older messages that pre-date the semantic_tag field.
     # ---------------------------------------------------------------------------
@@ -1718,7 +1718,7 @@ async def get_ranked_projects(db = Depends(get_db), admin = Depends(verify_admin
         demo = DEMO_DEMOGRAPHICS.get(cl["zone"], DEMO_DEMOGRAPHICS["Central"])
         # Use most common summary as project title
         summaries = [m.get("summary") or "" for m in cl["messages"] if m.get("summary")]
-        title = summaries[0] if summaries else f"{cl['category']} â€” {cl['zone']} Zone"
+        title = summaries[0] if summaries else f"{cl['category']} — {cl['zone']} Zone"
         gap_signal = project_gap_signal(cl["category"], cl["semantic_tag"], title, demo)
         infra_gap = gap_signal["normalized_gap"]
         impact_score = round((demand * cl["priority_score"] * (1 + infra_gap / 10)), 1)
@@ -1768,7 +1768,7 @@ async def get_ranked_projects(db = Depends(get_db), admin = Depends(verify_admin
                     f"Zone Population: {demo['population']:,} residents\n"
                     f"Relevant deprivation signal: {gap_signal['label']} = {gap_signal['value']}{gap_signal['unit']}\n"
                     f"Signal source: {gap_signal['source']}\n"
-                    f"Estimated cost: â‚¹{proj['estimated_budget']:,}\n"
+                    f"Estimated cost: ₹{proj['estimated_budget']:,}\n"
                 )
                 # Call Gemini for a smart justification
                 resp = gemini_client.models.generate_content(
@@ -2060,7 +2060,22 @@ def _run_asgi(asgi_app, req: https_fn.Request) -> https_fn.Response:
 
     return Response(b"".join(body_chunks), status=status_code[0], headers=headers_list)
 
-@https_fn.on_request(memory=options.MemoryOption.GB_1, timeout_sec=300)
+# The secrets list is what actually binds Secret Manager values to the deployed
+# function: the Python SDK builds the manifest from this decorator, so a secret
+# declared only in firebase.json never reaches the container. ADMIN_EMAILS has
+# to be here or verify_admin() fails closed in production and every dashboard
+# request comes back 503 - correct behaviour, but for the wrong reason.
+@https_fn.on_request(
+    memory=options.MemoryOption.GB_1,
+    timeout_sec=300,
+    secrets=[
+        "ADMIN_EMAILS",
+        "GEMINI_API_KEY",
+        "TWILIO_ACCOUNT_SID",
+        "TWILIO_AUTH_TOKEN",
+        "TWILIO_WHATSAPP_NUMBER",
+    ],
+)
 def api(req: https_fn.Request) -> https_fn.Response:
     return _run_asgi(app, req)
 
