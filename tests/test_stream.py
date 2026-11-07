@@ -4,6 +4,7 @@ reach a real person or stay behind after a demo.
 """
 
 import random
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -575,3 +576,11 @@ def test_off_topic_phrases_do_not_catch_civic_complaints():
     assert guardrails.check_topic_text("Road near the cricket stadium is broken")["verdict"] == "accept"
     assert guardrails.check_topic_text("Water leak in the movie hall lane")["verdict"] == "accept"
     assert guardrails.check_topic_text("What is the cricket score?")["verdict"] == "reject_topic"
+
+
+def test_the_sandbox_has_a_demo_data_cleanup_button():
+    rail = Path("sandbox/stream-rail.js").read_text(encoding="utf-8")
+
+    assert "Clean up demo data" in rail
+    assert "call('purge', {})" in rail
+    assert "confirm(" in rail, "it deletes data, so it must ask first"

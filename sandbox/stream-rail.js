@@ -14,6 +14,7 @@
 
   const ICON_PLAY = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
   const ICON_STOP = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h10v10H7z"/></svg>';
+  const ICON_CLEAR = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>';
   const ICON_FILES = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h8l5 5v15H6V2zm7 1.5V8h4.5L13 3.5zM8.5 12v1.6h8V12h-8zm0 3.5v1.6h8v-1.6h-8z"/></svg>';
 
   const style = document.createElement('style');
@@ -114,13 +115,17 @@
   filesBtn.type = 'button';
   filesBtn.innerHTML = ICON_FILES;
   filesBtn.append(h('span', 'srail-label', 'View data files'));
+  const clearBtn = h('button', 'srail-btn');
+  clearBtn.type = 'button';
+  clearBtn.innerHTML = ICON_CLEAR;
+  clearBtn.append(h('span', 'srail-label', 'Clean up demo data'));
   const status = h('div', 'srail-status');
   status.setAttribute('role', 'status');
   const consoleLink = h('a', '', 'Open live console');
   consoleLink.href = '/stream.html';
   consoleLink.target = '_blank';
   consoleLink.rel = 'noopener';
-  rail.append(toggle, filesBtn, status, consoleLink);
+  rail.append(toggle, filesBtn, clearBtn, status, consoleLink);
 
   const filesDialog = h('dialog', 'sfiles');
   filesDialog.setAttribute('aria-label', 'Data stream files');
@@ -155,6 +160,8 @@
     toggle.innerHTML = running ? ICON_STOP : ICON_PLAY;
     toggle.append(h('span', 'srail-label', running ? 'Stop data stream' : 'Start data stream'));
     toggle.setAttribute('aria-label', running ? 'Stop data stream' : 'Start data stream');
+    // The server refuses to clear during a run, which would only write more.
+    clearBtn.disabled = running;
     scenarioSelect.disabled = running;
     rateSelect.disabled = running;
   }
@@ -236,6 +243,21 @@
       await (driving || othersLive ? stop() : start());
     } finally {
       toggle.disabled = false;
+    }
+  });
+
+  clearBtn.addEventListener('click', async () => {
+    if (!confirm('Delete all simulated reports and saved stream files from UrbanOS? '
+      + 'Reports not marked as simulated are not touched. This cannot be undone.')) return;
+    clearBtn.disabled = true;
+    try {
+      const out = await call('purge', {});
+      holdStatusUntil = Date.now() + 8000;
+      say(`Removed ${out.removed_reports} simulated reports`);
+    } catch (e) {
+      say(e.message, 'bad');
+    } finally {
+      paintToggle();
     }
   });
 
