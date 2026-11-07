@@ -172,6 +172,18 @@ def nearest_locality(lat: float, lng: float) -> Locality:
     return min(GAZETTEER, key=lambda loc: (loc.lat - lat) ** 2 + ((loc.lng - lng) * cos_lat) ** 2)
 
 
+def is_urgent(description: str, location_raw: str = "", lat=None, lng=None) -> bool:
+    """Whether a report should jump the routine triage queue.
+
+    Danger words count even without a known issue, because an emergency the rules
+    have no category for would otherwise rank Low. Over-matching costs only a
+    shorter wait for that report.
+    """
+    text = (description or "").lower()
+    return (any(k in text for k in _ESCALATORS)
+            or classify(description, location_raw, lat, lng)["priority"] == "Critical")
+
+
 def classify(description: str, location_raw: str = "", lat=None, lng=None) -> dict:
     """Same field names as a model result, so callers need no special case."""
     text = (description or "").lower()

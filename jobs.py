@@ -9,13 +9,19 @@ Backends
 --------
 ``inline``      run immediately, which is the historical behaviour and the default.
 ``background``  run after the response is sent, via FastAPI's BackgroundTasks.
+                Local use only: main._run_asgi buffers the response until the
+                whole ASGI call returns, so on Firebase the citizen still waits.
+``queue``       hand the report to a Cloud Tasks queue. The only backend that
+                both answers at once on Firebase and survives a lost instance.
 
-A durable queue (Pub/Sub, Cloud Tasks) is the next step and slots in at
-``dispatch`` alone. It is deliberately not implemented here: it cannot be
-verified from this environment, and an untested dispatch path that silently
-drops civic reports is worse than a known in-process one. ``background`` does
-not survive an instance being evicted mid-task, which is exactly what
-``retriage_pending`` exists to repair.
+The queue
+---------
+The report is saved before anything is enqueued, so the database and not the
+queue is the record of what is owed. A queued report carries an open flag until
+it is fully finished, and a scheduled sweep re-enqueues any that have gone quiet.
+That covers a failed enqueue and a task that ran out of retries with one path. The
+flag also keeps the sweep away from old and simulated reports, which would
+otherwise start spending model quota the moment it was deployed.
 
 Everything here is idempotent: a report already triaged is skipped, so a
 repeated job is harmless.
@@ -36,6 +42,7 @@ from datetime import datetime, timezone
 
 import idempotency as IDEM
 import sim
+import triage_rules
 
 logger = logging.getLogger(__name__)
 
@@ -47,19 +54,69 @@ STATUS_FAILED = "failed"
 
 BACKEND_INLINE = "inline"
 BACKEND_BACKGROUND = "background"
+BACKEND_QUEUE = "queue"
+LEFT_FOR_SWEEP = "sweep"
 
 DETAILS_FIELD = "details_notification"
 DETAILS_PENDING = "pending"
 DETAILS_SENT = "sent"
 
+# Each name is the Cloud Function that drains that queue, declared in main.py.
+LANE_NORMAL = "normal"
+LANE_URGENT = "urgent"
+QUEUE_FOR_LANE = {LANE_NORMAL: "triagetask", LANE_URGENT: "triagetaskurgent"}
+
+QUEUE_OPEN_FIELD = "triage_queue_open"
+LANE_FIELD = "triage_lane"
+ENQUEUED_AT_FIELD = "triage_enqueued_at"
+
+# Longer than a task's own retries (see main.TRIAGE_RETRY), so the sweep does not
+# pile a second task on top of one that is still being retried.
+SWEEP_GRACE_SECONDS = 20 * 60
+SWEEP_GIVE_UP_SECONDS = 72 * 3600
+SWEEP_SCAN_LIMIT = 2000
+SWEEP_ENQUEUE_LIMIT = 500
+
 
 def backend() -> str:
     """Read per call so it can be switched without a redeploy."""
     choice = os.getenv("TRIAGE_BACKEND", BACKEND_INLINE).strip().lower()
-    if choice not in (BACKEND_INLINE, BACKEND_BACKGROUND):
+    if choice not in (BACKEND_INLINE, BACKEND_BACKGROUND, BACKEND_QUEUE):
         logger.warning("[JOBS] unknown TRIAGE_BACKEND %r, falling back to inline", choice)
         return BACKEND_INLINE
     return choice
+
+
+def defers(db) -> bool:
+    """Whether a report filed against `db` is triaged after the citizen is answered.
+
+    The sandbox and the stream always triage inline: they discard their background
+    tasks, and queue workers read the production database, so a deferred simulated
+    report would never be triaged at all.
+    """
+    return backend() != BACKEND_INLINE and not isinstance(db, sim.NamespacedDB)
+
+
+def lane_for(report: dict) -> str:
+    """Decide from keyword rules alone, since the point is to run before any model."""
+    urgent = triage_rules.is_urgent(report.get("body") or "", report.get("extracted_location") or "",
+                                    report.get("latitude"), report.get("longitude"))
+    return LANE_URGENT if urgent else LANE_NORMAL
+
+
+def queue_fields(report: dict) -> dict:
+    """Fields that put a report under the queue's care. Empty for other backends."""
+    if backend() != BACKEND_QUEUE:
+        return {}
+    return {QUEUE_OPEN_FIELD: True, LANE_FIELD: lane_for(report)}
+
+
+def _enqueue(lane: str, doc_id: str) -> None:
+    from firebase_admin import functions
+    # The explicit "data" wrapper is required. The Python Admin SDK sends this
+    # value as the whole request body, and the worker's SDK rejects, with a 400,
+    # any body that has no "data" key. Enqueueing still reports success.
+    functions.task_queue(QUEUE_FOR_LANE.get(lane, QUEUE_FOR_LANE[LANE_NORMAL])).enqueue({"data": {"doc_id": doc_id}})
 
 
 def details_fields(sender: str, language: str) -> dict:
@@ -72,10 +129,19 @@ def details_fields(sender: str, language: str) -> dict:
     return {DETAILS_FIELD: DETAILS_PENDING, "citizen_language": language}
 
 
-def dispatch(db, doc_id: str, background_tasks=None, runner=None) -> str:
+def dispatch(db, doc_id: str, background_tasks=None, runner=None, report=None) -> str:
     """Schedule triage for one filed report. Returns the backend actually used."""
     runner = runner or process_triage
     chosen = backend()
+
+    if chosen == BACKEND_QUEUE:
+        try:
+            _enqueue((report or {}).get(LANE_FIELD, LANE_NORMAL), doc_id)
+            return BACKEND_QUEUE
+        except Exception as e:
+            # Not run inline: a queue outage must not turn into webhook timeouts.
+            logger.error("[JOBS] could not enqueue %s, leaving it for the sweep: %s", doc_id, e, exc_info=True)
+            return LEFT_FOR_SWEEP
 
     if chosen == BACKEND_BACKGROUND and background_tasks is not None:
         background_tasks.add_task(runner, db, doc_id)
@@ -88,7 +154,41 @@ def dispatch(db, doc_id: str, background_tasks=None, runner=None) -> str:
     return BACKEND_INLINE
 
 
-def process_triage(db, doc_id: str, triage_module=None, client=None, media_loader=None, notifier=None) -> bool:
+def _triage_fields(result: dict) -> dict:
+    fields = {
+        "category": result["category"],
+        "priority": result["priority"],
+        "sentiment": result["feasibility"],
+        "summary": result["summary"],
+        "original_language": result["original_language"],
+        "constituency_zone": result["constituency_zone"],
+        "estimated_budget": result["estimated_budget"],
+        "semantic_tag": result["semantic_tag"],
+        "visual_evidence": result["visual_evidence"],
+        "responsible_body": result["responsible_body"],
+        "ward_no": result["ward_no"],
+        "ward_officer": result["ward_officer"],
+        "triage_source": result.get("triage_source"),
+    }
+    if result.get("extracted_location"):
+        fields["extracted_location"] = result["extracted_location"]
+    return fields
+
+
+def _estimated_pin(report: dict, result: dict) -> dict:
+    """Place a text-only location on the map, as inline intake does. The geofence
+    still applies, so a wrong guess cannot land off the map."""
+    lat, lng = result.get("estimated_latitude"), result.get("estimated_longitude")
+    if report.get("latitude") is not None or lat is None or lng is None:
+        return {}
+    import guardrails
+    if guardrails.check_coordinates(lat, lng)["verdict"] != "accept":
+        return {}
+    return {"latitude": lat, "longitude": lng}
+
+
+def process_triage(db, doc_id: str, triage_module=None, client=None, media_loader=None, notifier=None,
+                   rules_fallback: bool = False) -> bool:
     """Classify an already-filed report and write the fields back.
 
     Returns True when the report ends up triaged. Never raises: this runs
@@ -97,6 +197,10 @@ def process_triage(db, doc_id: str, triage_module=None, client=None, media_loade
 
     `notifier(report) -> bool` delivers the details message for a flagged report
     and reports whether it was accepted for delivery.
+
+    With `rules_fallback`, a report no model could classify gets keyword-rule
+    fields so the citizen and the dashboard are not left waiting out an outage. It
+    stays failed, and so returns False, because a model should still look at it.
     """
     import triage as default_triage
     triage_module = triage_module or default_triage
@@ -133,34 +237,29 @@ def process_triage(db, doc_id: str, triage_module=None, client=None, media_loade
         image_part=image_part,
         lat=report.get("latitude"),
         lng=report.get("longitude"),
+        rules_fallback=rules_fallback,
     )
 
     if not result.get("ok"):
         # Leave it pending-but-marked so a later run picks it up again.
-        _safe_update(ref, {
+        update = {
             "triage_status": STATUS_FAILED,
             "triage_attempted_at": datetime.now(timezone.utc).isoformat(),
-        }, doc_id)
+        }
+        decided_by_rules = result.get("triage_source") == "rules"
+        if decided_by_rules:
+            update.update(_triage_fields(result))
+            update.update(_estimated_pin(report, result))
+        if _safe_update(ref, update, doc_id) and decided_by_rules:
+            _send_details(db, ref, doc_id, {**report, **update}, notifier)
         return False
 
     update = {
-        "category": result["category"],
-        "priority": result["priority"],
-        "sentiment": result["feasibility"],
-        "summary": result["summary"],
-        "original_language": result["original_language"],
-        "constituency_zone": result["constituency_zone"],
-        "estimated_budget": result["estimated_budget"],
-        "semantic_tag": result["semantic_tag"],
-        "visual_evidence": result["visual_evidence"],
-        "responsible_body": result["responsible_body"],
-        "ward_no": result["ward_no"],
-        "ward_officer": result["ward_officer"],
+        **_triage_fields(result),
+        **_estimated_pin(report, result),
         "triage_status": STATUS_DONE,
         "triaged_at": datetime.now(timezone.utc).isoformat(),
     }
-    if result.get("extracted_location"):
-        update["extracted_location"] = result["extracted_location"]
 
     if not _safe_update(ref, update, doc_id):
         return False
@@ -240,3 +339,85 @@ def retriage_pending(db, limit: int = 100, **kwargs) -> dict:
     ids = pending_reports(db, limit)
     triaged = sum(1 for doc_id in ids if process_triage(db, doc_id, **kwargs))
     return {"found": len(ids), "triaged": triaged, "still_pending": len(ids) - triaged}
+
+
+def process_queued_report(db, doc_id: str, **kwargs) -> bool:
+    """Run one queue task. True means nothing more is owed, so the task may end.
+
+    False asks the queue to retry. Never raises, for the same reason as
+    process_triage.
+    """
+    process_triage(db, doc_id, rules_fallback=True, **kwargs)
+    try:
+        ref = db.collection(COLLECTION).document(doc_id)
+        snap = ref.get()
+        if not getattr(snap, "exists", False):
+            return True  # deleted since it was filed: retrying cannot help
+        report = snap.to_dict() or {}
+    except Exception as e:
+        logger.error("[JOBS] could not re-read report %s: %s", doc_id, e, exc_info=True)
+        return False
+
+    finished = report.get("triage_status") == STATUS_DONE and report.get(DETAILS_FIELD) != DETAILS_PENDING
+    if not finished:
+        return False
+    # If this write fails the sweep repeats the task, which finds nothing left to do.
+    _safe_update(ref, {QUEUE_OPEN_FIELD: False}, doc_id)
+    return True
+
+
+def _age_seconds(stamp, now: datetime):
+    """Age of a naive ISO timestamp, the format reports are filed with. None if unreadable."""
+    try:
+        return (now - datetime.fromisoformat(stamp)).total_seconds()
+    except (TypeError, ValueError):
+        return None
+
+
+def sweep_open_reports(db, now: datetime = None) -> dict:
+    """Re-enqueue queued reports that have gone quiet. Safe to run repeatedly."""
+    now = now or datetime.now()
+    stats = {"scanned": 0, "enqueued": 0, "waiting": 0, "gave_up": 0, "enqueue_failed": False}
+
+    query = db.collection(COLLECTION)
+    try:
+        from google.cloud.firestore_v1.base_query import FieldFilter
+        query = query.where(filter=FieldFilter(QUEUE_OPEN_FIELD, "==", True))
+    except Exception:
+        query = query.where(QUEUE_OPEN_FIELD, "==", True)
+
+    for doc in query.limit(SWEEP_SCAN_LIMIT).stream():
+        stats["scanned"] += 1
+        report = doc.to_dict() or {}
+        ref = db.collection(COLLECTION).document(doc.id)
+
+        filed_age = _age_seconds(report.get("timestamp"), now)
+        if filed_age is not None and filed_age > SWEEP_GIVE_UP_SECONDS:
+            logger.error("[JOBS] giving up on queued report %s after %.0f hours", doc.id, filed_age / 3600)
+            _safe_update(ref, {QUEUE_OPEN_FIELD: False, "needs_review": True}, doc.id)
+            stats["gave_up"] += 1
+            continue
+
+        ages = [a for a in (filed_age, _age_seconds(report.get(ENQUEUED_AT_FIELD), now)) if a is not None]
+        if ages and min(ages) < SWEEP_GRACE_SECONDS:
+            stats["waiting"] += 1
+            continue
+
+        if stats["enqueued"] >= SWEEP_ENQUEUE_LIMIT:
+            stats["waiting"] += 1
+            continue
+
+        try:
+            _enqueue(report.get(LANE_FIELD, LANE_NORMAL), doc.id)
+        except Exception as e:
+            logger.error("[JOBS] sweep could not enqueue %s, stopping this run: %s", doc.id, e, exc_info=True)
+            stats["enqueue_failed"] = True
+            break
+        _safe_update(ref, {ENQUEUED_AT_FIELD: now.isoformat()}, doc.id)
+        stats["enqueued"] += 1
+
+    # A warning because anything here means a task went quiet, and because INFO
+    # does not reach the logs on the deployed runtime.
+    if stats["enqueued"] or stats["gave_up"] or stats["enqueue_failed"]:
+        logger.warning("[JOBS] sweep: %s", stats)
+    return stats

@@ -772,7 +772,7 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db):
         # classified after the citizen has been answered. The receipt then shows
         # the same generic values it already shows whenever the model is
         # unavailable, and the fields are filled in moments later.
-        defer_triage = JOBS.backend() != JOBS.BACKEND_INLINE
+        defer_triage = JOBS.defers(db)
         if defer_triage:
             _t = dict(TRIAGE.DEFAULTS)
             _t["extracted_location"] = location_raw if loc_source == "text" else None
@@ -846,6 +846,7 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db):
         }
         if defer_triage:
             new_message.update(JOBS.details_fields(sender, lang))
+            new_message.update(JOBS.queue_fields(new_message))
         sim.tag_report(new_message)
         doc_ref.set(new_message)
         if defer_triage:
@@ -853,7 +854,8 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db):
                           runner=lambda _db, _id: JOBS.process_triage(
                               _db, _id, client=LLM.get_provider(),
                               media_loader=fetch_twilio_media_part,
-                              notifier=_notify_triage_details))
+                              notifier=_notify_triage_details),
+                          report=new_message)
         # Bust RAG + messages cache so new report is immediately visible
         _RAG_CACHE["data"] = None
         _RAG_CACHE["at"] = 0.0
@@ -2098,7 +2100,7 @@ async def media_proxy(url: str):
 
 import asyncio
 from flask import Response
-from firebase_functions import https_fn, options
+from firebase_functions import https_fn, options, scheduler_fn, tasks_fn
 
 def _run_asgi(asgi_app, req: https_fn.Request) -> https_fn.Response:
     """Bridge a Firebase Functions (WSGI-style) request into an ASGI app."""
@@ -2183,6 +2185,72 @@ def sandbox(req: https_fn.Request) -> https_fn.Response:
     # Imported here: sim_api imports this module, so a top-level import would cycle.
     from sim_api import sim_app
     return _run_asgi(sim_app, req)
+
+
+# Triage queue. See jobs.py for how the pieces fit together. Backoffs total about
+# 15 minutes, which jobs.SWEEP_GRACE_SECONDS must stay above.
+TRIAGE_RETRY = options.RetryConfig(max_attempts=5, min_backoff_seconds=60, max_backoff_seconds=480)
+TRIAGE_SECRETS = ["GEMINI_API_KEY", "TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_WHATSAPP_NUMBER"]
+
+
+def _run_triage_task(data) -> None:
+    """Raising is how a task asks the queue to retry it."""
+    data = data or {}
+    # Tolerates a future Admin SDK that adds the "data" wrapper itself, since
+    # requirements.txt does not pin it: see jobs._enqueue.
+    doc_id = data.get("doc_id") or (data.get("data") or {}).get("doc_id")
+    if not doc_id:
+        # Retrying cannot repair a task with no report in it.
+        logger.error(f"[JOBS] dropped a triage task with no doc_id: {data!r}")
+        return
+    finished = JOBS.process_queued_report(
+        firestore_db, doc_id,
+        client=LLM.get_provider(),
+        media_loader=fetch_twilio_media_part,
+        notifier=_notify_triage_details,
+    )
+    if not finished:
+        raise RuntimeError(f"triage of {doc_id} is not finished")
+
+
+# The limits bound model spend and protect its quota; a backlog waits in the queue.
+# Ten a second is about four times the average of 2 lakh reports a day.
+@tasks_fn.on_task_dispatched(
+    retry_config=TRIAGE_RETRY,
+    rate_limits=options.RateLimits(max_concurrent_dispatches=20, max_dispatches_per_second=10),
+    memory=options.MemoryOption.GB_1,
+    cpu=1,
+    concurrency=10,
+    max_instances=5,
+    timeout_sec=300,
+    secrets=TRIAGE_SECRETS,
+)
+def triagetask(req: tasks_fn.CallableRequest) -> None:
+    _run_triage_task(req.data)
+
+
+# A lane of its own, so a flood of routine reports cannot delay an emergency.
+@tasks_fn.on_task_dispatched(
+    retry_config=TRIAGE_RETRY,
+    rate_limits=options.RateLimits(max_concurrent_dispatches=10, max_dispatches_per_second=5),
+    memory=options.MemoryOption.GB_1,
+    cpu=1,
+    concurrency=10,
+    max_instances=3,
+    timeout_sec=300,
+    secrets=TRIAGE_SECRETS,
+)
+def triagetaskurgent(req: tasks_fn.CallableRequest) -> None:
+    _run_triage_task(req.data)
+
+
+@scheduler_fn.on_schedule(
+    schedule="every 5 minutes",
+    memory=options.MemoryOption.GB_1,
+    timeout_sec=300,
+)
+def triagesweep(event: scheduler_fn.ScheduledEvent) -> None:
+    JOBS.sweep_open_reports(firestore_db)
 
 if __name__ == "__main__":
     import uvicorn
