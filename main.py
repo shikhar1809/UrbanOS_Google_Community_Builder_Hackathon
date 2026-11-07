@@ -2046,7 +2046,8 @@ async def media_proxy(url: str):
     async def media_stream():
         # Redirects are followed by hand so the credentials are sent only to the
         # Twilio API, never to whatever host the redirect points at.
-        async with httpx.AsyncClient(follow_redirects=False, timeout=30.0) as client:
+        # A photo is not worth holding one of the instance's few threads for long.
+        async with httpx.AsyncClient(follow_redirects=False, timeout=10.0) as client:
             target, auth = url, (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
             for _ in range(MEDIA_MAX_REDIRECTS):
                 async with client.stream("GET", target, auth=auth) as response:
@@ -2100,9 +2101,18 @@ def _run_asgi(asgi_app, req: https_fn.Request) -> https_fn.Response:
     content_length = int(environ.get('CONTENT_LENGTH', 0) or 0)
     body_data = environ['wsgi.input'].read(content_length) if content_length > 0 else b""
     
+    request_delivered = [False]
+
     async def receive():
-        return {'type': 'http.request', 'body': body_data, 'more_body': False}
-        
+        if not request_delivered[0]:
+            request_delivered[0] = True
+            return {'type': 'http.request', 'body': body_data, 'more_body': False}
+        # Nothing more will arrive, so wait until cancelled, as ASGI expects. A
+        # StreamingResponse calls this in a loop to watch for a disconnect, and
+        # answering straight away spun that loop forever: each photo request held
+        # a thread at full CPU until the 300s timeout, which starved the instance.
+        await asyncio.Event().wait()
+
     status_code = [200]
     headers_list = []
     body_chunks = []
