@@ -52,44 +52,18 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import firebase_admin
-from firebase_admin import credentials, firestore, auth
+from firebase_admin import credentials, firestore
 
-security = HTTPBearer()
+def verify_admin() -> dict:
+    """Sign-in was removed at the owner's request, so every route is public.
 
-
-def admin_emails() -> list[str]:
-    """The allowlist, read per request so it can change without a redeploy."""
-    return [e.strip().lower() for e in os.getenv("ADMIN_EMAILS", "").split(",") if e.strip()]
-
-
-def verify_admin(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    """Authenticate the caller and check them against the admin allowlist.
-
-    Fails CLOSED. An empty ADMIN_EMAILS used to mean "any Google account on
-    earth may read every citizen report and sanction projects", which is not a
-    sane default for a system holding civic grievance data. With no allowlist
-    configured, nobody is an admin.
+    That includes the ones that message citizens, spend model quota and change
+    data. Routes keep this dependency so that restoring access control means
+    changing this one function, along with the login screen in public/index.html.
+    Responses must therefore never carry a citizen's phone number.
     """
-    allowed = admin_emails()
-    if not allowed:
-        logger.error("[SECURITY] ADMIN_EMAILS is not set, so no account can be an admin.")
-        raise HTTPException(
-            status_code=503,
-            detail="Admin access is not configured. Set ADMIN_EMAILS to the allowed addresses.",
-        )
-
-    try:
-        decoded_token = auth.verify_id_token(credentials.credentials)
-    except Exception as e:
-        raise HTTPException(status_code=401, detail=f"Invalid authentication credentials: {str(e)}")
-
-    user_email = (decoded_token.get("email") or "").lower()
-    if user_email not in allowed:
-        logger.warning(f"[SECURITY] Rejected non-admin sign-in for {user_email or 'unknown address'}.")
-        raise HTTPException(status_code=403, detail="Authenticated user is not an UrbanOS admin.")
-    return decoded_token
+    return {"email": "public"}
 
 # Initialize Firebase
 try:
@@ -1432,7 +1406,6 @@ def _feed_item(r: dict) -> dict:
     return {
         "id": r["id"],
         "reference_id": r["reference_id"],
-        "sender": r["sender"],
         "timestamp": r["ts_iso"],
         "category": r["category"],
         "semantic_tag": r["semantic_tag"],
@@ -1820,7 +1793,6 @@ async def get_ranked_projects(db = Depends(get_db), admin = Depends(verify_admin
             },
             "justification": None,  # filled below
             "status": cl["messages"][0].get("status", "Open"),
-            "senders": list(cl["senders"]),
         })
 
     ranked.sort(key=lambda x: x["impact_score"], reverse=True)
@@ -1969,7 +1941,6 @@ class SanctionRequest(BaseModel):
     title: str
     zone: str
     category: str
-    senders: list
 
 @app.post("/projects/sanction")
 async def sanction_project(req: SanctionRequest, background_tasks: BackgroundTasks, db = Depends(get_db), admin = Depends(verify_admin)):
@@ -2179,7 +2150,7 @@ def api(req: https_fn.Request) -> https_fn.Response:
 @https_fn.on_request(
     memory=options.MemoryOption.GB_1,
     timeout_sec=300,
-    secrets=["SIM_ACCESS_CODE", "GEMINI_API_KEY"],
+    secrets=["GEMINI_API_KEY"],
 )
 def sandbox(req: https_fn.Request) -> https_fn.Response:
     # Imported here: sim_api imports this module, so a top-level import would cycle.
