@@ -1,0 +1,474 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UrbanOS Live Stream</title>
+<meta name="robots" content="noindex">
+<style>
+  :root {
+    --bg: #f0f2f5; --panel: #ffffff; --sunken: #f7f8f9; --chat: #efeae2; --border: #e2e6e9;
+    --text: #111b21; --muted: #5b6b75; --accent: #008069; --accent-strong: #00a884; --on-accent: #ffffff;
+    --bubble: #ffffff; --reply: #d9fdd3; --good: #0a7d5c; --bad: #b42318; --warn-bg: #fff4d6; --warn-text: #6b4e00;
+    --critical: #b42318; --high: #b54708; --medium: #1d5fa8; --low: #5b6b75; --bar: #00a884;
+    --shadow: 0 1px 2px rgba(11, 20, 26, .10);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0b141a; --panel: #111b21; --sunken: #182229; --chat: #0b141a; --border: #26343c;
+      --text: #e9edef; --muted: #8fa1ab; --accent: #00a884; --accent-strong: #00a884; --on-accent: #06251e;
+      --bubble: #202c33; --reply: #005c4b; --good: #3ecf9f; --bad: #ff8a80; --warn-bg: #2c2412; --warn-text: #ffd279;
+      --critical: #ff8a80; --high: #ffb86b; --medium: #7fb8ff; --low: #8fa1ab; --bar: #00a884;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .4);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0b141a; --panel: #111b21; --sunken: #182229; --chat: #0b141a; --border: #26343c;
+    --text: #e9edef; --muted: #8fa1ab; --accent: #00a884; --accent-strong: #00a884; --on-accent: #06251e;
+    --bubble: #202c33; --reply: #005c4b; --good: #3ecf9f; --bad: #ff8a80; --warn-bg: #2c2412; --warn-text: #ffd279;
+    --critical: #ff8a80; --high: #ffb86b; --medium: #7fb8ff; --low: #8fa1ab; --bar: #00a884;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; display: flex; flex-direction: column; min-height: 100dvh; }
+  a { color: var(--accent); }
+  h1, h2, p { margin: 0; }
+
+  .top { display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .brand { font-weight: 700; font-size: 16px; }
+  .brand small { font-weight: 400; color: var(--muted); font-size: 13px; margin-left: 6px; }
+  .grow { flex: 1; }
+  .links { display: flex; gap: 14px; font-size: 13px; }
+  .pill { display: inline-flex; align-items: center; gap: 7px; padding: 4px 11px; border-radius: 999px; font-size: 12px; font-weight: 700; background: var(--sunken); color: var(--muted); }
+  .pill i { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+  .pill.live { color: var(--good); }
+  .pill.live i { animation: pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .3; } }
+
+  .controls { display: flex; gap: 12px; align-items: flex-end; padding: 12px 16px; background: var(--panel); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .field label { font-size: 11px; font-weight: 600; color: var(--muted); }
+  select, input[type=password] { height: 36px; border: 1px solid var(--border); border-radius: 8px; background: var(--sunken); color: var(--text); padding: 0 10px; font: inherit; max-width: 100%; }
+  input[type=range] { width: 150px; accent-color: var(--accent-strong); height: 36px; }
+  .btn { height: 36px; padding: 0 16px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel); color: var(--text); font: 600 13px/1 inherit; font-family: inherit; cursor: pointer; }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .btn.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); min-width: 130px; }
+  .btn.stop { background: var(--bad); color: #fff; border-color: var(--bad); min-width: 130px; }
+  :is(.btn, select, input, a):focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 2px; }
+  .hint { padding: 8px 16px; font-size: 13px; color: var(--muted); background: var(--panel); border-bottom: 1px solid var(--border); }
+  .notice { padding: 8px 16px; font-size: 13px; background: var(--warn-bg); color: var(--warn-text); }
+  .notice[hidden], .hint[hidden] { display: none; }
+  .err { color: var(--bad); font-size: 13px; align-self: center; }
+
+  .kpis { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 1px; background: var(--border); border-bottom: 1px solid var(--border); }
+  .kpi { background: var(--panel); padding: 10px 16px; min-width: 0; }
+  .kpi b { display: block; font-size: 22px; font-variant-numeric: tabular-nums; line-height: 1.2; }
+  .kpi span { font-size: 11px; color: var(--muted); }
+
+  .board { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr) minmax(0, .85fr); gap: 1px; background: var(--border); min-height: 0; }
+  .col { background: var(--panel); display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+  .col > header { padding: 10px 14px; border-bottom: 1px solid var(--border); display: flex; align-items: baseline; gap: 8px; }
+  .col h2 { font-size: 13px; }
+  .col header span { font-size: 12px; color: var(--muted); }
+  .scroll { flex: 1; overflow-y: auto; padding: 12px; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+  .chat { background: var(--chat); }
+  .empty { color: var(--muted); font-size: 13px; padding: 24px 8px; text-align: center; }
+
+  .bubble { background: var(--bubble); border-radius: 8px; padding: 7px 10px; box-shadow: var(--shadow); max-width: 94%; align-self: flex-start; overflow-wrap: anywhere; }
+  .bubble .who { font-size: 11px; font-weight: 700; color: var(--accent); display: flex; gap: 6px; flex-wrap: wrap; }
+  .bubble .who em { font-style: normal; font-weight: 400; color: var(--muted); }
+  .bubble .where { font-size: 11px; color: var(--muted); margin-top: 3px; }
+  .enter { animation: enter .22s ease-out; }
+  @keyframes enter { from { opacity: 0; transform: translateY(-5px); } }
+
+  .card { border: 1px solid var(--border); border-radius: 8px; padding: 9px 11px; border-left-width: 3px; overflow-wrap: anywhere; }
+  .card.filed { border-left-color: var(--good); }
+  .card.rejected { border-left-color: var(--bad); }
+  .card.error { border-left-color: var(--high); }
+  .card .head { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+  .card .title { font-weight: 600; }
+  .card .ms { margin-left: auto; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .meta { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 4px; font-size: 12px; color: var(--muted); }
+  .ref { font: 600 12px ui-monospace, Consolas, monospace; }
+  .prio { font-weight: 700; font-size: 11px; }
+  .prio.Critical { color: var(--critical); } .prio.High { color: var(--high); } .prio.Medium { color: var(--medium); } .prio.Low { color: var(--low); }
+
+  .section { padding: 12px 14px; border-bottom: 1px solid var(--border); }
+  .section h3 { margin: 0 0 8px; font-size: 12px; color: var(--muted); font-weight: 600; }
+  .bar-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 8px; font-size: 12px; margin-bottom: 8px; }
+  .bar-row .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bar-row .n { font-variant-numeric: tabular-nums; font-weight: 700; }
+  .track { grid-column: 1 / -1; height: 5px; background: var(--sunken); border-radius: 3px; overflow: hidden; }
+  .track i { display: block; height: 100%; background: var(--bar); border-radius: 3px; transition: width .4s; }
+  .tally { display: flex; justify-content: space-between; font-size: 12px; padding: 2px 0; }
+  .tally b { font-variant-numeric: tabular-nums; }
+  .side-scroll { flex: 1; overflow-y: auto; min-height: 0; }
+
+  @media (max-width: 1000px) {
+    .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .board { grid-template-columns: minmax(0, 1fr); }
+    .col { max-height: 62vh; }
+  }
+  @media (max-width: 560px) {
+    .controls .field, .controls select, .controls input[type=password] { width: 100%; }
+    input[type=range] { width: 100%; }
+    .btn.primary, .btn.stop { flex: 1; }
+  }
+  @media (prefers-reduced-motion: reduce) { .enter, .pill.live i { animation: none; } .track i { transition: none; } }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand">UrbanOS <small>Live data stream</small></div>
+  <span class="pill" id="status-pill"><i></i><span id="status-text">Idle</span></span>
+  <div class="grow"></div>
+  <nav class="links">
+    <a href="https://urbanos.web.app" target="_blank" rel="noopener">Open dashboard</a>
+    <a href="/#stream-files">Data files</a>
+    <a href="/">WhatsApp sandbox</a>
+  </nav>
+</header>
+
+<form class="controls" id="controls" autocomplete="off">
+  <div class="field">
+    <label for="scenario">Scenario</label>
+    <select id="scenario"></select>
+  </div>
+  <div class="field">
+    <label for="rate">Rate: <span id="rate-label">30</span> citizens a minute</label>
+    <input id="rate" type="range" min="6" max="120" step="6" value="30">
+  </div>
+  <div class="field">
+    <label for="budget">Stop after</label>
+    <select id="budget">
+      <option value="100">100 citizens</option>
+      <option value="300" selected>300 citizens</option>
+      <option value="1000">1000 citizens</option>
+    </select>
+  </div>
+  <div class="field">
+    <label for="code">Access code</label>
+    <input id="code" type="password" placeholder="Needed to start" autocomplete="off">
+  </div>
+  <button class="btn primary" id="toggle" type="submit">Start stream</button>
+  <button class="btn" id="purge" type="button">Clear simulated data</button>
+  <span class="err" id="error" role="alert"></span>
+</form>
+<p class="hint" id="scenario-hint"></p>
+<p class="notice" id="rules-notice" hidden>No language model is reachable, so triage is running on keyword rules. Reports are marked and can be re-triaged once a model is back.</p>
+
+<section class="kpis" aria-label="Run totals">
+  <div class="kpi"><b id="k-events">0</b><span>Citizens processed</span></div>
+  <div class="kpi"><b id="k-filed">0</b><span>Filed to UrbanOS</span></div>
+  <div class="kpi"><b id="k-rejected">0</b><span>Refused by guardrails</span></div>
+  <div class="kpi"><b id="k-rate">0</b><span>Per minute, observed</span></div>
+  <div class="kpi"><b id="k-latency">&mdash;</b><span>Avg pipeline time</span></div>
+  <div class="kpi"><b id="k-flight">0</b><span>In the pipeline now</span></div>
+</section>
+
+<main class="board">
+  <section class="col">
+    <header><h2>Incoming WhatsApp</h2><span>Simulated citizens</span></header>
+    <div class="scroll chat" id="incoming" role="log" aria-live="off"><p class="empty">Start the stream to see messages arrive.</p></div>
+  </section>
+  <section class="col">
+    <header><h2>What UrbanOS decided</h2><span>Production intake code</span></header>
+    <div class="scroll" id="outcomes" role="log" aria-live="off"><p class="empty">Each citizen's result appears here.</p></div>
+  </section>
+  <section class="col">
+    <header><h2>Forming live</h2></header>
+    <div class="side-scroll">
+      <div class="section"><h3>Largest project clusters this run</h3><div id="clusters"><p class="empty">None yet.</p></div></div>
+      <div class="section"><h3>Priority of filed reports</h3><div id="priorities"></div></div>
+      <div class="section"><h3>Why reports were refused</h3><div id="reasons"></div></div>
+      <div class="section"><h3>What classified them</h3><div id="sources"></div></div>
+    </div>
+  </section>
+</main>
+
+<script>
+(() => {
+  'use strict';
+
+  const API = '/sim/api/stream/';
+  const CODE_KEY = 'urbanos-stream-code';
+  const WATCH_MS = 3000;
+  const KEEP = 40;
+  const REASONS = {
+    out_of_area: 'Outside Lucknow', off_topic: 'Not a civic issue', duplicate: 'Repeat of a filed report',
+    rate_limited: 'Rate limited', guardrail: 'Other guardrail',
+  };
+  const SOURCES = { rules: 'Keyword rules', unknown: 'Unknown' };
+
+  const $ = (id) => document.getElementById(id);
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const seen = new Set();
+
+  let state = null;
+  let driving = false;   // this tab is the one sending ticks
+  let runId = null;
+  let inFlight = 0;
+
+  // ---------- small DOM helper: text only, so nothing from a response is parsed as HTML ----------
+  function h(tag, className, text) {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== undefined && text !== null) node.textContent = text;
+    return node;
+  }
+
+  function readCode() { try { return sessionStorage.getItem(CODE_KEY) || ''; } catch { return ''; } }
+  function saveCode(v) { try { sessionStorage.setItem(CODE_KEY, v); } catch { /* private mode */ } }
+
+  async function call(path, body) {
+    const res = await fetch(API + path, {
+      method: body === undefined ? 'GET' : 'POST',
+      headers: body === undefined ? {} : { 'Content-Type': 'application/json', 'X-Sim-Code': $('code').value.trim() },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    let data = null;
+    try { data = await res.json(); } catch { /* an empty or HTML error page */ }
+    if (!res.ok) {
+      const err = new Error((data && data.detail) || ('Request failed (' + res.status + ')'));
+      err.status = res.status;
+      throw err;
+    }
+    return data;
+  }
+
+  function showError(message) { $('error').textContent = message || ''; }
+
+  // ---------- rendering ----------
+  function prepend(container, node) {
+    const empty = container.querySelector('.empty');
+    if (empty) empty.remove();
+    container.prepend(node);
+    while (container.children.length > KEEP) container.lastElementChild.remove();
+  }
+
+  function renderIncoming(r) {
+    const b = h('div', 'bubble enter');
+    const who = h('div', 'who', r.name);
+    who.append(h('em', '', r.phone), h('em', '', r.language));
+    b.append(who, h('div', '', r.text), h('div', 'where', r.location));
+    prepend($('incoming'), b);
+  }
+
+  function renderOutcome(r) {
+    const c = h('div', 'card enter ' + r.outcome);
+    const head = h('div', 'head');
+    const meta = h('div', 'meta');
+    if (r.outcome === 'filed') {
+      head.append(h('span', 'title', r.summary || r.category || 'Report filed'));
+      head.append(h('span', 'prio ' + (r.priority || ''), r.priority || ''));
+      head.append(h('span', 'ms', r.pipeline_ms + ' ms'));
+      meta.append(h('span', 'ref', '#' + r.reference_id), h('span', '', r.department), h('span', '', r.ward), h('span', '', r.officer));
+      if (r.zone) meta.append(h('span', '', r.zone + ' zone'));
+    } else if (r.outcome === 'rejected') {
+      head.append(h('span', 'title', 'Refused: ' + (REASONS[r.reason] || r.reason)));
+      head.append(h('span', 'ms', r.pipeline_ms + ' ms'));
+      meta.append(h('span', '', r.reply || r.text));
+    } else {
+      head.append(h('span', 'title', 'Processing error: ' + r.reason));
+      head.append(h('span', 'ms', r.pipeline_ms + ' ms'));
+    }
+    c.append(head, meta);
+    prepend($('outcomes'), c);
+  }
+
+  function absorb(results) {
+    (results || []).forEach((r) => {
+      if (seen.has(r.id)) return;
+      seen.add(r.id);
+      renderIncoming(r);
+      renderOutcome(r);
+    });
+  }
+
+  function tallies(id, map, labelFor, emptyText) {
+    const box = $(id);
+    box.textContent = '';
+    const rows = Object.entries(map || {}).sort((a, b) => b[1] - a[1]);
+    if (!rows.length) { box.append(h('p', 'empty', emptyText)); return; }
+    rows.forEach(([k, v]) => {
+      const row = h('div', 'tally');
+      row.append(h('span', '', labelFor ? labelFor(k) : k), h('b', '', v));
+      box.append(row);
+    });
+  }
+
+  function renderClusters(list) {
+    const box = $('clusters');
+    box.textContent = '';
+    if (!list || !list.length) { box.append(h('p', 'empty', 'None yet.')); return; }
+    const top = list[0].count;
+    list.forEach((c) => {
+      const row = h('div', 'bar-row');
+      row.append(h('span', 'name', c.tag.replace(/_/g, ' ') + ', ' + c.zone), h('span', 'n', c.count));
+      const track = h('div', 'track');
+      const fill = h('i');
+      fill.style.width = Math.round((c.count / top) * 100) + '%';
+      track.append(fill);
+      row.append(track);
+      box.append(row);
+    });
+  }
+
+  function renderState(s) {
+    state = s;
+    const live = driving || s.live;
+    const pill = $('status-pill');
+    pill.classList.toggle('live', live);
+    $('status-text').textContent = live ? 'Live' : ({ completed: 'Finished', stopped: 'Stopped', running: 'Stalled' }[s.status] || 'Idle');
+
+    $('k-events').textContent = s.events;
+    $('k-filed').textContent = s.filed;
+    $('k-rejected').textContent = s.rejected;
+    $('k-rate').textContent = s.observed_per_min;
+    $('k-latency').textContent = s.avg_pipeline_ms != null ? s.avg_pipeline_ms + ' ms' : '—';
+    $('k-flight').textContent = inFlight;
+
+    renderClusters(s.clusters);
+    tallies('priorities', s.by_priority, null, 'None yet.');
+    tallies('reasons', s.by_reason, (k) => REASONS[k] || k, 'None yet.');
+    tallies('sources', s.by_source, (k) => SOURCES[k] || k.replace('model:', 'Model: '), 'None yet.');
+    $('rules-notice').hidden = !(s.by_source && s.by_source.rules);
+
+    absorb(s.recent);
+
+    // Someone else's run: this tab watches, and only they can stop it from their tab.
+    const elsewhere = s.live && !driving;
+    $('toggle').textContent = driving ? 'Stop stream' : (elsewhere ? 'Stop their stream' : 'Start stream');
+    $('toggle').className = 'btn ' + (driving || elsewhere ? 'stop' : 'primary');
+    $('purge').disabled = live;
+    ['scenario', 'rate', 'budget'].forEach((id) => { $(id).disabled = live; });
+  }
+
+  function populateScenarios(list) {
+    const select = $('scenario');
+    if (select.options.length || !list) return;
+    list.forEach((s) => {
+      const opt = h('option', '', s.label);
+      opt.value = s.key;
+      opt.dataset.description = s.description;
+      select.append(opt);
+    });
+    syncHint();
+  }
+
+  function syncHint() {
+    const opt = $('scenario').selectedOptions[0];
+    $('scenario-hint').textContent = opt ? opt.dataset.description : '';
+  }
+
+  // ---------- driving a run: one tick in flight at a time ----------
+  function pacing(rate) {
+    const batch = Math.max(1, Math.min(5, Math.ceil((rate / 60) * 2.5)));
+    return { batch, intervalMs: (batch * 60000) / rate };
+  }
+
+  async function drive(rate) {
+    const { batch, intervalMs } = pacing(rate);
+    let failures = 0;
+    while (driving) {
+      const began = performance.now();
+      inFlight = batch;
+      $('k-flight').textContent = inFlight;
+      try {
+        const out = await call('tick', { run_id: runId, batch });
+        failures = 0;
+        inFlight = 0;
+        renderState(out.state);
+        if (out.state.status !== 'running') { driving = false; renderState(out.state); break; }
+      } catch (e) {
+        inFlight = 0;
+        if (e.status === 429) { await sleep(1500); continue; }
+        if (e.status === 409 || e.status === 401) { driving = false; showError(e.message); break; }
+        failures += 1;
+        if (failures >= 5) { driving = false; showError('Stream stopped: ' + e.message); break; }
+        await sleep(2000);
+        continue;
+      }
+      await sleep(Math.max(0, intervalMs - (performance.now() - began)));
+    }
+    refresh();
+  }
+
+  async function startRun() {
+    const rate = Number($('rate').value);
+    const run = await call('start', {
+      scenario: $('scenario').value, rate_per_min: rate, max_events: Number($('budget').value),
+    });
+    saveCode($('code').value.trim());
+    seen.clear();
+    $('incoming').textContent = '';
+    $('outcomes').textContent = '';
+    runId = run.run_id;
+    driving = true;
+    renderState(run);
+    drive(rate);
+  }
+
+  async function refresh() {
+    try {
+      const s = await call('state');
+      populateScenarios(s.scenarios);
+      if (!driving) renderState(s);
+      showConfigured(s);
+    } catch { /* a missed poll corrects itself on the next one */ }
+  }
+
+  function showConfigured(s) {
+    if (s.limits) { $('rate').min = s.limits.min_rate; $('rate').max = s.limits.max_rate; }
+  }
+
+  // ---------- wiring ----------
+  $('code').value = readCode();
+  $('rate').addEventListener('input', () => { $('rate-label').textContent = $('rate').value; });
+  $('scenario').addEventListener('change', syncHint);
+
+  $('controls').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    showError('');
+    const button = $('toggle');
+    button.disabled = true;
+    try {
+      if (driving || (state && state.live)) {
+        driving = false;
+        renderState(await call('stop', {}));
+      } else {
+        if (!$('code').value.trim()) { showError('Enter the access code to start.'); $('code').focus(); return; }
+        await startRun();
+      }
+    } catch (e) {
+      showError(e.message);
+    } finally {
+      button.disabled = false;
+    }
+  });
+
+  $('purge').addEventListener('click', async () => {
+    showError('');
+    if (!$('code').value.trim()) { showError('Enter the access code first.'); $('code').focus(); return; }
+    if (!confirm('Delete every simulated report from UrbanOS? Real reports are not touched. This cannot be undone.')) return;
+    try {
+      const out = await call('purge', {});
+      seen.clear();
+      $('incoming').replaceChildren(h('p', 'empty', 'Start the stream to see messages arrive.'));
+      $('outcomes').replaceChildren(h('p', 'empty', "Each citizen's result appears here."));
+      showError('');
+      $('scenario-hint').textContent = 'Removed ' + out.removed_reports + ' simulated reports.';
+      refresh();
+    } catch (e) {
+      showError(e.message);
+    }
+  });
+
+  refresh();
+  setInterval(() => { if (!driving) refresh(); }, WATCH_MS);
+})();
+</script>
+</body>
+</html>

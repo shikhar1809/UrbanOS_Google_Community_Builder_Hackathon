@@ -133,6 +133,25 @@ def check_location_text(text: str) -> dict:
     return {"verdict": "unknown", "reason": "no recognised place name"}
 
 
+# Unmistakably not municipal. Kept to phrases a civic complaint would not contain,
+# because a false match here silences a citizen. The long tail stays with the
+# classifier; this only keeps the obvious ones out when no model is available.
+OFF_TOPIC_PHRASES = (
+    "cricket score", "ipl match", "movie review", "movie ticket", "horoscope", "rashifal",
+    "lottery", "crypto", "bitcoin", "personal loan", "who will win the election", "vote for",
+    "tell me a joke", "good morning friends", "forward this message", "buy followers",
+)
+
+
+def check_topic_text(text: str) -> dict:
+    """Cheap topical screen. Rejects only a recognised off-topic phrase."""
+    lowered = (text or "").lower()
+    hit = next((phrase for phrase in OFF_TOPIC_PHRASES if phrase in lowered), None)
+    if hit:
+        return {"verdict": "reject_topic", "reason": f"off-topic phrase: '{hit}'"}
+    return {"verdict": "accept", "reason": ""}
+
+
 def build_location_check_prompt(description: str, location_text: str) -> str:
     """Merged jurisdiction + geography classifier.
 

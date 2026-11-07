@@ -57,6 +57,15 @@ DEFAULT_OLLAMA_HOST = "http://localhost:11434"
 DEFAULT_OLLAMA_MODEL = "llama3.1:8b"
 DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
 DEFAULT_GROQ_MODEL = "groq/compound"
+DEFAULT_GROQ_TRIAGE_MODEL = "llama-3.1-8b-instant"
+# Deployed functions cannot start without their declared secrets existing, so an
+# unconfigured key is stored as this value rather than left missing.
+UNSET_SECRET = "unset"
+
+
+def groq_api_key() -> Optional[str]:
+    key = (os.getenv("GROQ_API_KEY") or "").strip()
+    return key if key and key != UNSET_SECRET else None
 
 
 def ollama_host() -> str:
@@ -267,7 +276,7 @@ class GeminiProvider(Provider):
                  triage_model: Optional[str] = None):
         self.client = client
         self.chat_model = chat_model or os.getenv("GEMINI_CHAT_MODEL", DEFAULT_GEMINI_MODEL)
-        self.triage_model = triage_model or chat_model
+        self.triage_model = triage_model or self.chat_model
 
     def narrate(self, system: str, history: Sequence[Turn], user: str,
                 max_tokens: int = 2048, temperature: float = 0.2) -> str:
@@ -321,14 +330,20 @@ class GeminiProvider(Provider):
 
 
 class GroqProvider(Provider):
-    """Hosted Llama over Groq. Narration only: the chat path was built on it, and
-    it stays reachable so an operator is never worse off than before."""
+    """Hosted Llama over Groq.
+
+    The only way the deployed functions can reach an open-weights model, since
+    Ollama runs on a developer machine. Groq has no constrained decoding, so
+    triage uses JSON mode plus pydantic validation: a reply that breaks the
+    schema raises and falls through to the rules rather than being stored.
+    """
 
     name = "groq"
 
-    def __init__(self, client, chat_model: Optional[str] = None):
+    def __init__(self, client, chat_model: Optional[str] = None, triage_model: Optional[str] = None):
         self.client = client
         self.chat_model = chat_model or os.getenv("GROQ_MODEL", DEFAULT_GROQ_MODEL)
+        self.triage_model = triage_model or os.getenv("GROQ_TRIAGE_MODEL", DEFAULT_GROQ_TRIAGE_MODEL)
 
     def narrate(self, system: str, history: Sequence[Turn], user: str,
                 max_tokens: int = 2048, temperature: float = 0.2) -> str:
@@ -349,10 +364,25 @@ class GroqProvider(Provider):
 
     def classify(self, prompt: str, schema: Type[BaseModel],
                  image: Optional[ImageRef] = None) -> BaseModel:
-        raise LLMUnavailable("groq is not configured for structured triage")
+        if image is not None:
+            logger.info("[LLM] groq triage is text-only; classifying without the photo")
+        instruction = ("Reply with one JSON object and nothing else. It must match this JSON schema, "
+                       "using exactly these property names:\n" + json.dumps(schema_for_decoding(schema)))
+        try:
+            completion = self.client.chat.completions.create(
+                messages=[{"role": "system", "content": instruction},
+                          {"role": "user", "content": prompt}],
+                model=self.triage_model,
+                temperature=0,
+                response_format={"type": "json_object"},
+            )
+            raw = completion.choices[0].message.content or ""
+        except Exception as e:
+            raise LLMUnavailable(f"groq triage failed: {e}") from e
+        return schema.model_validate(_extract_json(raw))
 
     def describe(self) -> dict:
-        return {"provider": self.name, "chat_model": self.chat_model}
+        return {"provider": self.name, "chat_model": self.chat_model, "triage_model": self.triage_model}
 
 
 def _build(kind: str) -> Optional[Provider]:
@@ -372,7 +402,7 @@ def _build(kind: str) -> Optional[Provider]:
             return None
 
     if kind == "groq":
-        key = os.getenv("GROQ_API_KEY")
+        key = groq_api_key()
         if not key:
             return None
         try:

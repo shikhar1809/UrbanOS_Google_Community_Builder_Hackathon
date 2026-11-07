@@ -19,13 +19,40 @@ from __future__ import annotations
 import hashlib
 import logging
 import re
+import time
 from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field
 
+import triage_rules
+
 logger = logging.getLogger(__name__)
 
 TRIAGE_MODEL = "gemini-2.5-flash"
+
+# After a quota or billing refusal the next call will fail the same way, and each
+# attempt adds a second of latency to a report the rules can file at once.
+MODEL_COOLDOWN_SECONDS = 120
+_QUOTA_MARKERS = ("402", "429", "resource_exhausted", "quota", "depleted", "rate limit")
+_model_cool_until = 0.0
+
+
+def model_cooling() -> bool:
+    return time.time() < _model_cool_until
+
+
+def note_model_failure(error: Exception) -> None:
+    """Back off from the model when it has refused on quota or billing grounds."""
+    global _model_cool_until
+    text = str(error).lower()
+    if any(marker in text for marker in _QUOTA_MARKERS):
+        _model_cool_until = time.time() + MODEL_COOLDOWN_SECONDS
+        logger.warning("[TRIAGE] model refused on quota; using rules for %ss", MODEL_COOLDOWN_SECONDS)
+
+
+def reset_model_cooldown() -> None:
+    global _model_cool_until
+    _model_cool_until = 0.0
 
 # 110 municipal wards, each with a duty officer band.
 # A ward the model actually decided, as opposed to "Unknown" or prose.
@@ -151,20 +178,26 @@ def _classify(client, prompt: str, image_part, model: str) -> TriageResult:
 
 
 def run_triage(client, description: str, location_raw: str = "", loc_source: str = "",
-               image_part=None, lat=None, lng=None, model: str = TRIAGE_MODEL) -> dict:
+               image_part=None, lat=None, lng=None, model: str = TRIAGE_MODEL,
+               rules_fallback: bool = False) -> dict:
     """Classify one report. Never raises: on failure the defaults are returned
     so the report is still filed and can be triaged again later.
+
+    With `rules_fallback`, a report no model could classify gets keyword-rule
+    fields instead of blanks. `ok` stays False so it remains eligible for
+    /admin/retriage, and `triage_source` records which one decided.
 
     `model` applies only to the legacy google-genai path; an llm.Provider picks
     its own model from configuration.
     """
     result = dict(DEFAULTS)
     result["extracted_location"] = location_raw if loc_source == "text" else None
+    result["triage_source"] = None
 
     # A GPS pin determines the ward whether or not the model answers.
     pinned = ward_from_coordinates(lat, lng)
 
-    if client and description:
+    if client and description and not (rules_fallback and model_cooling()):
         try:
             parsed = _classify(client, build_prompt(description, location_raw), image_part, model)
             result.update({
@@ -178,6 +211,8 @@ def run_triage(client, description: str, location_raw: str = "", loc_source: str
                 "estimated_budget": parsed.estimated_budget,
                 "semantic_tag": parsed.semantic_tag,
                 "visual_evidence": parsed.visual_evidence or "",
+                "estimated_latitude": getattr(parsed, "estimated_latitude", None),
+                "estimated_longitude": getattr(parsed, "estimated_longitude", None),
             })
             # The model is asked for a ward, but a model that does not know says
             # so ("Unknown", ""), and a non-answer on screen is worse than the
@@ -190,11 +225,21 @@ def run_triage(client, description: str, location_raw: str = "", loc_source: str
             if loc_source == "text":
                 result["extracted_location"] = parsed.extracted_location or location_raw
             result["ok"] = True
+            result["triage_source"] = "model:" + getattr(client, "name", "gemini")
         except Exception as e:
             logger.error(f"[AI ERROR] Triage failed: {e}", exc_info=True)
+            note_model_failure(e)
             result["ok"] = False
     else:
         result["ok"] = False
+
+    if rules_fallback and not result["ok"] and description:
+        result.update(triage_rules.classify(description, location_raw, lat, lng))
+        result["triage_source"] = "rules"
+        # A text location has no pin, but the gazetteer knows roughly where it is,
+        # which is enough to place it on the map and in a ward.
+        if not pinned:
+            pinned = ward_from_coordinates(result.get("estimated_latitude"), result.get("estimated_longitude"))
 
     if pinned:
         result["ward_no"], result["ward_officer"] = pinned

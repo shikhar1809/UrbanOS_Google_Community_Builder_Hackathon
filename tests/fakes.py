@@ -8,6 +8,7 @@ depends on.
 from __future__ import annotations
 
 import copy
+import uuid
 
 
 class AlreadyExists(Exception):
@@ -28,6 +29,7 @@ class FakeDocument:
     def __init__(self, store: dict, key: str):
         self._store = store
         self._key = key
+        self.id = key
 
     def get(self):
         return FakeSnapshot(self._store.get(self._key))
@@ -60,25 +62,31 @@ class FakeQuery:
     count and stream. Ordering drops documents missing the field, exactly as
     Firestore does -- that behaviour is the point of one of the tests."""
 
-    def __init__(self, docs: dict, order_field=None, descending=False, cap=None, backing=None):
+    def __init__(self, docs: dict, order_field=None, descending=False, cap=None, filters=()):
         self._docs = docs
         self._order_field = order_field
         self._descending = descending
         self._cap = cap
-        # Writes must land in the real collection even when reading a filtered view.
-        self._backing = backing if backing is not None else docs
+        # Evaluated on each read, as Firestore does, so a query re-run after a
+        # write sees that write. Holding matched rows here would loop forever in
+        # anything that deletes until a query comes back empty.
+        self._filters = tuple(filters)
 
     def order_by(self, field, direction="ASCENDING"):
-        return FakeQuery(self._docs, field, direction == "DESCENDING", self._cap, self._backing)
+        return FakeQuery(self._docs, field, direction == "DESCENDING", self._cap, self._filters)
 
     def limit(self, cap):
-        return FakeQuery(self._docs, self._order_field, self._descending, cap, self._backing)
+        return FakeQuery(self._docs, self._order_field, self._descending, cap, self._filters)
 
     def count(self):
-        return FakeAggregationQuery(len(self._docs))
+        return FakeAggregationQuery(len(self._matching()))
+
+    def _matching(self):
+        return {k: v for k, v in self._docs.items()
+                if all(_matches(v, f, o, val) for f, o, val in self._filters)}
 
     def _rows(self):
-        rows = [(k, v) for k, v in self._docs.items()]
+        rows = list(self._matching().items())
         if self._order_field:
             rows = [r for r in rows if r[1].get(self._order_field) is not None]
             rows.sort(key=lambda r: r[1][self._order_field], reverse=self._descending)
@@ -89,11 +97,11 @@ class FakeQuery:
     def where(self, field=None, op=None, value=None, filter=None):
         if filter is not None:
             field, op, value = filter.field_path, filter.op_string, filter.value
-        rows = {k: v for k, v in self._docs.items() if _matches(v, field, op, value)}
-        return FakeQuery(rows, self._order_field, self._descending, self._cap, self._docs)
+        return FakeQuery(self._docs, self._order_field, self._descending, self._cap,
+                         self._filters + ((field, op, value),))
 
     def stream(self):
-        return iter([FakeDocSnapshot(k, v, self._backing) for k, v in self._rows()])
+        return iter([FakeDocSnapshot(k, v, self._docs) for k, v in self._rows()])
 
 
 class FakeAggregationQuery:
@@ -125,9 +133,15 @@ class FakeBatch:
     def update(self, ref, data):
         self.ops.append((ref, data))
 
+    def delete(self, ref):
+        self.ops.append((ref, None))
+
     def commit(self):
         for ref, data in self.ops:
-            ref.update(data)
+            if data is None:
+                ref.delete()
+            else:
+                ref.update(data)
         self.commits += 1
         self.ops = []
 
@@ -136,8 +150,9 @@ class FakeCollection(FakeQuery):
     def __init__(self, docs: dict):
         super().__init__(docs)
 
-    def document(self, key: str):
-        return FakeDocument(self._docs, key)
+    def document(self, key: str = None):
+        # Like the real client, no key means a generated id.
+        return FakeDocument(self._docs, key or uuid.uuid4().hex[:20])
 
     def add(self, data):
         key = f"auto-{len(self._docs)}"
@@ -146,9 +161,12 @@ class FakeCollection(FakeQuery):
 
 
 def _matches(doc, field, op, value):
-    if op != "==":
-        raise NotImplementedError(f"fake only supports ==, got {op}")
-    return doc.get(field) == value
+    if op == "==":
+        return doc.get(field) == value
+    if op == ">":
+        # Firestore excludes documents missing the field from a range query.
+        return doc.get(field) is not None and doc.get(field) > value
+    raise NotImplementedError(f"fake only supports == and >, got {op}")
 
 
 class FakeFirestore:

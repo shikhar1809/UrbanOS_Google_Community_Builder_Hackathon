@@ -16,11 +16,12 @@ import os
 import re
 import xml.etree.ElementTree as ET
 
-from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Path, Query, Request
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 import sim
+import sim_stream
 from main import _process_whatsapp_sync, firestore_db
 from state import clear_session
 
@@ -149,3 +150,97 @@ def get_media(media_id: str):
 def reset_session(req: SimReset):
     clear_session(_sandbox_db(), _sender(req.phone))
     return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Live stream
+# ---------------------------------------------------------------------------
+
+def require_stream_access(request: Request) -> None:
+    """Stricter than the chat: these write to the real reports collection and can
+    spend model quota, so with no code configured they refuse rather than open up."""
+    expected = access_code()
+    if not expected:
+        raise HTTPException(status_code=503, detail="Stream controls are disabled: SIM_ACCESS_CODE is not set.")
+    supplied = request.headers.get("X-Sim-Code", "")
+    if not hmac.compare_digest(supplied.encode(), expected.encode()):
+        raise HTTPException(status_code=401, detail="Access code required")
+
+
+def _raw_db():
+    if firestore_db is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    return firestore_db
+
+
+class StreamStart(BaseModel):
+    scenario: str = Field(default="steady", max_length=32)
+    rate_per_min: int = Field(default=30, ge=1, le=1000)
+    max_events: int = Field(default=sim_stream.DEFAULT_MAX_EVENTS, ge=1, le=100000)
+
+
+class StreamTick(BaseModel):
+    run_id: str = Field(max_length=32)
+    batch: int = Field(default=1, ge=1, le=100)
+
+
+def _stream_call(fn, *args):
+    try:
+        return fn(*args)
+    except sim_stream.StreamError as e:
+        raise HTTPException(status_code=e.status, detail=e.detail)
+
+
+@sim_app.get("/sim/api/stream/state")
+def stream_state():
+    # Open on purpose so anyone can watch. Every sender in it is a masked,
+    # simulated number, and watching spends nothing but one read.
+    state = sim_stream.read_state(_raw_db())
+    state["scenarios"] = sim_stream.scenarios()
+    state["limits"] = {"min_rate": sim_stream.MIN_RATE, "max_rate": sim_stream.MAX_RATE,
+                       "max_batch": sim_stream.MAX_BATCH, "hard_max_events": sim_stream.HARD_MAX_EVENTS}
+    return state
+
+
+RUN_ID_PATTERN = r"^[0-9a-f]{10}$"
+FILE_FORMATS = {
+    "jsonl": ("application/x-ndjson; charset=utf-8", sim_stream.rows_to_jsonl),
+    "csv": ("text/csv; charset=utf-8", sim_stream.rows_to_csv),
+}
+
+
+@sim_app.get("/sim/api/stream/files")
+def stream_files():
+    # Open like the state endpoint: every row is simulated, with masked senders.
+    return {"files": sim_stream.list_files(_raw_db())}
+
+
+@sim_app.get("/sim/api/stream/files/{run_id}")
+def stream_file(run_id: str = Path(pattern=RUN_ID_PATTERN), format: str = Query(default="json", pattern="^(json|jsonl|csv)$")):
+    rows = _stream_call(sim_stream.file_rows, _raw_db(), run_id)
+    if format == "json":
+        return {"run_id": run_id, "rows": rows}
+    content_type, render = FILE_FORMATS[format]
+    return Response(content=render(rows), media_type=content_type, headers={
+        "Content-Disposition": f'attachment; filename="urbanos-stream-{run_id}.{format}"',
+    })
+
+
+@sim_app.post("/sim/api/stream/start", dependencies=[Depends(require_stream_access)])
+def stream_start(req: StreamStart):
+    return _stream_call(sim_stream.start, _raw_db(), req.scenario, req.rate_per_min, req.max_events)
+
+
+@sim_app.post("/sim/api/stream/tick", dependencies=[Depends(require_stream_access)])
+def stream_tick(req: StreamTick):
+    return _stream_call(sim_stream.tick, _raw_db(), _process_whatsapp_sync, req.run_id, req.batch)
+
+
+@sim_app.post("/sim/api/stream/stop", dependencies=[Depends(require_stream_access)])
+def stream_stop():
+    return _stream_call(sim_stream.stop, _raw_db())
+
+
+@sim_app.post("/sim/api/stream/purge", dependencies=[Depends(require_stream_access)])
+def stream_purge():
+    return _stream_call(sim_stream.purge, _raw_db())

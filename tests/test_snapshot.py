@@ -109,6 +109,50 @@ def test_snapshot_is_cached_between_calls(monkeypatch):
     assert analytics._SNAPSHOT["version"] == version, "a cached read must not refetch"
 
 
+def test_a_report_filed_elsewhere_appears_without_waiting_for_the_ttl(monkeypatch):
+    """The stream files reports from a different function, whose invalidation
+    cannot reach this process. They must still show up inside the cache window."""
+    monkeypatch.setattr(analytics, "SNAPSHOT_MAX_RECORDS", 5000)
+    monkeypatch.setattr(analytics, "LIVE_DELTA_INTERVAL", 0.0)
+    db = seed(FakeFirestore(), 5)
+    analytics.get_snapshot(db, force=True)
+    version = analytics._SNAPSHOT["version"]
+    rebuilt_at = analytics._SNAPSHOT["at"]
+
+    seed(db, 1, start_day=6)
+    snap = analytics.get_snapshot(db)
+
+    assert snap["records"][0]["reference_id"] == "UO00006", "newest first"
+    assert snap["total_count"] == 6
+    assert snap["version"] == version + 1, "ranking keys its cache on the version"
+    assert snap["at"] == rebuilt_at, "this must be a merge, not a full rebuild"
+
+
+def test_the_delta_check_does_not_double_count_a_report(monkeypatch):
+    monkeypatch.setattr(analytics, "SNAPSHOT_MAX_RECORDS", 5000)
+    monkeypatch.setattr(analytics, "LIVE_DELTA_INTERVAL", 0.0)
+    db = seed(FakeFirestore(), 3)
+    analytics.get_snapshot(db, force=True)
+    seed(db, 1, start_day=4)
+
+    analytics.get_snapshot(db)
+    snap = analytics.get_snapshot(db)
+
+    assert len(snap["records"]) == 4
+    assert snap["total_count"] == 4
+
+
+def test_the_delta_read_is_throttled(monkeypatch):
+    monkeypatch.setattr(analytics, "SNAPSHOT_MAX_RECORDS", 5000)
+    monkeypatch.setattr(analytics, "LIVE_DELTA_INTERVAL", 3600.0)
+    db = seed(FakeFirestore(), 3)
+    analytics.get_snapshot(db, force=True)
+    analytics.get_snapshot(db)  # takes the one allowed check
+    seed(db, 1, start_day=4)
+
+    assert len(analytics.get_snapshot(db)["records"]) == 3
+
+
 def test_invalidate_forces_a_rebuild(monkeypatch):
     monkeypatch.setattr(analytics, "SNAPSHOT_MAX_RECORDS", 5000)
     db = seed(FakeFirestore(), 5)

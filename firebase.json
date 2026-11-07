@@ -17,7 +17,8 @@
       "ignore": [
         "firebase.json",
         "**/.*",
-        "**/node_modules/**"
+        "**/node_modules/**",
+        "index_live.html"
       ],
       "rewrites": [
         {
@@ -51,17 +52,99 @@
           "function": "sandbox"
         }
       ]
+    },
+    {
+      "target": "whatsapp",
+      "public": "sandbox",
+      "headers": [
+        {
+          "source": "**/*.html",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, no-store, must-revalidate"
+            }
+          ]
+        }
+      ],
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**"
+      ],
+      "rewrites": [
+        {
+          "source": "/sim/**",
+          "function": "sandbox"
+        }
+      ]
     }
   ],
   "functions": {
     "source": ".",
     "runtime": "python311",
-    "secretEnvironmentVariables": [
-      { "key": "ADMIN_EMAILS", "secret": "ADMIN_EMAILS" },
-      { "key": "GEMINI_API_KEY", "secret": "GEMINI_API_KEY" },
-      { "key": "TWILIO_ACCOUNT_SID", "secret": "TWILIO_ACCOUNT_SID" },
-      { "key": "TWILIO_AUTH_TOKEN", "secret": "TWILIO_AUTH_TOKEN" },
-      { "key": "TWILIO_WHATSAPP_NUMBER", "secret": "TWILIO_WHATSAPP_NUMBER" }
+    "ignore": [
+      "venv",
+      ".git",
+      ".github",
+      ".firebase",
+      ".pytest_cache",
+      ".pitch-build",
+      "__pycache__",
+      "**/__pycache__/**",
+      "*.pyc",
+      ".env",
+      ".env.*",
+      "firebase-key.json",
+      "firebase-debug.log",
+      "firebase-debug.*.log",
+      "*.exe",
+      "*.zip",
+      "*.db",
+      "*.png",
+      "*.log",
+      "logs.txt",
+      "messages.json",
+      "deploy.ps1",
+      "tests",
+      "evals",
+      "docs",
+      "outputs",
+      "finetune",
+      "Workflows",
+      "sandbox",
+      "_*.js",
+      "_*.py",
+      "temp.js",
+      "test.js",
+      "test_*.py",
+      "add_*.py",
+      "patch_*.py",
+      "fix*.py",
+      "inject_*.py",
+      "refactor_*.py",
+      "migrate_*.py",
+      "restore_*.py",
+      "strip_*.py",
+      "check_*.py",
+      "seed_*.py",
+      "*_update.py",
+      "backfill.py",
+      "build_spa.py",
+      "db_migration.py",
+      "design_overhaul.py",
+      "final_mock_sweep.py",
+      "logo_update.py",
+      "make_live.py",
+      "production_refactor.py",
+      "reseed_timestamps.py",
+      "retheme.py",
+      "audit_colors.py",
+      "update_responses.py",
+      "analysis.html",
+      "coordination.html",
+      "priority.html",
+      "survey.html"
     ]
   }
 }

@@ -40,6 +40,8 @@ from typing import Any, Iterable
 logger = logging.getLogger(__name__)
 
 SNAPSHOT_TTL = 60.0  # seconds
+LIVE_DELTA_INTERVAL = 2.0  # seconds between checks for reports newer than the snapshot
+LIVE_DELTA_MAX = 200
 
 # Hard ceiling on how many reports are held in memory at once.
 #
@@ -279,6 +281,8 @@ def normalize_record(doc_id: str, d: dict) -> dict:
         "original_language": d.get("original_language"),
         "is_urgent": bool(d.get("is_urgent")),
         "visual_evidence": d.get("visual_evidence"),
+        "simulated": bool(d.get("simulated")),
+        "triage_source": d.get("triage_source"),
         # Lowercased haystack built once so server-side search is a substring
         # test instead of six string concatenations per record per keystroke.
         "_search": " ".join(
@@ -353,11 +357,59 @@ def _read_reports(db, cap: int, ordered: bool = True) -> list[dict]:
     return records
 
 
+def _merge_new_reports(db) -> None:
+    """Pull reports newer than the snapshot into it, without a full rebuild.
+
+    The snapshot is per process, and invalidate_snapshot() only reaches the
+    process that wrote the report. Anything filed by another instance or another
+    function therefore stayed invisible until the TTL ran out, up to a minute
+    behind a feed that is meant to be live. Firestore bills this at one read when
+    nothing is new, against a full collection read for a rebuild.
+    """
+    if db is None or time.time() - _SNAPSHOT.get("delta_at", 0.0) < LIVE_DELTA_INTERVAL:
+        return
+
+    with _snapshot_lock:
+        now = time.time()
+        latest = _SNAPSHOT.get("latest_ts")
+        if latest is None or now - _SNAPSHOT.get("delta_at", 0.0) < LIVE_DELTA_INTERVAL:
+            return
+        _SNAPSHOT["delta_at"] = now
+
+        try:
+            query = (db.collection("messages")
+                     .where("timestamp", ">", latest.isoformat())
+                     .order_by("timestamp")
+                     .limit(LIVE_DELTA_MAX))
+            docs = list(query.stream())
+        except Exception as e:
+            logger.warning(f"[SNAPSHOT] live delta read failed: {e}")
+            return
+        if not docs:
+            return
+
+        known = {r["id"] for r in _SNAPSHOT["records"]}
+        fresh = [normalize_record(d.id, d.to_dict() or {}) for d in docs]
+        fresh = [r for r in fresh if r["id"] not in known and r["timestamp"]]
+        if not fresh:
+            return
+
+        fresh.sort(key=lambda r: r["timestamp"], reverse=True)
+        # A new list rather than an insert: request handlers may be iterating the
+        # old one on another thread.
+        _SNAPSHOT["records"] = (fresh + _SNAPSHOT["records"])[:SNAPSHOT_MAX_RECORDS]
+        _SNAPSHOT["latest_ts"] = fresh[0]["timestamp"]
+        _SNAPSHOT["total_count"] = _SNAPSHOT.get("total_count", 0) + len(fresh)
+        _SNAPSHOT["version"] = _SNAPSHOT.get("version", 0) + 1
+        logger.info(f"[SNAPSHOT] merged {len(fresh)} new reports (v{_SNAPSHOT['version']})")
+
+
 def get_snapshot(db, force: bool = False) -> dict[str, Any]:
     """Return the shared, normalized, timestamp-DESC snapshot of all reports."""
     now = time.time()
     cached = _SNAPSHOT.get("records")
     if not force and cached is not None and (now - _SNAPSHOT["at"]) < SNAPSHOT_TTL:
+        _merge_new_reports(db)
         return _SNAPSHOT
 
     with _snapshot_lock:

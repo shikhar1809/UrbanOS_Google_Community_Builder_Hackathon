@@ -167,11 +167,56 @@ def test_ollama_classify_attaches_an_evidence_photo(monkeypatch):
 
 # --- groq -------------------------------------------------------------------
 
-def test_groq_cannot_classify():
-    """Groq narrates. Routing a citizen's complaint through it would be a silent
-    downgrade, so it refuses rather than guessing."""
+class _GroqStub:
+    """Just enough of the groq client: chat.completions.create."""
+
+    def __init__(self, reply=None, error=None):
+        self.calls = []
+        self._reply, self._error = reply, error
+        self.chat = self
+        self.completions = self
+
+    def create(self, **kwargs):
+        self.calls.append(kwargs)
+        if self._error:
+            raise self._error
+        message = type("M", (), {"content": self._reply})()
+        return type("C", (), {"choices": [type("Ch", (), {"message": message})()]})()
+
+
+def test_groq_classify_validates_the_reply_against_the_schema():
+    stub = _GroqStub('{"category": "Other", "priority": "Low"}')
+    result = llm.GroqProvider(client=stub).classify("prompt", Shape)
+
+    assert isinstance(result, Shape) and result.category == "Other"
+    assert stub.calls[0]["response_format"] == {"type": "json_object"}
+    assert stub.calls[0]["temperature"] == 0
+    assert stub.calls[0]["model"] == llm.DEFAULT_GROQ_TRIAGE_MODEL
+
+
+def test_groq_reply_that_breaks_the_schema_raises_rather_than_being_stored():
+    with pytest.raises(Exception):
+        llm.GroqProvider(client=_GroqStub('{"category": "Other"}')).classify("prompt", Shape)
+
+
+def test_groq_failure_is_unavailable_not_a_crash():
     with pytest.raises(llm.LLMUnavailable):
-        llm.GroqProvider(client=object()).classify("prompt", Shape)
+        llm.GroqProvider(client=_GroqStub(error=RuntimeError("boom"))).classify("prompt", Shape)
+
+
+def test_placeholder_groq_secret_counts_as_no_key(monkeypatch):
+    monkeypatch.setenv("GROQ_API_KEY", llm.UNSET_SECRET)
+    assert llm.groq_api_key() is None
+    monkeypatch.setenv("GROQ_API_KEY", "gsk_real")
+    assert llm.groq_api_key() == "gsk_real"
+
+
+def test_gemini_triage_model_defaults_to_the_chat_model():
+    """It used to be left as None when built with no arguments, which is how
+    production builds it, so every Gemini triage call failed."""
+    provider = llm.GeminiProvider(client=object())
+    assert provider.triage_model == provider.chat_model
+    assert provider.triage_model
 
 
 # --- resolution -------------------------------------------------------------

@@ -41,8 +41,13 @@ ALLOWED_MEDIA_TYPES = {
 
 _MEDIA_ID_RE = re.compile(r"[0-9a-f]{32}")
 
+STREAM_PREFIX = "stream_"
+REPORTS_COLLECTION = "messages"
+SIMULATED_PHONE_PREFIX = "+999"  # no country uses 999, so these reach no real phone
+
 _db_var: contextvars.ContextVar = contextvars.ContextVar("sim_db", default=None)
 _sink_var: contextvars.ContextVar = contextvars.ContextVar("sim_outbound", default=None)
+_report_tags_var: contextvars.ContextVar = contextvars.ContextVar("sim_report_tags", default=None)
 
 
 class NamespacedDB:
@@ -58,6 +63,49 @@ class NamespacedDB:
 
     def __getattr__(self, item):
         return getattr(self._db, item)
+
+
+class StreamDB(NamespacedDB):
+    """Storage for the live stream. Unlike the chat sandbox, reports go to the
+    real `messages` collection, because reaching the dashboard is the point.
+    Conversation state stays namespaced so simulated citizens cannot touch a
+    real citizen's session or rate limits."""
+
+    def __init__(self, db):
+        super().__init__(db, prefix=STREAM_PREFIX)
+
+    def collection(self, name: str):
+        if name == REPORTS_COLLECTION:
+            return self._db.collection(REPORTS_COLLECTION)
+        return super().collection(name)
+
+
+def is_simulated_sender(sender: Optional[str]) -> bool:
+    """Numbers under the reserved +999 prefix belong to no one. Anything that
+    messages citizens must skip them."""
+    return bool(sender) and sender.replace("whatsapp:", "").startswith(SIMULATED_PHONE_PREFIX)
+
+
+@contextlib.contextmanager
+def tagging_reports(tags: dict, filed: list) -> Iterator[None]:
+    """Stamp every report filed in this context with its provenance, and collect
+    it so the caller can see what the pipeline decided."""
+    token = _report_tags_var.set((tags, filed))
+    try:
+        yield
+    finally:
+        _report_tags_var.reset(token)
+
+
+def tag_report(report: dict) -> None:
+    """Called by the intake pipeline just before it writes a report. Does nothing
+    outside the stream, so real reports are stored exactly as before."""
+    active = _report_tags_var.get()
+    if active is None:
+        return
+    tags, filed = active
+    report.update(tags)
+    filed.append(report)
 
 
 @contextlib.contextmanager

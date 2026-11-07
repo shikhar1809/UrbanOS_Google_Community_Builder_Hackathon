@@ -1,4 +1,5 @@
 .env
+.env.deploy-hold
 urbanos.db
 firebase-key.json
 venv/

@@ -15,12 +15,22 @@ import asyncio
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+
+# Report timestamps are naive local datetimes, and browsers read them as local
+# time. Cloud Functions run in UTC, which made a report filed just now look 5.5
+# hours old to an office in Lucknow. tzset does not exist on Windows, where the
+# machine's own zone is used instead.
+os.environ.setdefault("TZ", "Asia/Kolkata")
+if hasattr(time, "tzset"):
+    time.tzset()
+
 import analytics as AN
 import guardrails as GR
 import idempotency as IDEM
 import jobs as JOBS
 import llm as LLM
 import sim
+import sim_stream
 import triage as TRIAGE
 from dotenv import load_dotenv
 from twilio.request_validator import RequestValidator
@@ -124,7 +134,7 @@ twilio_validator = RequestValidator(TWILIO_AUTH_TOKEN) if TWILIO_AUTH_TOKEN else
 TWILIO_VALIDATE_SIGNATURE = os.getenv("TWILIO_VALIDATE_SIGNATURE", "true").strip().lower() not in ("0", "false", "no")
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+GROQ_API_KEY = LLM.groq_api_key()
 try:
     gemini_client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
 except Exception as _e:
@@ -671,9 +681,13 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db):
         # cases; this catches the ones only a reader can judge, such as a
         # complaint whose text names a town the location field never mentioned.
         # Fails open - a classifier outage must not silence real complaints.
-        gate_verdict = "accept"
-        gate_reason = ""
-        if description and (_groq_client or gemini_client):
+        #
+        # The phrase check runs first and costs nothing, so the obvious off-topic
+        # messages are still caught when no model can be reached.
+        _topic = GR.check_topic_text(description)
+        gate_verdict = _topic["verdict"]
+        gate_reason = _topic["reason"]
+        if gate_verdict == "accept" and description and (_groq_client or gemini_client) and not TRIAGE.model_cooling():
             try:
                 gate_prompt = GR.build_location_check_prompt(description, location_raw)
                 if _groq_client:
@@ -692,6 +706,7 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db):
                 gate_reason = parsed_gate["reason"]
             except Exception as je:
                 logger.warning(f"[GUARDRAIL] intake screen failed: {je}. Defaulting to accept.")
+                TRIAGE.note_model_failure(je)
 
         if gate_verdict == "reject_location":
             logger.warning(f"[GUARDRAIL] out-of-area report from {sender}: {gate_reason}")
@@ -748,7 +763,13 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db):
                 image_part=image_part,
                 lat=lat,
                 lng=lng,
+                rules_fallback=True,
             )
+            # A text location has no pin, but triage may know roughly where it is.
+            # The geofence still applies, so a wrong guess cannot land off the map.
+            if lat is None and _t.get("estimated_latitude") is not None:
+                if GR.check_coordinates(_t["estimated_latitude"], _t["estimated_longitude"])["verdict"] == "accept":
+                    lat, lng = _t["estimated_latitude"], _t["estimated_longitude"]
         category = _t["category"]
         priority = _t["priority"]
         feasibility = _t["feasibility"]
@@ -794,8 +815,10 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db):
             "triage_status": JOBS.STATUS_PENDING if defer_triage else (
                 JOBS.STATUS_DONE if _t.get("ok") else JOBS.STATUS_FAILED
             ),
+            "triage_source": _t.get("triage_source"),
             "id": doc_ref.id
         }
+        sim.tag_report(new_message)
         doc_ref.set(new_message)
         if defer_triage:
             JOBS.dispatch(db, doc_ref.id, background_tasks,
@@ -839,7 +862,7 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db):
             options = [opt.strip() for opt in active_survey.get('options').split(',')]
             opt_text = "\n".join([f"{i+1}. {opt}" for i, opt in enumerate(options)])
             survey_q = active_survey.get('question')
-            if lang != "English" and gemini_client:
+            if lang != "English" and gemini_client and not TRIAGE.model_cooling():
                 try:
                     tr = gemini_client.models.generate_content(
                         model='gemini-2.5-flash',
@@ -850,7 +873,7 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db):
                     pass
             twiml.message(f"{receipt_msg}\n\n*{survey_q}*\n\nReply with the number of your choice:\n{opt_text}")
         else:
-            if lang != "English" and gemini_client:
+            if lang != "English" and gemini_client and not TRIAGE.model_cooling():
                 try:
                     tr = gemini_client.models.generate_content(
                         model='gemini-2.5-flash',
@@ -1044,7 +1067,8 @@ async def broadcast_survey(survey_id: str, req: BroadcastRequest | None = None, 
     snap = AN.get_snapshot(db)
     window = _audience_window(snap, audience)
     resolved = AN.resolve_audience(snap["records"] or [], audience, window)
-    senders = [r["sender"] for r in resolved["recipients"] if r["sender"]]
+    senders = [r["sender"] for r in resolved["recipients"]
+               if r["sender"] and not sim.is_simulated_sender(r["sender"])]
     label = AN.describe_audience(audience)
 
     if req.dry_run:
@@ -1390,7 +1414,17 @@ def _feed_item(r: dict) -> dict:
         "original_language": r["original_language"],
         "is_urgent": r["is_urgent"],
         "visual_evidence": r["visual_evidence"],
+        "simulated": r["simulated"],
+        "triage_source": r["triage_source"],
     }
+
+
+@app.get("/api/stream/state")
+def api_stream_state(db = Depends(get_db), admin = Depends(verify_admin)):
+    """The simulated stream, for the dashboard's live banner."""
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    return JSONResponse(content=sim_stream.read_state(db))
 
 
 def _window_from_params(snap, range_key, anchor, start, end):
@@ -1654,6 +1688,7 @@ def project_gap_signal(category: str, semantic_tag: str, title: str, demo: dict)
 # (warm Cloud Function instances); invalidated on timeout or new sanction.
 # ---------------------------------------------------------------------------
 _RANKED_CACHE: dict = {"data": None, "at": 0.0, "version": None}
+_JUSTIFICATION_CACHE: dict = {}  # project id -> (text, unix time written)
 CACHE_TTL_SECONDS = 300  # 5 minutes
 
 @app.get("/projects/ranked")
@@ -1749,9 +1784,17 @@ async def get_ranked_projects(db = Depends(get_db), admin = Depends(verify_admin
     ranked.sort(key=lambda x: x["impact_score"], reverse=True)
     top = ranked[:8]
 
-    # Generate AI justification for top 1 (Gemini) - limited to save quota for Chat agent
-    if gemini_client:
+    # Generate AI justification for top 1 (Gemini) - limited to save quota for Chat agent.
+    # Under a live stream the snapshot version moves constantly, so the same project
+    # would otherwise be re-justified on every dashboard refresh.
+    for proj in top[:1]:
+        cached = _JUSTIFICATION_CACHE.get(proj["id"])
+        if cached and now - cached[1] < CACHE_TTL_SECONDS:
+            proj["justification"] = cached[0]
+    if gemini_client and not TRIAGE.model_cooling():
         for proj in top[:1]:
+            if proj.get("justification"):
+                continue
             try:
                 demo = proj["demographics"]
                 gap_signal = proj["evidence"]["gap_signal"]
@@ -1776,8 +1819,10 @@ async def get_ranked_projects(db = Depends(get_db), admin = Depends(verify_admin
                     contents=prompt
                 )
                 proj["justification"] = resp.text.strip().replace('"', '')
+                _JUSTIFICATION_CACHE[proj["id"]] = (proj["justification"], now)
             except Exception as e:
                 logger.error(f"[AI JUSTIFICATION] Failed: {e}")
+                TRIAGE.note_model_failure(e)
                 gap_signal = proj["evidence"]["gap_signal"]
                 proj["justification"] = f"{proj['demand_count']} citizens in {proj['zone']} flagged this. Evidence: {gap_signal['label']} is {gap_signal['value']}{gap_signal['unit']}."
 
@@ -1853,6 +1898,7 @@ def mark_sanctioned(db, refs: list) -> int:
 
 def notify_sanctioned(senders: list, title: str, project_id: str) -> int:
     """Tell citizens their proposal was sanctioned. Runs after the response."""
+    senders = [s for s in senders if not sim.is_simulated_sender(s)]
     if not senders:
         return 0
     if not (TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN and TWILIO_WHATSAPP_NUMBER):
@@ -2071,6 +2117,8 @@ def _run_asgi(asgi_app, req: https_fn.Request) -> https_fn.Response:
     secrets=[
         "ADMIN_EMAILS",
         "GEMINI_API_KEY",
+        # Add "GROQ_API_KEY" here and on `sandbox` once that secret exists: a
+        # deploy fails outright if a declared secret is missing.
         "TWILIO_ACCOUNT_SID",
         "TWILIO_AUTH_TOKEN",
         "TWILIO_WHATSAPP_NUMBER",
@@ -2082,7 +2130,14 @@ def api(req: https_fn.Request) -> https_fn.Response:
 # WhatsApp sandbox: a Twilio-free replica of the intake flow for testing. It has
 # its own function and hosting site, and only exposes /sim/* routes that write
 # to sim_* collections. Deploy it alone with `firebase deploy --only functions:sandbox`.
-@https_fn.on_request(memory=options.MemoryOption.GB_1, timeout_sec=300, secrets=["SIM_ACCESS_CODE"])
+#
+# It also runs the live stream, which needs the model keys to triage for real.
+# Twilio is deliberately not bound: nothing here may ever send a real message.
+@https_fn.on_request(
+    memory=options.MemoryOption.GB_1,
+    timeout_sec=300,
+    secrets=["SIM_ACCESS_CODE", "GEMINI_API_KEY"],
+)
 def sandbox(req: https_fn.Request) -> https_fn.Response:
     # Imported here: sim_api imports this module, so a top-level import would cycle.
     from sim_api import sim_app

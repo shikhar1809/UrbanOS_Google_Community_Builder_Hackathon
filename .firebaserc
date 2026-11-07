@@ -7,6 +7,9 @@
       "hosting": {
         "sandbox": [
           "urbanos-whatsapp-sandbox"
+        ],
+        "whatsapp": [
+          "urbanos-whatsapp"
         ]
       }
     }
