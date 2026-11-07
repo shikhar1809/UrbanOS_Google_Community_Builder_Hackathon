@@ -227,7 +227,71 @@
         0%   { transform: scale(0.8); opacity: 1; }
         100% { transform: scale(2.2); opacity: 0; }
     }
-    
+
+    /* A complaint landing on the city: ripples at its real location, in its priority colour. */
+    .arrival { position: relative; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; }
+    .arrival i {
+        position: absolute; inset: 0; border-radius: 50%; border: 2px solid var(--tone);
+        opacity: 0; animation: arrivalRing 1.6s cubic-bezier(0.16, 1, 0.3, 1) 2;
+    }
+    .arrival i + i { animation-delay: .35s; }
+    .arrival b {
+        width: 12px; height: 12px; border-radius: 50%; background: var(--tone); border: 2px solid #FFFFFF;
+        box-shadow: 0 2px 6px rgba(15, 23, 42, .35); animation: arrivalLand .45s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .arrival.urgent i { border-width: 3px; animation-iteration-count: 4; }
+    .arrival.urgent b { width: 16px; height: 16px; }
+    @keyframes arrivalRing {
+        0%   { transform: scale(.6); opacity: .9; }
+        100% { transform: scale(4.2); opacity: 0; }
+    }
+    @keyframes arrivalLand {
+        0%   { transform: scale(2.4); opacity: 0; }
+        100% { transform: scale(1); opacity: 1; }
+    }
+    .leaflet-tooltip.arrival-tip {
+        border: 0; border-radius: 8px; padding: 6px 9px; background: #0F172A; color: #FFFFFF;
+        font: 600 11px/1.3 'Inter', system-ui, sans-serif; max-width: 220px; white-space: normal; width: max-content;
+        box-shadow: 0 6px 18px rgba(15, 23, 42, .3);
+    }
+    .leaflet-tooltip-top.arrival-tip::before { border-top-color: #0F172A; }
+
+    /* Urgent reports, visible from every page. */
+    #live-alerts {
+        position: fixed; right: 16px; bottom: 16px; z-index: 9001; display: flex; flex-direction: column; gap: 8px;
+        width: min(320px, calc(100vw - 32px)); pointer-events: none;
+    }
+    .live-alert {
+        pointer-events: auto; display: grid; grid-template-columns: 10px 1fr; column-gap: 10px; width: 100%; padding: 11px 13px;
+        text-align: left; cursor: pointer; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-card); color: var(--text-primary);
+        font-family: 'Inter', system-ui, sans-serif; box-shadow: 0 10px 28px rgba(15, 23, 42, .18);
+        animation: liveAlertIn .4s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .live-alert:hover { background: #F8FAFC; }
+    .live-alert:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+    .live-alert.leaving { opacity: 0; transform: translateX(16px); transition: opacity .2s ease-in, transform .2s ease-in; }
+    .live-alert .dot { width: 10px; height: 10px; margin-top: 3px; border-radius: 50%; background: var(--tone); }
+    .live-alert strong { display: block; font-size: 11px; font-weight: 700; color: var(--tone); }
+    .live-alert span { display: block; margin-top: 2px; font-size: 13px; font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
+    .live-alert small { display: block; margin-top: 3px; font-size: 11px; color: var(--text-secondary); }
+    @keyframes liveAlertIn {
+        from { opacity: 0; transform: translateX(28px); }
+        to   { opacity: 1; transform: translateX(0); }
+    }
+    /* A number that just changed. */
+    .live-tick { animation: liveTick 1s cubic-bezier(0.16, 1, 0.3, 1); }
+    @keyframes liveTick {
+        0%   { color: var(--blue-dark); transform: translateY(-2px); }
+        100% { transform: translateY(0); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .arrival i { display: none; }
+        .arrival b, .live-alert { animation-name: liveFadeIn; }
+        .live-tick { animation-name: liveTickColor; }
+    }
+    @keyframes liveFadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes liveTickColor { 0% { color: var(--blue-dark); } }
+
     /* Route/journey card */
     .route-card {
         position: absolute;
@@ -1272,6 +1336,160 @@
             }
         }
 
+        // ===================================================================
+        // URBANLIVE - what the dashboard does when a report arrives
+        // ===================================================================
+        // The feed's delta poll is the one signal. It covers real WhatsApp reports
+        // and the simulated stream alike, so both look the same on screen.
+        //   * every report ripples on the map at its real location, without moving it
+        //   * Critical and High also get a map label and an alert visible on any page
+        //   * numbers count up, and the dashboards refresh on a steady rhythm
+        window.UrbanLive = (function () {
+            const REFRESH_MS = 6000;
+            const RANKING_REFRESH_MS = 20000;
+            const STAGGER_MS = 700;    // a batch lands across the poll, not all at once
+            const MAX_LANDINGS = 6;
+            const LANDING_MS = 8000;   // long enough for the next refresh to draw its pin
+            const ALERT_MS = 7000;
+            const MAX_ALERTS = 3;
+            const PAN_GAP_MS = 12000;
+            const TONES = { Critical: '#DC2626', High: '#B45309', Medium: '#2563EB', Low: '#475569' };
+
+            const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            const isUrgent = m => m.priority === 'Critical' || m.priority === 'High';
+            const tone = m => TONES[m.priority] || TONES.Low;
+            const headline = m => m.summary || m.category || 'New civic report';
+            const tweens = new WeakMap();
+
+            let lastRefresh = 0, lastRanking = 0, refreshTimer = null, lastPan = 0;
+
+            function refreshDashboards() {
+                const wait = lastRefresh + REFRESH_MS - Date.now();
+                if (wait > 0) {
+                    if (!refreshTimer) refreshTimer = setTimeout(() => { refreshTimer = null; refreshDashboards(); }, wait);
+                    return;
+                }
+                lastRefresh = Date.now();
+                fetchMessages();
+                if (window.UrbanInsights) UrbanInsights.refresh();
+                if (Date.now() - lastRanking > RANKING_REFRESH_MS) {
+                    lastRanking = Date.now();
+                    fetchRankedProjects();
+                }
+            }
+
+            function land(m) {
+                const map = window.liveMap;
+                if (!map || !m.latitude || !m.longitude) return;
+                const urgent = isUrgent(m);
+                const icon = L.divIcon({
+                    className: '',
+                    html: '<div class="arrival' + (urgent ? ' urgent' : '') + '" style="--tone:' + tone(m) + '"><i></i><i></i><b></b></div>',
+                    iconSize: [18, 18], iconAnchor: [9, 9],
+                });
+                const where = [m.latitude, m.longitude];
+                const marker = L.marker(where, { icon, zIndexOffset: 2000, interactive: false }).addTo(map);
+                if (urgent) {
+                    // A node rather than a string: Leaflet treats a tooltip string as HTML.
+                    const label = document.createElement('div');
+                    label.textContent = headline(m);
+                    marker.bindTooltip(label, { permanent: true, direction: 'top', offset: [0, -12], className: 'arrival-tip' });
+                }
+                setTimeout(() => { if (map.hasLayer(marker)) map.removeLayer(marker); }, LANDING_MS);
+
+                // Only a Critical report off-screen justifies moving the operator's map.
+                if (m.priority === 'Critical' && Date.now() - lastPan > PAN_GAP_MS
+                    && document.getElementById('view-live')?.classList.contains('active')
+                    && !map.getBounds().pad(-0.15).contains(where)) {
+                    lastPan = Date.now();
+                    map.panTo(where, { animate: !reducedMotion(), duration: 1 });
+                }
+            }
+
+            function alertsRoot() {
+                let root = document.getElementById('live-alerts');
+                if (!root) {
+                    root = document.createElement('div');
+                    root.id = 'live-alerts';
+                    root.setAttribute('role', 'status');
+                    root.setAttribute('aria-live', 'polite');
+                    document.body.appendChild(root);
+                }
+                return root;
+            }
+
+            function dismiss(card) {
+                if (!card.isConnected || card.classList.contains('leaving')) return;
+                card.classList.add('leaving');
+                setTimeout(() => card.remove(), 200);
+            }
+
+            function raiseAlert(m) {
+                const card = document.createElement('button');
+                card.type = 'button';
+                card.className = 'live-alert';
+                card.style.setProperty('--tone', tone(m));
+                const dot = document.createElement('div');
+                dot.className = 'dot';
+                const text = document.createElement('div');
+                const level = document.createElement('strong');
+                level.textContent = m.priority + ' report';
+                const title = document.createElement('span');
+                title.textContent = headline(m);
+                const meta = document.createElement('small');
+                meta.textContent = [m.ward_no, m.responsible_body].filter(Boolean).join(' · ');
+                text.append(level, title, meta);
+                card.append(dot, text);
+                card.addEventListener('click', () => {
+                    dismiss(card);
+                    switchView('live');
+                    if (window.liveMap && m.latitude && m.longitude) {
+                        setTimeout(() => window.liveMap.flyTo([m.latitude, m.longitude], 16, { animate: !reducedMotion(), duration: 1.2 }), 350);
+                    }
+                });
+                const root = alertsRoot();
+                root.appendChild(card);
+                const live = root.querySelectorAll('.live-alert:not(.leaving)');
+                if (live.length > MAX_ALERTS) dismiss(live[0]);
+                setTimeout(() => dismiss(card), ALERT_MS);
+            }
+
+            // Count a stat up to its new value, then mark it so the eye finds the change.
+            function setNumber(id, value) {
+                const node = document.getElementById(id);
+                if (!node) return;
+                const from = parseInt(String(node.textContent).replace(/[^0-9-]/g, ''), 10);
+                const previous = tweens.get(node);
+                if (previous) cancelAnimationFrame(previous);
+                if (Number.isNaN(from) || from === value) { node.textContent = value; return; }
+                if (value > from) {
+                    node.classList.remove('live-tick');
+                    void node.offsetWidth;   // restarts the animation on repeated arrivals
+                    node.classList.add('live-tick');
+                }
+                if (reducedMotion() || document.hidden || !node.offsetParent) { node.textContent = value; return; }
+                const began = performance.now();
+                const step = now => {
+                    const t = Math.min((now - began) / 600, 1);
+                    node.textContent = Math.round(from + (value - from) * (1 - Math.pow(1 - t, 3)));
+                    if (t < 1) tweens.set(node, requestAnimationFrame(step));
+                };
+                tweens.set(node, requestAnimationFrame(step));
+            }
+
+            function arrive(items) {
+                // The server sends newest first; they land in the order they were filed.
+                const batch = items.slice(0, MAX_LANDINGS).reverse();
+                batch.forEach((m, i) => setTimeout(() => {
+                    land(m);
+                    if (isUrgent(m)) raiseAlert(m);
+                }, reducedMotion() ? 0 : i * STAGGER_MS));
+                refreshDashboards();
+            }
+
+            return { arrive, setNumber };
+        })();
+
         // Fetch Live Messages from FastAPI backend
         // ===================================================================
         // URBANFEED - raw incident feed controller
@@ -1488,6 +1706,7 @@
                     state.total = d.filtered_total;
                     state.offset += d.items.length;
                     setCounts();
+                    UrbanLive.arrive(d.items);
                     const badge = el('feed-live-badge');
                     if (badge) {
                         badge.textContent = '+' + d.items.length + ' new';
@@ -1572,13 +1791,11 @@
         })();
 
         // Shows when the simulated stream is running and keeps the map, counters
-        // and planning queue moving with it. The feed cards update themselves via
-        // UrbanFeed's delta poll; everything else is on a slow timer unless a
-        // stream is actually producing reports.
+        // and planning queue moving with it. Arrivals themselves are handled by UrbanLive,
+        // from the feed's delta poll; this only paints the banner and latency.
         window.UrbanStream = (function () {
             const STATE_POLL_MS = 4000;
-            const REFRESH_EVERY_MS = 8000;
-            let started = false, lastFiled = null, lastRefresh = 0, bar = null;
+            let started = false, bar = null;
 
             function ensureBar() {
                 if (bar) return bar;
@@ -1614,13 +1831,6 @@
                     if (!res.ok) return;
                     const s = await res.json();
                     paint(s);
-                    const grew = lastFiled !== null && s.filed > lastFiled;
-                    lastFiled = s.filed;
-                    if (grew && Date.now() - lastRefresh > REFRESH_EVERY_MS) {
-                        lastRefresh = Date.now();
-                        fetchMessages();
-                        fetchRankedProjects();
-                    }
                 } catch (e) { /* the banner is not worth surfacing an error for */ }
             }
 
@@ -1660,23 +1870,11 @@
                                 canvas.appendChild(packet);
                                 setTimeout(() => packet.remove(), 1500);
                             }
-                            const rawMsg = data[i];
-                            if (window.liveMap && rawMsg && rawMsg.latitude && rawMsg.longitude) {
-                                const pulseIcon = L.divIcon({
-                                    className: 'custom-div-icon',
-                                    html: '<div class="pin-pulse"><div class="ring"></div><div class="core"></div></div>',
-                                    iconSize: [28, 28], iconAnchor: [14, 14]
-                                });
-                                const marker = L.marker([rawMsg.latitude, rawMsg.longitude], { icon: pulseIcon }).addTo(window.liveMap);
-                                setTimeout(() => { if (window.liveMap.hasLayer(marker)) window.liveMap.removeLayer(marker); }, 4000);
-                                window.liveMap.setView([rawMsg.latitude, rawMsg.longitude], 14, { animate: true });
-                            }
                         }, i * 300);
                     }
                 }
 
-                const counterEl = document.getElementById('msg-counter');
-                if (counterEl) counterEl.innerText = data.length;
+                UrbanLive.setNumber('msg-counter', data.length);
 
                 lastMessageCount = data.length;
 
@@ -1768,10 +1966,10 @@
 
                 // KPIs
                 const setEl = (id, v) => { const e = document.getElementById(id); if(e) e.innerText = v; };
-                setEl('ana-total', anaTotal - 1 < 0 ? 0 : anaTotal);
-                setEl('ana-critical', anaCrit);
-                setEl('ana-week', anaWeek);
-                setEl('ana-sanctioned', anaSanc);
+                UrbanLive.setNumber('ana-total', anaTotal - 1 < 0 ? 0 : anaTotal);
+                UrbanLive.setNumber('ana-critical', anaCrit);
+                UrbanLive.setNumber('ana-week', anaWeek);
+                UrbanLive.setNumber('ana-sanctioned', anaSanc);
 
                 // Status Pipeline bars
                 const pTotal = Object.values(statusPipe).reduce((a,b) => a+b, 1);
@@ -3624,9 +3822,9 @@
                 const d = await res.json();
                 const h = d.headline || {};
                 const set = (id, v) => { const e = el(id); if (e) e.textContent = v; };
-                set('ins-kpi-total', h.total != null ? h.total : '-');
-                set('ins-kpi-open', h.open != null ? h.open : '-');
-                set('ins-kpi-critical', h.critical != null ? h.critical : '-');
+                [['ins-kpi-total', h.total], ['ins-kpi-open', h.open], ['ins-kpi-critical', h.critical]].forEach(([id, v]) => {
+                    if (v != null) UrbanLive.setNumber(id, v); else set(id, '-');
+                });
                 set('ins-kpi-resolution', h.resolution_rate != null ? Math.round(h.resolution_rate * 100) + '%' : '-');
                 const note = el('insights-window-note');
                 if (note) {
@@ -3640,6 +3838,7 @@
         }
 
         return {
+            refresh,
             init() {
                 if (state.started) return;
                 state.started = true;
