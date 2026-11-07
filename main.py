@@ -8,7 +8,7 @@ from fastapi import FastAPI, Request, HTTPException, Depends, BackgroundTasks, U
 from twilio.twiml.messaging_response import MessagingResponse
 from twilio.rest import Client
 from state import get_session, update_session, clear_session
-from worker import process_voice_note
+from worker import process_voice_note, send_whatsapp_message
 import json
 import logging
 import asyncio
@@ -369,6 +369,32 @@ async def receive_whatsapp(request: Request, background_tasks: BackgroundTasks, 
     except Exception as exc:
         logger.error(f"[IDEMPOTENCY] could not record reply: {exc}")
     return response
+
+def _notify_triage_details(report: dict) -> bool:
+    """Second message of a deferred report: what triage decided, and who has it."""
+    ref_id = report.get("reference_id")
+    body = (
+        f"📋 *Update on your report #{ref_id}*\n\n"
+        f"📂 Category: {report.get('category') or 'General'}\n"
+        f"⚡ Priority: {report.get('priority') or 'Normal'}\n\n"
+        f"🏛️ *Assigned To:*\n"
+        f"• Ward: *{report.get('ward_no') or 'To be confirmed'}*\n"
+        f"• Department: *{report.get('responsible_body') or 'Municipal Corporation'}*\n"
+        f"• Officer: *{report.get('ward_officer') or 'To be confirmed'}*\n\n"
+        f"ℹ️ Reply STATUS {ref_id} at any time for an update."
+    )
+    lang = report.get("citizen_language") or "English"
+    if lang != "English" and gemini_client and not TRIAGE.model_cooling():
+        try:
+            tr = gemini_client.models.generate_content(
+                model='gemini-2.5-flash',
+                contents=f"Translate ONLY this text to {lang}, keep the reference ID #{ref_id}, the word STATUS and names exactly as is. Preserve newlines:\n{body}"
+            )
+            body = tr.text.strip()
+        except Exception:
+            pass  # an English update is better than none
+    return send_whatsapp_message(report.get("sender"), body) is not None
+
 
 def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db):
     sender = form_data.get("From", "")
@@ -818,13 +844,16 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db):
             "triage_source": _t.get("triage_source"),
             "id": doc_ref.id
         }
+        if defer_triage:
+            new_message.update(JOBS.details_fields(sender, lang))
         sim.tag_report(new_message)
         doc_ref.set(new_message)
         if defer_triage:
             JOBS.dispatch(db, doc_ref.id, background_tasks,
                           runner=lambda _db, _id: JOBS.process_triage(
                               _db, _id, client=LLM.get_provider(),
-                              media_loader=fetch_twilio_media_part))
+                              media_loader=fetch_twilio_media_part,
+                              notifier=_notify_triage_details))
         # Bust RAG + messages cache so new report is immediately visible
         _RAG_CACHE["data"] = None
         _RAG_CACHE["at"] = 0.0
@@ -844,18 +873,29 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db):
         user_name = session_data.get("user_name", "Citizen")
         
         # Build the rich receipt message
-        receipt_msg = (
-            f"✅ *Issue Logged Successfully!*\n\n"
-            f"📌 Reference: *#{ref_id}*\n"
-            f"👤 Reported by: {user_name}\n"
-            f"📂 Category: {category or 'General'}\n"
-            f"⚡ Priority: {priority or 'Normal'}\n\n"
-            f"🏛️ *Assigned To:*\n"
-            f"• Ward: *{_ward_no}*\n"
-            f"• Department: *{_responsible_body}*\n"
-            f"• Officer: *{_ward_officer}*\n\n"
-            f"ℹ️ {_ward_officer} of {_responsible_body} has been notified. You will receive swift updates. Please await a follow-up survey."
-        )
+        if defer_triage:
+            # Nothing has been decided yet, so promise the details rather than
+            # show generic values as if they were the assignment.
+            receipt_msg = (
+                f"✅ *Issue Logged Successfully!*\n\n"
+                f"📌 Reference: *#{ref_id}*\n"
+                f"👤 Reported by: {user_name}\n\n"
+                f"⏳ We are assigning your report now. We will message you shortly with its "
+                f"category, priority, department and officer."
+            )
+        else:
+            receipt_msg = (
+                f"✅ *Issue Logged Successfully!*\n\n"
+                f"📌 Reference: *#{ref_id}*\n"
+                f"👤 Reported by: {user_name}\n"
+                f"📂 Category: {category or 'General'}\n"
+                f"⚡ Priority: {priority or 'Normal'}\n\n"
+                f"🏛️ *Assigned To:*\n"
+                f"• Ward: *{_ward_no}*\n"
+                f"• Department: *{_responsible_body}*\n"
+                f"• Officer: *{_ward_officer}*\n\n"
+                f"ℹ️ {_ward_officer} of {_responsible_body} has been notified. You will receive swift updates. Please await a follow-up survey."
+            )
         
         if active_survey:
             update_session(db, sender, "awaiting_survey", {"survey_id": active_survey.get('id'), "user_name": user_name})
@@ -2011,6 +2051,7 @@ async def retriage_reports(limit: int = 100, db = Depends(get_db), admin = Depen
         JOBS.retriage_pending, db, limit,
         client=LLM.get_provider(),
         media_loader=fetch_twilio_media_part,
+        notifier=_notify_triage_details,
     )
     if result["triaged"]:
         AN.invalidate_snapshot()

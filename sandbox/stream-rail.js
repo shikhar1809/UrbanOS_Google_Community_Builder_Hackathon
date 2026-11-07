@@ -5,7 +5,6 @@
   'use strict';
 
   const API = '/sim/api/stream/';
-  const CHAT_SESSION_KEY = 'urbanos-sandbox-v1';
   const CODE_KEY = 'urbanos-stream-code';
   const WATCH_MS = 4000;
   const REASONS = {
@@ -143,16 +142,9 @@
   let runId = null;
   let holdStatusUntil = 0;
 
-  function storedCode() {
-    try {
-      const fromStream = sessionStorage.getItem(CODE_KEY);
-      if (fromStream) return fromStream;
-      const chat = JSON.parse(localStorage.getItem(CHAT_SESSION_KEY) || 'null');
-      return (chat && chat.code) || '';
-    } catch { return ''; }
-  }
-  function saveCode(code) { try { sessionStorage.setItem(CODE_KEY, code); } catch { /* private mode */ } }
-  function forgetCode() { try { sessionStorage.removeItem(CODE_KEY); } catch { /* private mode */ } }
+  function storedCode() { try { return localStorage.getItem(CODE_KEY) || ''; } catch { return ''; } }
+  function saveCode(value) { try { localStorage.setItem(CODE_KEY, value); } catch { /* private mode */ } }
+  function forgetCode() { try { localStorage.removeItem(CODE_KEY); } catch { /* private mode */ } }
 
   let code = storedCode();
 

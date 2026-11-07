@@ -41,27 +41,33 @@ def test_twiml_bodies_extracts_each_message():
     assert sim_api._twiml_bodies(b"<Response></Response>") == []
 
 
-def test_status_is_open_when_no_access_code_configured(monkeypatch):
-    monkeypatch.delenv("SIM_ACCESS_CODE", raising=False)
-    client = TestClient(sim_app)
-
-    response = client.get("/sim/api/status")
-
-    assert response.status_code == 200
-    assert response.json()["access_code_required"] is False
-
-
-def test_access_code_gates_api_routes(monkeypatch):
+def test_the_chat_needs_no_code_even_when_one_is_configured(monkeypatch):
+    """The code protects the stream, which writes to real collections. The chat
+    stays open so anyone with the link can try it."""
     monkeypatch.setenv("SIM_ACCESS_CODE", "let-me-in")
     client = TestClient(sim_app)
 
-    assert client.get("/sim/api/status").status_code == 401
-    assert client.get("/sim/api/status", headers={"X-Sim-Code": "wrong"}).status_code == 401
-    assert client.get("/sim/api/status", headers={"X-Sim-Code": "let-me-in"}).status_code == 200
+    assert client.get("/sim/api/status").status_code == 200
+    # 422 rather than 401: past any gate, and stopped by input validation.
+    assert client.post("/sim/api/message", json={"phone": "bad"}).status_code == 422
+    assert client.post("/sim/api/media", json={"content_type": "text/html", "data": "AAAA"}).status_code == 422
+    assert client.post("/sim/api/reset", json={"phone": "bad"}).status_code == 422
+
+
+def test_the_chat_writes_only_to_sandbox_collections(monkeypatch):
+    """What makes leaving it open acceptable."""
+    from tests.fakes import FakeFirestore
+    db = FakeFirestore()
+    monkeypatch.setattr(sim_api, "firestore_db", db)
+    client = TestClient(sim_app)
+
+    assert client.post("/sim/api/message", json={"phone": "919900000003", "body": "hi"}).status_code == 200
+
+    assert db.data, "the message should have been processed"
+    assert all(name.startswith("sim_") for name in db.data)
 
 
 def test_bad_input_is_rejected_before_touching_storage(monkeypatch):
-    monkeypatch.delenv("SIM_ACCESS_CODE", raising=False)
     client = TestClient(sim_app)
 
     bad_phone = client.post("/sim/api/message", json={"phone": "not-a-number", "body": "hi"})

@@ -380,10 +380,6 @@
       <label for="phone">Your phone number, with country code</label>
       <input id="phone" name="phone" inputmode="tel" autocomplete="tel" placeholder="91 98765 43210">
     </div>
-    <div class="field">
-      <label for="code">Sandbox access code</label>
-      <input id="code" name="code" type="password" autocomplete="off" placeholder="Access code">
-    </div>
     <p id="form-error" class="form-error" role="alert"></p>
     <button id="continue" class="btn-primary" type="submit">Open chat</button>
     <p class="gate-foot">Test data only. Your number is used as the chat identity in the sandbox database.</p>
@@ -606,16 +602,9 @@
   // ---------- network ----------
   async function api(path, options = {}) {
     const headers = { 'Content-Type': 'application/json' };
-    // Only sent when the deployment is configured to require a code.
-    if (session && session.code) headers['X-Sim-Code'] = session.code;
     const res = await fetch(path, { method: options.method || 'GET', headers, body: options.body });
     let data = {};
     try { data = await res.json(); } catch { /* empty body */ }
-    if (res.status === 401) {
-      const err = new Error('Access code rejected');
-      err.auth = true;
-      throw err;
-    }
     if (!res.ok) throw new Error(typeof data.detail === 'string' ? data.detail : `Request failed (${res.status})`);
     return data;
   }
@@ -626,10 +615,9 @@
     document.body.classList.remove('signed-in');
     $('#gate').hidden = false;
     $('#form-error').textContent = message || '';
-    // Prefilled with a generated test number so only the code has to be typed.
+    // Prefilled with a generated test number so one click opens the chat.
     $('#phone').value = session ? digits(session.phone) : generatePhone();
-    $('#code').value = '';
-    $('#code').focus();
+    $('#continue').focus();
   }
 
   function showApp() {
@@ -848,7 +836,6 @@
       }
       out.status = 'read';
     } catch (err) {
-      if (err.auth) { signOut('That access code is not right. Please sign in again.'); return; }
       out.status = 'failed';
       out.error = err.message;
       toast(err.message);
@@ -941,7 +928,6 @@
       out.url = up.url;
       await dispatch(out, { media_id: up.id, media_type: blob.type, body: '' });
     } catch (err) {
-      if (err.auth) { signOut('That access code is not right. Please sign in again.'); return; }
       out.status = 'failed';
       toast(err.message);
       renderAll();
@@ -1006,7 +992,6 @@
       out.url = up.url;
       await dispatch(out, { media_id: up.id, media_type: mime, body: '' });
     } catch (err) {
-      if (err.auth) { signOut('That access code is not right. Please sign in again.'); return; }
       out.status = 'failed';
       toast(err.message);
       renderAll();
@@ -1090,7 +1075,6 @@
   async function onSignIn(event) {
     event.preventDefault();
     const phone = digits($('#phone').value);
-    const code = $('#code').value.trim();
     const error = $('#form-error');
     error.textContent = '';
     if (phone.length < 8 || phone.length > 15) {
@@ -1099,12 +1083,12 @@
     }
     const button = $('#continue');
     button.disabled = true;
-    session = { phone, code, thread: [] };
+    session = { phone, thread: [] };
     try {
       await api('/sim/api/status');
     } catch (err) {
       session = null;
-      error.textContent = err.auth ? 'That access code is not right.' : `Could not reach the sandbox. ${err.message}`;
+      error.textContent = `Could not reach the sandbox. ${err.message}`;
       button.disabled = false;
       return;
     }
@@ -1125,7 +1109,6 @@
       renderAll();
       toast('Conversation reset.');
     } catch (err) {
-      if (err.auth) return signOut('That access code is not right. Please sign in again.');
       toast(err.message);
     } finally {
       button.disabled = false;
@@ -1195,11 +1178,6 @@
     syncComposer();
     if (!session) return showGate('');
     showApp();
-    try {
-      await api('/sim/api/status');
-    } catch (err) {
-      if (err.auth) signOut('Access code changed. Please sign in again.');
-    }
   }
 
   boot();

@@ -19,6 +19,13 @@ not survive an instance being evicted mid-task, which is exactly what
 
 Everything here is idempotent: a report already triaged is skipped, so a
 repeated job is harmless.
+
+Two messages
+------------
+A deferred report is answered with an instant receipt, before triage has decided
+anything, so the category, ward and officer follow in a second message. Only a
+report flagged at filing gets one: draining an old backlog must not message
+citizens who were already given a full receipt.
 """
 
 from __future__ import annotations
@@ -26,6 +33,9 @@ from __future__ import annotations
 import logging
 import os
 from datetime import datetime, timezone
+
+import idempotency as IDEM
+import sim
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +48,10 @@ STATUS_FAILED = "failed"
 BACKEND_INLINE = "inline"
 BACKEND_BACKGROUND = "background"
 
+DETAILS_FIELD = "details_notification"
+DETAILS_PENDING = "pending"
+DETAILS_SENT = "sent"
+
 
 def backend() -> str:
     """Read per call so it can be switched without a redeploy."""
@@ -46,6 +60,16 @@ def backend() -> str:
         logger.warning("[JOBS] unknown TRIAGE_BACKEND %r, falling back to inline", choice)
         return BACKEND_INLINE
     return choice
+
+
+def details_fields(sender: str, language: str) -> dict:
+    """Fields that ask for a details message once this report has been triaged.
+
+    Empty for a simulated citizen: anything that messages citizens must skip them.
+    """
+    if sim.is_simulated_sender(sender):
+        return {}
+    return {DETAILS_FIELD: DETAILS_PENDING, "citizen_language": language}
 
 
 def dispatch(db, doc_id: str, background_tasks=None, runner=None) -> str:
@@ -64,12 +88,15 @@ def dispatch(db, doc_id: str, background_tasks=None, runner=None) -> str:
     return BACKEND_INLINE
 
 
-def process_triage(db, doc_id: str, triage_module=None, client=None, media_loader=None) -> bool:
+def process_triage(db, doc_id: str, triage_module=None, client=None, media_loader=None, notifier=None) -> bool:
     """Classify an already-filed report and write the fields back.
 
     Returns True when the report ends up triaged. Never raises: this runs
     detached from any request, so there is nobody to return an error to, and a
     failure must leave the report retriable rather than lost.
+
+    `notifier(report) -> bool` delivers the details message for a flagged report
+    and reports whether it was accepted for delivery.
     """
     import triage as default_triage
     triage_module = triage_module or default_triage
@@ -86,7 +113,10 @@ def process_triage(db, doc_id: str, triage_module=None, client=None, media_loade
         return False
 
     if report.get("triage_status") == STATUS_DONE:
-        return True  # already done; a repeated job must not re-bill the model
+        # Already done; a repeated job must not re-bill the model. It may still
+        # owe the citizen a message that an earlier attempt could not deliver.
+        _send_details(db, ref, doc_id, report, notifier)
+        return True
 
     image_part = None
     if media_loader:
@@ -135,7 +165,34 @@ def process_triage(db, doc_id: str, triage_module=None, client=None, media_loade
     if not _safe_update(ref, update, doc_id):
         return False
     logger.info("[JOBS] triaged %s as %s/%s", doc_id, result["category"], result["priority"])
+    _send_details(db, ref, doc_id, {**report, **update}, notifier)
     return True
+
+
+def _send_details(db, ref, doc_id: str, report: dict, notifier) -> None:
+    """Deliver a flagged report's details message once, even with competing jobs."""
+    if notifier is None or report.get(DETAILS_FIELD) != DETAILS_PENDING:
+        return
+
+    claim_id = f"triage-details-{doc_id}"
+    if not IDEM.claim(db, claim_id).granted:
+        return
+
+    try:
+        delivered = notifier(report)
+    except Exception as e:
+        logger.error("[JOBS] details message failed for %s: %s", doc_id, e, exc_info=True)
+        delivered = False
+
+    if not delivered:
+        IDEM.release(db, claim_id)  # the flag stays pending, so a later run retries
+        return
+
+    _safe_update(ref, {
+        DETAILS_FIELD: DETAILS_SENT,
+        "details_sent_at": datetime.now(timezone.utc).isoformat(),
+    }, doc_id)
+    IDEM.record_reply(db, claim_id, DETAILS_SENT)
 
 
 def _safe_update(ref, data: dict, doc_id: str) -> bool:
@@ -148,27 +205,33 @@ def _safe_update(ref, data: dict, doc_id: str) -> bool:
 
 
 def pending_reports(db, limit: int = 100) -> list:
-    """Report ids that still need triage.
+    """Report ids that still need triage or an undelivered details message.
 
     Covers both reports filed while triage was deferred and reports whose
     triage failed, which is the state the whole backlog landed in while the
     model quota was exhausted.
     """
     found: list[str] = []
-    for status in (STATUS_PENDING, STATUS_FAILED):
+    wanted = (("triage_status", STATUS_PENDING),
+              ("triage_status", STATUS_FAILED),
+              (DETAILS_FIELD, DETAILS_PENDING))
+    for field, value in wanted:
         if len(found) >= limit:
             break
         try:
             query = db.collection(COLLECTION)
             try:
                 from google.cloud.firestore_v1.base_query import FieldFilter
-                query = query.where(filter=FieldFilter("triage_status", "==", status))
+                query = query.where(filter=FieldFilter(field, "==", value))
             except Exception:
-                query = query.where("triage_status", "==", status)
-            for doc in query.limit(limit - len(found)).stream():
-                found.append(doc.id)
+                query = query.where(field, "==", value)
+            # A report awaiting triage usually awaits its details message too, so
+            # ask for `limit` and let the check below cap and de-duplicate.
+            for doc in query.limit(limit).stream():
+                if len(found) < limit and doc.id not in found:
+                    found.append(doc.id)
         except Exception as e:
-            logger.error("[JOBS] could not list %s reports: %s", status, e)
+            logger.error("[JOBS] could not list %s=%s reports: %s", field, value, e)
     return found
 
 

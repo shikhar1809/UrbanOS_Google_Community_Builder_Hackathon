@@ -34,19 +34,10 @@ sim_app = FastAPI(title="UrbanOS WhatsApp sandbox", docs_url=None, redoc_url=Non
 
 
 def access_code() -> str:
-    """Shared secret for the chat UI, read per request so the secret can be
-    rotated without a code change. When unset the API is open, which is only
-    appropriate for local development."""
+    """Shared secret for the stream controls, read per request so the secret can
+    be rotated without a code change. The chat needs no code: it only touches
+    sim_* collections, so judges can try it from a link."""
     return os.getenv("SIM_ACCESS_CODE", "")
-
-
-def require_access(request: Request) -> None:
-    expected = access_code()
-    if not expected:
-        return
-    supplied = request.headers.get("X-Sim-Code", "")
-    if not hmac.compare_digest(supplied.encode(), expected.encode()):
-        raise HTTPException(status_code=401, detail="Access code required")
 
 
 def _sandbox_db() -> sim.NamespacedDB:
@@ -83,12 +74,12 @@ class SimReset(BaseModel):
     phone: str = Field(pattern=PHONE_PATTERN)
 
 
-@sim_app.get("/sim/api/status", dependencies=[Depends(require_access)])
+@sim_app.get("/sim/api/status")
 def status():
-    return {"ok": True, "access_code_required": bool(access_code())}
+    return {"ok": True}
 
 
-@sim_app.post("/sim/api/message", dependencies=[Depends(require_access)])
+@sim_app.post("/sim/api/message")
 async def send_message(msg: SimMessage):
     if msg.media_id and msg.media_type not in sim.ALLOWED_MEDIA_TYPES:
         raise HTTPException(status_code=422, detail="Unsupported media type")
@@ -118,7 +109,7 @@ async def send_message(msg: SimMessage):
     return {"replies": [{"text": text} for text in replies]}
 
 
-@sim_app.post("/sim/api/media", dependencies=[Depends(require_access)])
+@sim_app.post("/sim/api/media")
 async def upload_media(media: SimMedia):
     if media.content_type not in sim.ALLOWED_MEDIA_TYPES:
         raise HTTPException(status_code=422, detail="Unsupported media type")
@@ -137,7 +128,6 @@ async def upload_media(media: SimMedia):
 
 @sim_app.get("/sim/api/media/{media_id}")
 def get_media(media_id: str):
-    # Not behind the access code: <img> and <audio> tags cannot send headers.
     # Media ids are 128-bit random values, so they are not guessable.
     found = sim.read_media(_sandbox_db(), media_id)
     if not found:
@@ -146,7 +136,7 @@ def get_media(media_id: str):
     return Response(content=data, media_type=content_type, headers={"Cache-Control": "private, max-age=3600"})
 
 
-@sim_app.post("/sim/api/reset", dependencies=[Depends(require_access)])
+@sim_app.post("/sim/api/reset")
 def reset_session(req: SimReset):
     clear_session(_sandbox_db(), _sender(req.phone))
     return {"ok": True}
@@ -157,8 +147,8 @@ def reset_session(req: SimReset):
 # ---------------------------------------------------------------------------
 
 def require_stream_access(request: Request) -> None:
-    """Stricter than the chat: these write to the real reports collection and can
-    spend model quota, so with no code configured they refuse rather than open up."""
+    """Unlike the chat, these write to the real reports collection, so with no
+    code configured they refuse rather than open up."""
     expected = access_code()
     if not expected:
         raise HTTPException(status_code=503, detail="Stream controls are disabled: SIM_ACCESS_CODE is not set.")

@@ -219,8 +219,8 @@
     return node;
   }
 
-  function readCode() { try { return sessionStorage.getItem(CODE_KEY) || ''; } catch { return ''; } }
-  function saveCode(v) { try { sessionStorage.setItem(CODE_KEY, v); } catch { /* private mode */ } }
+  function readCode() { try { return localStorage.getItem(CODE_KEY) || ''; } catch { return ''; } }
+  function saveCode(v) { try { localStorage.setItem(CODE_KEY, v); } catch { /* private mode */ } }
 
   async function call(path, body) {
     const res = await fetch(API + path, {
