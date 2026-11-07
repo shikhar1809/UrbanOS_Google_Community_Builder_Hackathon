@@ -41,14 +41,11 @@ def test_twiml_bodies_extracts_each_message():
     assert sim_api._twiml_bodies(b"<Response></Response>") == []
 
 
-def test_the_chat_needs_no_code_even_when_one_is_configured(monkeypatch):
-    """The code protects the stream, which writes to real collections. The chat
-    stays open so anyone with the link can try it."""
-    monkeypatch.setenv("SIM_ACCESS_CODE", "let-me-in")
+def test_the_chat_needs_no_code():
     client = TestClient(sim_app)
 
     assert client.get("/sim/api/status").status_code == 200
-    # 422 rather than 401: past any gate, and stopped by input validation.
+    # 422: stopped by input validation, not by a gate.
     assert client.post("/sim/api/message", json={"phone": "bad"}).status_code == 422
     assert client.post("/sim/api/media", json={"content_type": "text/html", "data": "AAAA"}).status_code == 422
     assert client.post("/sim/api/reset", json={"phone": "bad"}).status_code == 422

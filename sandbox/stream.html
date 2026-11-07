@@ -148,10 +148,6 @@
       <option value="1000">1000 citizens</option>
     </select>
   </div>
-  <div class="field">
-    <label for="code">Access code</label>
-    <input id="code" type="password" placeholder="Needed to start" autocomplete="off">
-  </div>
   <button class="btn primary" id="toggle" type="submit">Start stream</button>
   <button class="btn" id="purge" type="button">Clear simulated data</button>
   <span class="err" id="error" role="alert"></span>
@@ -193,7 +189,6 @@
   'use strict';
 
   const API = '/sim/api/stream/';
-  const CODE_KEY = 'urbanos-stream-code';
   const WATCH_MS = 3000;
   const KEEP = 40;
   const REASONS = {
@@ -219,13 +214,10 @@
     return node;
   }
 
-  function readCode() { try { return localStorage.getItem(CODE_KEY) || ''; } catch { return ''; } }
-  function saveCode(v) { try { localStorage.setItem(CODE_KEY, v); } catch { /* private mode */ } }
-
   async function call(path, body) {
     const res = await fetch(API + path, {
       method: body === undefined ? 'GET' : 'POST',
-      headers: body === undefined ? {} : { 'Content-Type': 'application/json', 'X-Sim-Code': $('code').value.trim() },
+      headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
     let data = null;
@@ -385,7 +377,7 @@
       } catch (e) {
         inFlight = 0;
         if (e.status === 429) { await sleep(1500); continue; }
-        if (e.status === 409 || e.status === 401) { driving = false; showError(e.message); break; }
+        if (e.status === 409) { driving = false; showError(e.message); break; }
         failures += 1;
         if (failures >= 5) { driving = false; showError('Stream stopped: ' + e.message); break; }
         await sleep(2000);
@@ -401,7 +393,6 @@
     const run = await call('start', {
       scenario: $('scenario').value, rate_per_min: rate, max_events: Number($('budget').value),
     });
-    saveCode($('code').value.trim());
     seen.clear();
     $('incoming').textContent = '';
     $('outcomes').textContent = '';
@@ -425,7 +416,6 @@
   }
 
   // ---------- wiring ----------
-  $('code').value = readCode();
   $('rate').addEventListener('input', () => { $('rate-label').textContent = $('rate').value; });
   $('scenario').addEventListener('change', syncHint);
 
@@ -439,7 +429,6 @@
         driving = false;
         renderState(await call('stop', {}));
       } else {
-        if (!$('code').value.trim()) { showError('Enter the access code to start.'); $('code').focus(); return; }
         await startRun();
       }
     } catch (e) {
@@ -451,7 +440,6 @@
 
   $('purge').addEventListener('click', async () => {
     showError('');
-    if (!$('code').value.trim()) { showError('Enter the access code first.'); $('code').focus(); return; }
     if (!confirm('Delete every simulated report from UrbanOS? Real reports are not touched. This cannot be undone.')) return;
     try {
       const out = await call('purge', {});

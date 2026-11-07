@@ -337,29 +337,29 @@ def test_purge_refuses_while_a_run_is_live(db):
 @pytest.fixture
 def client(monkeypatch, db):
     monkeypatch.setattr(sim_api, "firestore_db", db)
-    monkeypatch.setenv("SIM_ACCESS_CODE", "let-me-in")
     return TestClient(sim_api.sim_app)
 
 
-AUTH = {"X-Sim-Code": "let-me-in"}
+def test_stream_controls_need_no_code(client):
+    run = client.post("/sim/api/stream/start", json={"scenario": "steady"})
+    assert run.status_code == 200
+    assert client.post("/sim/api/stream/tick", json={"run_id": run.json()["run_id"], "batch": 1}).status_code == 200
+    assert client.post("/sim/api/stream/stop").status_code == 200
+    assert client.post("/sim/api/stream/purge").status_code == 200
 
 
-def test_stream_controls_require_the_code(client):
-    for path in ("start", "stop", "purge"):
-        assert client.post(f"/sim/api/stream/{path}", json={}).status_code == 401
-    assert client.post("/sim/api/stream/tick", json={"run_id": "x"}).status_code == 401
+def test_clearing_the_stream_never_touches_real_reports(client, db):
+    """Anyone can press this now, so the limit has to hold on the server."""
+    db.data.setdefault("messages", {})["real"] = {"id": "real", "body": "A real citizen's report", "status": "Open"}
 
+    assert client.post("/sim/api/stream/purge").status_code == 200
 
-def test_stream_controls_fail_closed_with_no_code_configured(client, monkeypatch):
-    """The chat opens up when no code is set. These must not, because they write
-    to the real collection."""
-    monkeypatch.delenv("SIM_ACCESS_CODE")
-    assert client.post("/sim/api/stream/start", json={}).status_code == 503
+    assert "real" in db.data["messages"]
 
 
 def test_watching_is_open_and_exposes_no_real_number(client, db):
-    run = client.post("/sim/api/stream/start", json={"scenario": "steady"}, headers=AUTH).json()
-    client.post("/sim/api/stream/tick", json={"run_id": run["run_id"], "batch": 2}, headers=AUTH)
+    run = client.post("/sim/api/stream/start", json={"scenario": "steady"}).json()
+    client.post("/sim/api/stream/tick", json={"run_id": run["run_id"], "batch": 2})
 
     response = client.get("/sim/api/stream/state")
 
@@ -372,28 +372,28 @@ def test_watching_is_open_and_exposes_no_real_number(client, db):
 
 
 def test_an_unknown_scenario_is_rejected(client):
-    assert client.post("/sim/api/stream/start", json={"scenario": "nope"}, headers=AUTH).status_code == 422
+    assert client.post("/sim/api/stream/start", json={"scenario": "nope"}).status_code == 422
 
 
 def test_full_http_lifecycle(client):
-    run = client.post("/sim/api/stream/start", json={"scenario": "monsoon", "rate_per_min": 60}, headers=AUTH).json()
+    run = client.post("/sim/api/stream/start", json={"scenario": "monsoon", "rate_per_min": 60}).json()
     assert run["live"] is True
 
-    ticked = client.post("/sim/api/stream/tick", json={"run_id": run["run_id"], "batch": 2}, headers=AUTH)
+    ticked = client.post("/sim/api/stream/tick", json={"run_id": run["run_id"], "batch": 2})
     assert ticked.status_code == 200
 
-    assert client.post("/sim/api/stream/stop", headers=AUTH).json()["status"] == "stopped"
-    assert client.post("/sim/api/stream/purge", headers=AUTH).status_code == 200
+    assert client.post("/sim/api/stream/stop").json()["status"] == "stopped"
+    assert client.post("/sim/api/stream/purge").status_code == 200
     assert client.get("/sim/api/stream/state").json()["events"] == 0
 
 
 # --- data files --------------------------------------------------------------
 
 def run_with_noise(client):
-    run = client.post("/sim/api/stream/start", json={"scenario": "adversarial"}, headers=AUTH).json()
+    run = client.post("/sim/api/stream/start", json={"scenario": "adversarial"}).json()
     for _ in range(4):
         sim_stream._control(sim_api.firestore_db).update({"last_tick_at": 0})
-        client.post("/sim/api/stream/tick", json={"run_id": run["run_id"], "batch": 5}, headers=AUTH)
+        client.post("/sim/api/stream/tick", json={"run_id": run["run_id"], "batch": 5})
     return run["run_id"]
 
 
@@ -412,7 +412,7 @@ def test_a_file_holds_every_result_including_refusals(client):
 
 def test_runs_are_listed_newest_first_with_totals(client):
     first = run_with_noise(client)
-    client.post("/sim/api/stream/stop", headers=AUTH)
+    client.post("/sim/api/stream/stop")
     second = run_with_noise(client)
 
     files = client.get("/sim/api/stream/files").json()["files"]
@@ -461,9 +461,9 @@ def test_an_unknown_or_malformed_run_is_refused(client):
 
 def test_purge_removes_the_files_too(client):
     run_with_noise(client)
-    client.post("/sim/api/stream/stop", headers=AUTH)
+    client.post("/sim/api/stream/stop")
 
-    client.post("/sim/api/stream/purge", headers=AUTH)
+    client.post("/sim/api/stream/purge")
 
     assert client.get("/sim/api/stream/files").json()["files"] == []
 

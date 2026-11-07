@@ -5,7 +5,6 @@
   'use strict';
 
   const API = '/sim/api/stream/';
-  const CODE_KEY = 'urbanos-stream-code';
   const WATCH_MS = 4000;
   const REASONS = {
     out_of_area: 'Outside Lucknow', off_topic: 'Not a civic issue', duplicate: 'Repeat report',
@@ -41,11 +40,10 @@
     .srail a { color: var(--green-deep); font-size: 12px; text-align: center; }
     .srail :focus-visible, .sfiles :focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
 
-    .sfiles, .scode { margin: auto; border: 0; border-radius: 12px; padding: 0; background: var(--panel); color: var(--text);
+    .sfiles { margin: auto; border: 0; border-radius: 12px; padding: 0; background: var(--panel); color: var(--text);
       box-shadow: 0 12px 40px rgba(0,0,0,.35); font: 13px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
     .sfiles { width: min(980px, calc(100vw - 32px)); max-height: calc(100dvh - 48px); }
-    .scode { width: min(360px, calc(100vw - 32px)); }
-    .sfiles::backdrop, .scode::backdrop { background: rgba(11,20,26,.55); }
+    .sfiles::backdrop { background: rgba(11,20,26,.55); }
     .sfiles-head { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--border);
       position: sticky; top: 0; background: var(--panel); flex-wrap: wrap; }
     .sfiles-head h2 { margin: 0; font-size: 15px; flex: 1; min-width: 160px; }
@@ -66,12 +64,6 @@
     .stable .filed { color: var(--green-deep); font-weight: 600; }
     .stable .rejected, .stable .error { color: var(--danger); font-weight: 600; }
     .sempty { color: var(--text-2); padding: 20px 0; text-align: center; margin: 0; }
-    .scode form { display: flex; flex-direction: column; gap: 10px; padding: 18px; }
-    .scode h2 { margin: 0; font-size: 15px; }
-    .scode p { margin: 0; color: var(--text-2); }
-    .scode input { height: 38px; padding: 0 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--input-bg); color: var(--text); font: inherit; }
-    .scode-actions { display: flex; gap: 8px; justify-content: flex-end; }
-    .scode-actions .srail-btn { width: auto; min-width: 84px; }
 
     /* Too narrow to sit beside the panel: shrink to two icons over the chat's edge. */
     @media (max-width: 1040px) {
@@ -132,9 +124,7 @@
 
   const filesDialog = h('dialog', 'sfiles');
   filesDialog.setAttribute('aria-label', 'Data stream files');
-  const codeDialog = h('dialog', 'scode');
-  codeDialog.setAttribute('aria-label', 'Stream access code');
-  document.body.append(rail, filesDialog, codeDialog);
+  document.body.append(rail, filesDialog);
 
   // ---------- state ----------
   let driving = false;
@@ -142,16 +132,10 @@
   let runId = null;
   let holdStatusUntil = 0;
 
-  function storedCode() { try { return localStorage.getItem(CODE_KEY) || ''; } catch { return ''; } }
-  function saveCode(value) { try { localStorage.setItem(CODE_KEY, value); } catch { /* private mode */ } }
-  function forgetCode() { try { localStorage.removeItem(CODE_KEY); } catch { /* private mode */ } }
-
-  let code = storedCode();
-
   async function call(path, body) {
     const res = await fetch(API + path, {
       method: body === undefined ? 'GET' : 'POST',
-      headers: body === undefined ? {} : { 'Content-Type': 'application/json', 'X-Sim-Code': code },
+      headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
     let data = null;
@@ -196,38 +180,6 @@
   }
 
   // ---------- driving ----------
-  function askForCode() {
-    return new Promise((resolve) => {
-      codeDialog.textContent = '';
-      let accepted = false;
-      const form = h('form');
-      const input = h('input');
-      input.type = 'password';
-      input.autocomplete = 'off';
-      input.placeholder = 'Access code';
-      input.setAttribute('aria-label', 'Access code');
-      const actions = h('div', 'scode-actions');
-      const cancel = h('button', 'srail-btn', 'Cancel');
-      cancel.type = 'button';
-      const ok = h('button', 'srail-btn go', 'Start');
-      ok.type = 'submit';
-      actions.append(cancel, ok);
-      form.append(h('h2', '', 'Access code needed'),
-        h('p', '', 'The stream writes simulated reports into UrbanOS, so starting it takes the sandbox code.'),
-        input, actions);
-      codeDialog.append(form);
-      cancel.addEventListener('click', () => codeDialog.close());
-      form.addEventListener('submit', (event) => {
-        event.preventDefault();
-        accepted = true;
-        codeDialog.close();
-      });
-      codeDialog.addEventListener('close', () => resolve(accepted ? input.value.trim() : ''), { once: true });
-      codeDialog.showModal();
-      input.focus();
-    });
-  }
-
   async function drive(rate) {
     const batch = Math.max(1, Math.min(5, Math.ceil((rate / 60) * 2.5)));
     const intervalMs = (batch * 60000) / rate;
@@ -242,7 +194,7 @@
       } catch (e) {
         if (e.status === 429) { await sleep(1500); continue; }
         failures += 1;
-        if (e.status === 409 || e.status === 401 || failures >= 5) {
+        if (e.status === 409 || failures >= 5) {
           driving = false;
           paintToggle();
           say('Stopped: ' + e.message, 'bad');
@@ -257,30 +209,23 @@
   }
 
   async function start() {
-    if (!code) code = await askForCode();
-    if (!code) return;
     const rate = Number(rateSelect.value);
     try {
       const run = await call('start', { scenario: scenarioSelect.value || 'steady', rate_per_min: rate, max_events: 300 });
-      saveCode(code);
       runId = run.run_id;
       driving = true;
       paintState(run);
       drive(rate);
     } catch (e) {
-      if (e.status === 401) { code = ''; forgetCode(); say('That access code is not right.', 'bad'); return; }
       say(e.message, 'bad');
     }
   }
 
   async function stop() {
-    if (!code) code = await askForCode();
-    if (!code) return;
     driving = false;
     try {
       paintState(await call('stop', {}));
     } catch (e) {
-      if (e.status === 401) { code = ''; forgetCode(); }
       say(e.message, 'bad');
     }
   }

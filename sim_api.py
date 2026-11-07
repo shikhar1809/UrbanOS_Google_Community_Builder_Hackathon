@@ -10,13 +10,12 @@ from __future__ import annotations
 import asyncio
 import base64
 import binascii
-import hmac
 import logging
 import os
 import re
 import xml.etree.ElementTree as ET
 
-from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Path, Query, Request
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Path, Query, Request
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
@@ -31,13 +30,6 @@ PHONE_PATTERN = r"^\+?\d{8,15}$"
 MEDIA_ID_PATTERN = r"^[0-9a-f]{32}$"
 
 sim_app = FastAPI(title="UrbanOS WhatsApp sandbox", docs_url=None, redoc_url=None, openapi_url=None)
-
-
-def access_code() -> str:
-    """Shared secret for the stream controls, read per request so the secret can
-    be rotated without a code change. The chat needs no code: it only touches
-    sim_* collections, so judges can try it from a link."""
-    return os.getenv("SIM_ACCESS_CODE", "")
 
 
 def _sandbox_db() -> sim.NamespacedDB:
@@ -146,17 +138,6 @@ def reset_session(req: SimReset):
 # Live stream
 # ---------------------------------------------------------------------------
 
-def require_stream_access(request: Request) -> None:
-    """Unlike the chat, these write to the real reports collection, so with no
-    code configured they refuse rather than open up."""
-    expected = access_code()
-    if not expected:
-        raise HTTPException(status_code=503, detail="Stream controls are disabled: SIM_ACCESS_CODE is not set.")
-    supplied = request.headers.get("X-Sim-Code", "")
-    if not hmac.compare_digest(supplied.encode(), expected.encode()):
-        raise HTTPException(status_code=401, detail="Access code required")
-
-
 def _raw_db():
     if firestore_db is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
@@ -216,21 +197,21 @@ def stream_file(run_id: str = Path(pattern=RUN_ID_PATTERN), format: str = Query(
     })
 
 
-@sim_app.post("/sim/api/stream/start", dependencies=[Depends(require_stream_access)])
+@sim_app.post("/sim/api/stream/start")
 def stream_start(req: StreamStart):
     return _stream_call(sim_stream.start, _raw_db(), req.scenario, req.rate_per_min, req.max_events)
 
 
-@sim_app.post("/sim/api/stream/tick", dependencies=[Depends(require_stream_access)])
+@sim_app.post("/sim/api/stream/tick")
 def stream_tick(req: StreamTick):
     return _stream_call(sim_stream.tick, _raw_db(), _process_whatsapp_sync, req.run_id, req.batch)
 
 
-@sim_app.post("/sim/api/stream/stop", dependencies=[Depends(require_stream_access)])
+@sim_app.post("/sim/api/stream/stop")
 def stream_stop():
     return _stream_call(sim_stream.stop, _raw_db())
 
 
-@sim_app.post("/sim/api/stream/purge", dependencies=[Depends(require_stream_access)])
+@sim_app.post("/sim/api/stream/purge")
 def stream_purge():
     return _stream_call(sim_stream.purge, _raw_db())
