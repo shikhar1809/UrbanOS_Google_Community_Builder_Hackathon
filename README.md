@@ -113,12 +113,12 @@ UrbanOS uses Gemini for three real jobs:
 The ranking engine groups proposals by `(semantic_tag, zone)`.
 
 ```text
-Impact Score = demand_count * priority_score * (1 + category_gap / 10)
+Impact Score = sum(report priority weights) * (1 + category_gap / 10)
 ```
 
 The important detail is `category_gap`. It is not one generic number.
 
-UrbanOS chooses the deprivation signal based on the project type:
+UrbanOS uses illustrative zone-level figures for the project type when a locality maps to a known zone. Projects with no matching zone keep their base priority score.
 
 | Project type | Evidence signal |
 |---|---|
@@ -230,6 +230,12 @@ https://api-<cloud-function-hash>-uc.a.run.app/webhook/whatsapp
 ```
 
 ---
+
+## Live intake capacity
+
+Production Firebase settings route filed reports to Cloud Tasks. Recognised text issues can complete using local civic rules. Photos and ambiguous reports still depend on model capacity. The normal queue is configured for 80 dispatches per second and the urgent queue for 20, with separate concurrency limits. Dispatch settings are ceilings. A production throughput check must also measure webhook acknowledgement latency, queue age, model quota and WhatsApp delivery.
+
+The dashboard requests at most 300 committed report changes per response using a timestamp and document-ID cursor. It updates the Review pipeline from the same changes and keeps the visible live feed bounded during bursts. Production validation needs a verified sender and isolated traffic that cannot notify citizens. Deploy the API, both task workers and the dashboard together when changing this contract.
 
 ## Limitations
 

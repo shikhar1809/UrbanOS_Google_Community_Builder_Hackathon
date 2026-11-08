@@ -3,7 +3,10 @@ message per citizen inline. At scale that cannot finish inside the request
 timeout, which would leave some citizens told and others not.
 """
 
-import pytest
+import hashlib
+import time
+
+from fastapi.testclient import TestClient
 
 import main
 from tests.fakes import FakeFirestore
@@ -153,3 +156,43 @@ def test_one_failed_send_does_not_stop_the_rest(monkeypatch):
 def test_nothing_is_sent_when_twilio_is_not_configured(monkeypatch):
     monkeypatch.setattr(main, "TWILIO_ACCOUNT_SID", "")
     assert main.notify_sanctioned(["whatsapp:+911"], "t", "p") == 0
+
+
+
+def test_repeat_sanction_updates_and_notifies_only_new_members(monkeypatch):
+    db = seed(FakeFirestore(), [
+        ("North", TAG, "Infrastructure", "whatsapp:+911"),
+        ("North", TAG, "Infrastructure", "whatsapp:+911"),
+        ("North", TAG, "Infrastructure", "whatsapp:+912"),
+        ("North", TAG, "Infrastructure", "whatsapp:+913"),
+    ])
+    reports = db.data["messages"]
+    reports["m0"]["status"] = "Sanctioned"
+    reports["m3"]["status"] = "Resolved"
+    notices = []
+    monkeypatch.setattr(main, "notify_sanctioned", lambda senders, *_: notices.extend(senders))
+    monkeypatch.setitem(main.app.dependency_overrides, main.get_db, lambda: db)
+    client = TestClient(main.app)
+    payload = {"project_id": f"{TAG}|North", "title": "New drain", "zone": "North", "category": "Infrastructure"}
+
+    assert client.post("/projects/sanction", json=payload).json()["reports_updated"] == 2
+    assert client.post("/projects/sanction", json=payload).json() == {
+        "status": "already_actioned", "citizens_notified": 0, "reports_updated": 0,
+    }
+    assert notices == ["whatsapp:+912"]
+    assert reports["m3"]["status"] == "Resolved"
+    assert len(db.data["sanctioned_projects"]) == 1
+
+
+def test_an_in_flight_sanction_rejects_a_concurrent_request(monkeypatch):
+    db = seed(FakeFirestore(), [("North", TAG, "Infrastructure", "whatsapp:+911")])
+    project_id = f"{TAG}|North"
+    lock_id = hashlib.sha256(project_id.encode()).hexdigest()
+    db.collection("project_sanction_locks").document(lock_id).create({"expires_at": time.time() + 600})
+    monkeypatch.setitem(main.app.dependency_overrides, main.get_db, lambda: db)
+    response = TestClient(main.app).post("/projects/sanction", json={
+        "project_id": project_id, "title": "Drain", "zone": "North", "category": "Infrastructure",
+    })
+
+    assert response.status_code == 409
+    assert db.data["messages"]["m0"]["status"] == "Open"

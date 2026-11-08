@@ -1,10 +1,11 @@
 import os
+import hashlib
 import httpx
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
-from fastapi import FastAPI, Request, HTTPException, Depends, BackgroundTasks, UploadFile, File
+from fastapi import FastAPI, Request, HTTPException, Depends, BackgroundTasks, UploadFile, File, Query
 from twilio.twiml.messaging_response import MessagingResponse
 from twilio.rest import Client
 from state import get_session, update_session, clear_session
@@ -32,6 +33,7 @@ import llm as LLM
 import sim
 import sim_stream
 import triage as TRIAGE
+import triage_rules
 from dotenv import load_dotenv
 from twilio.request_validator import RequestValidator
 
@@ -99,7 +101,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-TWILIO_WHATSAPP_NUMBER = os.getenv("TWILIO_WHATSAPP_NUMBER")
+TWILIO_WHATSAPP_NUMBER = os.getenv("TWILIO_WHATSAPP_NUMBER", "").strip()
 TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
 twilio_validator = RequestValidator(TWILIO_AUTH_TOKEN) if TWILIO_AUTH_TOKEN else None
@@ -322,6 +324,10 @@ async def receive_whatsapp(request: Request, background_tasks: BackgroundTasks, 
         logger.warning(f"[SECURITY] Invalid Twilio signature from {client_host}. Rejecting request.")
         raise HTTPException(status_code=403, detail="Forbidden")
 
+    return await asyncio.to_thread(_handle_webhook, form_data, background_tasks, db)
+
+
+def _handle_webhook(form_data, background_tasks, db):
     # Twilio redelivers on timeout, and triage is slow enough that timeouts
     # happen under load. Without this, each redelivery files another report for
     # the same citizen message and inflates the demand count behind sanctioning.
@@ -331,8 +337,7 @@ async def receive_whatsapp(request: Request, background_tasks: BackgroundTasks, 
         return HTMLResponse(content=ticket.reply or EMPTY_TWIML, media_type="application/xml")
 
     try:
-        # Offload the blocking DB logic to a threadpool to prevent freezing the asyncio event loop
-        response = await asyncio.to_thread(_process_whatsapp_sync, form_data, background_tasks, db)
+        response = _process_whatsapp_sync(form_data, background_tasks, db)
     except Exception:
         # Let the retry through rather than having it swallowed as a duplicate.
         IDEM.release(db, message_id)
@@ -687,7 +692,14 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db):
         _topic = GR.check_topic_text(description)
         gate_verdict = _topic["verdict"]
         gate_reason = _topic["reason"]
-        if gate_verdict == "accept" and description and (_groq_client or gemini_client) and not TRIAGE.model_cooling():
+        defer_triage = JOBS.defers(db)
+        fast = defer_triage and JOBS.uses_fast_triage(description, photo_type or "")
+        if fast and gate_verdict == "accept":
+            body_location = GR.check_location_text(description)
+            if body_location["verdict"] == "reject":
+                gate_verdict, gate_reason = "reject_location", body_location["reason"]
+            fast = loc_source == "gps_pin" or GR.check_location_text(location_raw)["verdict"] == "accept"
+        if not fast and gate_verdict == "accept" and description and (_groq_client or gemini_client) and not TRIAGE.model_cooling():
             try:
                 gate_prompt = GR.build_location_check_prompt(description, location_raw)
                 if _groq_client:
@@ -746,7 +758,6 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db):
         # classified after the citizen has been answered. The receipt then shows
         # the same generic values it already shows whenever the model is
         # unavailable, and the fields are filled in moments later.
-        defer_triage = JOBS.defers(db)
         if defer_triage:
             _t = dict(TRIAGE.DEFAULTS)
             _t["extracted_location"] = location_raw if loc_source == "text" else None
@@ -789,6 +800,7 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db):
         doc_ref = db.collection('messages').document()
         new_message = {
             "timestamp": datetime.now().isoformat(),
+            JOBS.LIVE_UPDATED_FIELD: firestore.SERVER_TIMESTAMP,
             "sender": sender,
             "body": description,
             "media_url": photo_url or data.get("voice_url"),
@@ -835,7 +847,8 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db):
         _RAG_CACHE["at"] = 0.0
         _MESSAGES_CACHE["data"] = None
         _MESSAGES_CACHE["at"] = 0.0
-        AN.invalidate_snapshot()
+        # The shared analytics cache merges new reports incrementally. Invalidating
+        # it for every intake would force concurrent readers to reload history.
         if _spam:
             _spam.record_submission(sender, description, ref_id)
 
@@ -1431,12 +1444,57 @@ def _feed_item(r: dict) -> dict:
         "visual_evidence": r["visual_evidence"],
         "simulated": r["simulated"],
         "triage_source": r["triage_source"],
+        "triage_status": r["triage_status"],
+        "live_version": r["live_version"],
     }
+
+
+@app.get("/api/feed/live")
+def api_live_reports(
+    cursor: str = Query(default="", max_length=240),
+    db = Depends(get_db),
+    admin = Depends(verify_admin),
+):
+    """Bounded, ordered changes to report cards, including queued triage updates."""
+    from google.cloud.firestore_v1.base_query import FieldFilter
+    from google.api_core.datetime_helpers import DatetimeWithNanoseconds
+
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    collection = db.collection("messages")
+    field = JOBS.LIVE_UPDATED_FIELD
+    start = datetime.now(timezone.utc) - timedelta(seconds=10)
+    if cursor:
+        try:
+            stamp, doc_id = cursor.split("|", 1)
+            start = DatetimeWithNanoseconds.from_rfc3339(stamp)
+            if "/" in doc_id or "|" in doc_id:
+                raise ValueError("Invalid document ID")
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid live cursor")
+
+    query = collection.where(filter=FieldFilter(field, ">=", start)).order_by(field).order_by("__name__")
+    if cursor and doc_id:
+        query = query.start_after({field: start, "__name__": collection.document(doc_id)})
+    limit = 300
+    docs = list(query.limit(limit + 1).stream())
+    items = []
+    for doc in docs[:limit]:
+        report = doc.to_dict()
+        item = _feed_item(AN.normalize_record(doc.id, report))
+        cursor = f"{item['live_version']}|{doc.id}"
+        items.append(item)
+    return JSONResponse({
+        "items": items,
+        "cursor": cursor or f"{AN.live_version(start)}|",
+        "has_more": len(docs) > limit,
+        "demo_cleanup_at": AN.demo_cleanup_at(db),
+    }, headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/stream/state")
 def api_stream_state(db = Depends(get_db), admin = Depends(verify_admin)):
-    """The simulated stream, for the dashboard's live banner."""
+    """Current simulator state for existing clients."""
     if db is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
     return JSONResponse(content=sim_stream.read_state(db))
@@ -1629,23 +1687,8 @@ async def get_messages(
 
 
 # ---------------------------------------------------------------------------
-# DEMOGRAPHIC DATA LAYER
-# ---------------------------------------------------------------------------
-# Source: Census of India 2011, Lucknow District Census Handbook (DCHB).
-# Lucknow Municipal Corporation (LMC) Zone population estimates are derived
-# from ward-level data published by the Office of the Registrar General &
-# Census Commissioner, India. Infrastructure gap data (school/hospital
-# distances) sourced from UDISE+ 2021-22 district report and National Health
-# Mission (NHM) Uttar Pradesh facility mapping data.
-#
-# TOTAL Lucknow District Population (Census 2011): 4,589,838
-# Lucknow Urban Agglomeration: 2,902,920
-#
-# This layer is PLUGGABLE — replace with live Census API calls at:
-#   → data.gov.in  (Open Government Data Platform India)
-#   → udiseplus.gov.in (school density data)
-#   → nhm.gov.in (health infrastructure data)
-# ---------------------------------------------------------------------------
+# ILLUSTRATIVE LUCKNOW PLANNING DATA
+# Static zone estimates for the demo. No measured locality-level data is loaded.
 DEMO_DEMOGRAPHICS = {
     # North Lucknow: Sarojini Nagar, Bakshi Ka Talab — peri-urban, lower infra density
     "North":   {"population": 312000, "youth_pct": 36, "nearest_school_km": 7.8, "nearest_hospital_km": 11.2, "literacy_rate": 69, "road_gap_index": 7.1, "water_gap_index": 6.8, "sanitation_gap_index": 7.4, "utility_gap_index": 6.2, "environment_gap_index": 6.6, "civic_amenity_gap_index": 7.0},
@@ -1661,197 +1704,136 @@ DEMO_DEMOGRAPHICS = {
 
 PRIORITY_WEIGHTS = {"Critical": 4, "High": 3, "Medium": 2, "Low": 1}
 
-INFRA_GAP_SOURCES = {
-    "education_access": "UDISE+ school-density layer, constituency zone estimate",
-    "health_access": "NHM facility mapping layer, constituency zone estimate",
-    "road_connectivity": "PWD road-condition and ward connectivity proxy",
-    "water_sanitation": "Jal Jeevan/NULM ward service-gap proxy",
-    "power_lighting": "DISCOM outage and streetlight coverage proxy",
-    "environment_public_space": "LMC parks, waste, and flood-risk proxy",
-    "civic_amenity": "Composite ward amenity gap proxy",
-}
-
 def project_gap_signal(category: str, semantic_tag: str, title: str, demo: dict) -> dict:
     """Pick the deprivation signal that matches the project type."""
     text = f"{category or ''} {semantic_tag or ''} {title or ''}".lower()
     if any(k in text for k in ("school", "education", "literacy", "classroom")):
         raw_value = demo["nearest_school_km"]
-        return {"key": "education_access", "label": "Nearest school distance", "value": raw_value, "unit": "km", "normalized_gap": min(raw_value, 10), "source": INFRA_GAP_SOURCES["education_access"]}
+        return {"key": "education_access", "label": "Nearest school distance", "value": raw_value, "unit": "km", "normalized_gap": min(raw_value, 10)}
     if any(k in text for k in ("hospital", "health", "clinic", "phc", "dispensary")):
         raw_value = demo["nearest_hospital_km"]
-        return {"key": "health_access", "label": "Nearest health facility distance", "value": raw_value, "unit": "km", "normalized_gap": min(raw_value, 10), "source": INFRA_GAP_SOURCES["health_access"]}
+        return {"key": "health_access", "label": "Nearest health facility distance", "value": raw_value, "unit": "km", "normalized_gap": min(raw_value, 10)}
     if any(k in text for k in ("road", "bridge", "footpath", "traffic", "signal", "pothole")):
         raw_value = demo["road_gap_index"]
-        return {"key": "road_connectivity", "label": "Road/connectivity gap index", "value": raw_value, "unit": "/10", "normalized_gap": raw_value, "source": INFRA_GAP_SOURCES["road_connectivity"]}
-    if any(k in text for k in ("water", "drain", "sewer", "sanitation", "pipeline", "toilet", "nala")):
+        return {"key": "road_connectivity", "label": "Road/connectivity gap index", "value": raw_value, "unit": "/10", "normalized_gap": raw_value}
+    if any(k in text for k in ("water", "drain", "sewer", "sewage", "sanitation", "pipeline", "toilet", "nala")):
         raw_value = max(demo["water_gap_index"], demo["sanitation_gap_index"])
-        return {"key": "water_sanitation", "label": "Water/sanitation gap index", "value": raw_value, "unit": "/10", "normalized_gap": raw_value, "source": INFRA_GAP_SOURCES["water_sanitation"]}
+        return {"key": "water_sanitation", "label": "Water/sanitation gap index", "value": raw_value, "unit": "/10", "normalized_gap": raw_value}
     if any(k in text for k in ("electric", "power", "light", "streetlight", "transformer")):
         raw_value = demo["utility_gap_index"]
-        return {"key": "power_lighting", "label": "Power/lighting gap index", "value": raw_value, "unit": "/10", "normalized_gap": raw_value, "source": INFRA_GAP_SOURCES["power_lighting"]}
-    if any(k in text for k in ("park", "waste", "garbage", "green", "pollution", "flood")):
+        return {"key": "power_lighting", "label": "Power/lighting gap index", "value": raw_value, "unit": "/10", "normalized_gap": raw_value}
+    if any(k in text for k in ("park", "swing", "waste", "garbage", "green", "pollution", "flood")):
         raw_value = demo["environment_gap_index"]
-        return {"key": "environment_public_space", "label": "Environment/public-space gap index", "value": raw_value, "unit": "/10", "normalized_gap": raw_value, "source": INFRA_GAP_SOURCES["environment_public_space"]}
+        return {"key": "environment_public_space", "label": "Environment/public-space gap index", "value": raw_value, "unit": "/10", "normalized_gap": raw_value}
     raw_value = demo["civic_amenity_gap_index"]
-    return {"key": "civic_amenity", "label": "Composite civic amenity gap index", "value": raw_value, "unit": "/10", "normalized_gap": raw_value, "source": INFRA_GAP_SOURCES["civic_amenity"]}
+    return {"key": "civic_amenity", "label": "Composite civic amenity gap index", "value": raw_value, "unit": "/10", "normalized_gap": raw_value}
 
 # ---------------------------------------------------------------------------
-# RANKED PROJECTS CACHE
-# ---------------------------------------------------------------------------
-# Caches ranked project results for CACHE_TTL_SECONDS to avoid calling
-# Gemini justifications on every dashboard load. Cache is per-process
-# (warm Cloud Function instances); invalidated on timeout or new sanction.
+# RANKED PROJECTS
 # ---------------------------------------------------------------------------
 _RANKED_CACHE: dict = {"data": None, "at": 0.0, "version": None}
-_JUSTIFICATION_CACHE: dict = {}  # project id -> (text, unix time written)
-CACHE_TTL_SECONDS = 300  # 5 minutes
+CACHE_TTL_SECONDS = 300
+EVIDENCE_ZONES = {zone.casefold(): zone for zone in DEMO_DEMOGRAPHICS}
+EVIDENCE_ZONES.update({loc.name.casefold(): loc.zone for loc in triage_rules.GAZETTEER})
+EVIDENCE_ZONES["central lucknow"] = "Central"
+ROUTINE_LEGACY_PARK_TAGS = {"park maintenance needed", "broken swings", "overgrown weeds"}
+
+
+def project_tag(record: dict) -> str:
+    return record.get("semantic_tag") or record["category"]
+
+
+def project_status(reports: list) -> str:
+    buckets = {report["status_bucket"] for report in reports}
+    if buckets == {"sanctioned"}:
+        return "Sanctioned"
+    if buckets == {"completed"}:
+        return "Completed"
+    if "open" not in buckets:
+        return "Actioned"
+    if "sanctioned" in buckets:
+        return "Partially sanctioned"
+    if "completed" in buckets:
+        return "Partially completed"
+    statuses = {report["status"].casefold() for report in reports}
+    return "In Review" if statuses <= {"in review", "under review", "in progress"} else "Open"
+
+
+def ranking_weight(report: dict) -> int:
+    # The old seed script assigned random priority to these routine requests.
+    if report["category_raw"] == "Parks & Rec" and report["semantic_tag"] in ROUTINE_LEGACY_PARK_TAGS:
+        return PRIORITY_WEIGHTS["Low"]
+    return PRIORITY_WEIGHTS.get(report["priority"].title(), 1)
+
 
 @app.get("/projects/ranked")
-async def get_ranked_projects(db = Depends(get_db), admin = Depends(verify_admin)):
-    """Groups messages into projects, scores them, and generates AI justification.
-    Results are cached in-process for 5 minutes to reduce Gemini API cost at scale."""
+async def get_ranked_projects(include_totals: bool = False, db = Depends(get_db), admin = Depends(verify_admin)):
+    """Return the top eight rows, optionally with all-snapshot planning totals."""
     now = time.time()
     snap = AN.get_snapshot(db)
     version = snap.get("version")
-    fresh = _RANKED_CACHE["data"] and (now - _RANKED_CACHE["at"]) < CACHE_TTL_SECONDS
-    if fresh and _RANKED_CACHE.get("version") == version:
-        logger.info("[CACHE HIT] Returning cached ranked projects (age: %.0fs)", now - _RANKED_CACHE["at"])
-        return JSONResponse(content=_RANKED_CACHE["data"])
+    cached = _RANKED_CACHE["data"]
+    if cached is not None and _RANKED_CACHE["version"] == version and now - _RANKED_CACHE["at"] < CACHE_TTL_SECONDS:
+        return JSONResponse(content=cached if include_totals else cached["projects"])
 
-    logger.info("[CACHE MISS] Recomputing ranked projects...")
-    # Ranking reads the shared snapshot rather than issuing its own query.
-    #
-    # It used to take `limit(500)` with no ordering, which Firestore answers in
-    # document-id order: once the collection passed 500 reports the ranking that
-    # drives sanctioning was computed on an arbitrary half of the data. The
-    # snapshot is ordered newest-first, bounded, and already in memory, so this
-    # is both deterministic and one less full read.
-    #
-    # Its records are normalized, so ranking now sees the same categories and
-    # zones the rest of the dashboard shows instead of the raw legacy values.
-    messages = snap["records"] or []
-
-    # ---------------------------------------------------------------------------
-    # SEMANTIC CLUSTERING
-    # Cluster by (semantic_tag, zone) instead of raw (category, zone).
-    # semantic_tag is a normalized snake_case key assigned by Gemini during
-    # triage — it groups proposals about the *same real-world issue* together
-    # regardless of how they were phrased or which broad category they fell into.
-    # Falls back to category for older messages that pre-date the semantic_tag field.
-    # ---------------------------------------------------------------------------
+    reports = snap["records"] or []
     clusters = {}
-    for m in messages:
-        # Use semantic_tag if available, else fall back to category, else body snippet
-        tag = m.get("semantic_tag") or m.get("category")
-        if not tag:
-            body_snippet = (m.get("body") or "").strip()[:40]
-            tag = body_snippet if body_snippet else "General Proposal"
-        zone = m.get("constituency_zone") or "Central"
-        key = f"{tag}|{zone}"
-        if key not in clusters:
-            clusters[key] = {
-                "category": m.get("category") or tag,
-                "semantic_tag": tag,
-                "zone": zone,
-                "messages": [], "senders": set(),
-                "budget_sum": 0, "priority_score": 0,
-            }
-        clusters[key]["messages"].append(m)
-        clusters[key]["senders"].add(m.get("sender"))
-        clusters[key]["budget_sum"] += m.get("estimated_budget") or 0
-        clusters[key]["priority_score"] += PRIORITY_WEIGHTS.get(m.get("priority"), 1)
+    for report in reports:
+        key = (project_tag(report), report["constituency_zone"])
+        clusters.setdefault(key, []).append(report)
 
-    # Score and rank
     ranked = []
-    for key, cl in clusters.items():
-        demand = len(cl["messages"])
-        demo = DEMO_DEMOGRAPHICS.get(cl["zone"], DEMO_DEMOGRAPHICS["Central"])
-        # Use most common summary as project title
-        summaries = [m.get("summary") or "" for m in cl["messages"] if m.get("summary")]
-        title = summaries[0] if summaries else f"{cl['category']} — {cl['zone']} Zone"
-        gap_signal = project_gap_signal(cl["category"], cl["semantic_tag"], title, demo)
-        infra_gap = gap_signal["normalized_gap"]
-        impact_score = round((demand * cl["priority_score"] * (1 + infra_gap / 10)), 1)
-        avg_budget = int(cl["budget_sum"] / demand) if demand else 0
+    for (tag, zone), members in clusters.items():
+        first = members[0]
+        category = first["category"]
+        title = next((m["summary"] for m in members if m["summary"]), f"{category} — {zone}")
+        evidence_zone = EVIDENCE_ZONES.get(zone.casefold())
+        demo = DEMO_DEMOGRAPHICS.get(evidence_zone)
+        gap = project_gap_signal(category, tag, title, demo) if demo else None
+        if gap:
+            gap["source"] = f"UrbanOS demo estimate for the {evidence_zone} zone"
+        weight = sum(ranking_weight(m) for m in members)
+        multiplier = 1 + (gap["normalized_gap"] / 10 if gap else 0)
         ranked.append({
-            "id": key,
+            "id": f"{tag}|{zone}",
             "title": title,
-            "category": cl["category"],
-            "semantic_tag": cl["semantic_tag"],
-            "zone": cl["zone"],
-            "demand_count": demand,
-            "unique_senders": len(cl["senders"]),
-            "impact_score": impact_score,
-            "estimated_budget": avg_budget,
+            "category": category,
+            "semantic_tag": tag,
+            "zone": zone,
+            "demand_count": len(members),
+            "unique_senders": len({m["sender"] for m in members if m["sender"]}),
+            "impact_score": round(weight * multiplier, 1),
+            "estimated_budget": sum(m["estimated_budget"] for m in members) // len(members),
             "demographics": demo,
-            "latitude": cl["messages"][0].get("latitude"),
-            "longitude": cl["messages"][0].get("longitude"),
+            "latitude": first["latitude"],
+            "longitude": first["longitude"],
             "evidence": {
-                "gap_signal": gap_signal,
-                "formula": "demand_count * priority_score * (1 + category_gap / 10)",
-                "priority_score": cl["priority_score"],
+                "gap_signal": gap,
+                "formula": "sum(report priority weights) * (1 + category_gap / 10)",
+                "priority_score": weight,
             },
-            "justification": None,  # filled below
-            "status": cl["messages"][0].get("status", "Open"),
+            "justification": f"{len(members)} reports contributed {weight} priority points.",
+            "status": project_status(members),
         })
 
-    ranked.sort(key=lambda x: x["impact_score"], reverse=True)
-    top = ranked[:8]
-
-    # Generate AI justification for top 1 (Gemini) - limited to save quota for Chat agent.
-    # Under a live stream the snapshot version moves constantly, so the same project
-    # would otherwise be re-justified on every dashboard refresh.
-    for proj in top[:1]:
-        cached = _JUSTIFICATION_CACHE.get(proj["id"])
-        if cached and now - cached[1] < CACHE_TTL_SECONDS:
-            proj["justification"] = cached[0]
-    if gemini_client and not TRIAGE.model_cooling():
-        for proj in top[:1]:
-            if proj.get("justification"):
-                continue
-            try:
-                demo = proj["demographics"]
-                gap_signal = proj["evidence"]["gap_signal"]
-                prompt = (
-                    f"You are an AI advisor for an Indian MP's office. Write a vivid, compelling 2-3 sentence justification "
-                    f"(max 60 words) explaining EXACTLY why this project was ranked so highly for immediate action. "
-                    f"Highlight citizen demand, the relevant deprivation metric, and the calculated impact score. "
-                    f"Be highly specific, data-driven, and urgent.\\n\\n"
-                    f"Project: {proj['title']}\\n"
-                    f"Impact Score: {proj['impact_score']} (Very High)\\n"
-                    f"Topic: {proj.get('semantic_tag', proj['category'])}\n"
-                    f"Zone: {proj['zone']} Constituency\n"
-                    f"Citizen Demand: {proj['demand_count']} proposals received\n"
-                    f"Zone Population: {demo['population']:,} residents\n"
-                    f"Relevant deprivation signal: {gap_signal['label']} = {gap_signal['value']}{gap_signal['unit']}\n"
-                    f"Signal source: {gap_signal['source']}\n"
-                    f"Estimated cost: ₹{proj['estimated_budget']:,}\n"
-                )
-                # Call Gemini for a smart justification
-                resp = gemini_client.models.generate_content(
-                    model='gemini-2.5-flash',
-                    contents=prompt
-                )
-                proj["justification"] = resp.text.strip().replace('"', '')
-                _JUSTIFICATION_CACHE[proj["id"]] = (proj["justification"], now)
-            except Exception as e:
-                logger.error(f"[AI JUSTIFICATION] Failed: {e}")
-                TRIAGE.note_model_failure(e)
-                gap_signal = proj["evidence"]["gap_signal"]
-                proj["justification"] = f"{proj['demand_count']} citizens in {proj['zone']} flagged this. Evidence: {gap_signal['label']} is {gap_signal['value']}{gap_signal['unit']}."
-
-    # Fallback justification for remaining
-    for proj in top:
-        if not proj.get("justification"):
-            gap_signal = proj["evidence"]["gap_signal"]
-            proj["justification"] = f"{proj['demand_count']} citizens in {proj['zone']} flagged this. Evidence: {gap_signal['label']} is {gap_signal['value']}{gap_signal['unit']}."
-
-    # Cache results before returning
-    _RANKED_CACHE["data"] = top
-    _RANKED_CACHE["at"] = time.time()
-    _RANKED_CACHE["version"] = version
-    logger.info("[CACHE SET] Ranked projects cached for %ds", CACHE_TTL_SECONDS)
-    return JSONResponse(content=top)
+    ranked.sort(key=lambda project: (-project["impact_score"], project["id"]))
+    sanctioned = [report for report in reports if report["status_bucket"] == "sanctioned"]
+    whatsapp = (TWILIO_WHATSAPP_NUMBER or "").strip().removeprefix("whatsapp:").removeprefix("+")
+    result = {
+        "projects": ranked[:8],
+        "totals": {
+            "projects": len(ranked),
+            "sanctioned_projects": sum(p["status"] == "Sanctioned" for p in ranked),
+            "sanctioned_reports": len(sanctioned),
+            "sanctioned_report_estimate": sum(r["estimated_budget"] for r in sanctioned),
+            "requested_report_estimate": sum(r["estimated_budget"] for r in reports),
+            "reports": len(reports),
+            "truncated": snap.get("truncated", False),
+        },
+        "proposal_url": f"https://wa.me/{whatsapp}?text=Hi" if whatsapp.isascii() and whatsapp.isdigit() else None,
+    }
+    _RANKED_CACHE.update(data=result, at=time.time(), version=version)
+    return JSONResponse(content=result if include_totals else result["projects"])
 
 
 # Firestore caps a batched write at 500 operations.
@@ -1870,39 +1852,49 @@ def cluster_members(db, zone: str, semantic_tag: str | None, category: str) -> l
     query = db.collection('messages')
     try:
         from google.cloud.firestore_v1.base_query import FieldFilter
-        query = query.where(filter=FieldFilter("constituency_zone", "==", zone))
+        if zone != "Unknown":
+            query = query.where(filter=FieldFilter("constituency_zone", "==", zone))
     except Exception:
-        query = query.where("constituency_zone", "==", zone)
+        if zone != "Unknown":
+            query = query.where("constituency_zone", "==", zone)
 
     members = []
     for doc in query.stream():
-        msg = doc.to_dict() or {}
-        msg_tag = msg.get("semantic_tag") or msg.get("category")
-        if (semantic_tag and msg_tag == semantic_tag) or (not semantic_tag and msg.get("category") == category):
+        report = AN.normalize_record(doc.id, doc.to_dict() or {})
+        if report["constituency_zone"] != zone:
+            continue
+        if semantic_tag:
+            matches = project_tag(report) == semantic_tag
+        else:
+            matches = not report["semantic_tag"] and report["category"] == AN.normalize_category(category)
+        if matches:
             members.append(doc)
     return members
 
 
-def mark_sanctioned(db, refs: list) -> int:
+def mark_sanctioned(db, refs: list) -> set:
     """Flip a cluster to Sanctioned in batched writes rather than one call per
     report, so a large cluster is a handful of round trips instead of hundreds."""
-    written = 0
+    written = set()
+    update = {"status": "Sanctioned", JOBS.LIVE_UPDATED_FIELD: firestore.SERVER_TIMESTAMP}
     for start in range(0, len(refs), FIRESTORE_BATCH_LIMIT):
         chunk = refs[start:start + FIRESTORE_BATCH_LIMIT]
         try:
             batch = db.batch()
             for ref in chunk:
-                batch.update(ref, {"status": "Sanctioned"})
+                batch.update(ref, update)
             batch.commit()
         except Exception as e:
             logger.warning(f"[SANCTION] batch write failed, falling back per document: {e}")
             for ref in chunk:
                 try:
-                    ref.update({"status": "Sanctioned"})
+                    ref.update(update)
+                    written.add(ref.id)
                 except Exception as inner:
                     logger.error(f"[SANCTION] could not update a report: {inner}")
                     continue
-        written += len(chunk)
+        else:
+            written.update(ref.id for ref in chunk)
     _RANKED_CACHE["data"] = None
     _RANKED_CACHE["at"] = 0.0
     _RANKED_CACHE["version"] = None
@@ -1944,41 +1936,73 @@ class SanctionRequest(BaseModel):
 
 @app.post("/projects/sanction")
 async def sanction_project(req: SanctionRequest, background_tasks: BackgroundTasks, db = Depends(get_db), admin = Depends(verify_admin)):
-    """Sanctions a project cluster, updates message statuses, notifies citizens."""
-    cluster_tag = None
+    """Sanction open reports once per cluster and notify newly affected citizens."""
     cluster_zone = req.zone
+    cluster_tag = AN.normalize_category(req.category)
     if "|" in req.project_id:
         cluster_tag, cluster_zone = req.project_id.rsplit("|", 1)
 
-    members = cluster_members(db, cluster_zone, cluster_tag, req.category)
-    mark_sanctioned(db, [doc.reference for doc in members])
+    project_id = f"{cluster_tag}|{cluster_zone}"
+    lock_id = hashlib.sha256(project_id.encode()).hexdigest()
+    lock = db.collection("project_sanction_locks").document(lock_id)
+    try:
+        lock.create({"expires_at": time.time() + 600})
+    except Exception as exc:
+        if type(exc).__name__ != "AlreadyExists":
+            raise
+        # Allow recovery after an instance was terminated without releasing its lock.
+        snapshot = lock.get()
+        if not snapshot.exists or snapshot.to_dict()["expires_at"] > time.time():
+            raise HTTPException(status_code=409, detail="This project is being sanctioned. Refresh and try again.")
+        try:
+            lock.update({"expires_at": time.time() + 600}, option=db.write_option(last_update_time=snapshot.update_time))
+        except Exception as conflict:
+            if type(conflict).__name__ not in {"FailedPrecondition", "NotFound"}:
+                raise
+            raise HTTPException(status_code=409, detail="This project is being sanctioned. Refresh and try again.")
 
-    senders = []
-    seen = set()
-    for doc in members:
-        sender = (doc.to_dict() or {}).get("sender")
-        if sender and sender not in seen:
-            seen.add(sender)
-            senders.append(sender)
+    try:
+        members = cluster_members(db, cluster_zone, cluster_tag, req.category)
+        if not members:
+            raise HTTPException(status_code=404, detail="Project cluster not found.")
 
-    # Sending is a network call per citizen. Doing it inline meant a large
-    # cluster could outlast the request timeout, leaving some citizens notified
-    # and others not, with no record of where it stopped.
-    background_tasks.add_task(notify_sanctioned, senders, req.title, req.project_id)
+        pending = []
+        prior_senders = set()
+        for doc in members:
+            report = doc.to_dict() or {}
+            status = AN.status_bucket(report.get("status"))
+            if status == "open":
+                pending.append((doc, report.get("sender")))
+            elif status == "sanctioned":
+                prior_senders.add(report.get("sender"))
 
-    # Log sanction in a separate collection
-    db.collection('sanctioned_projects').add({
-        "project_id": req.project_id,
-        "title": req.title,
-        "zone": req.zone,
-        "category": req.category,
-        "semantic_tag": cluster_tag,
-        "sanctioned_at": datetime.now().isoformat(),
-        "citizens_notified": len(senders),
-    })
-    # `citizens_notified` is the number queued: delivery happens after this
-    # response, and per-citizen failures are logged by notify_sanctioned.
-    return {"status": "sanctioned", "citizens_notified": len(senders), "reports_updated": len(members)}
+        if not pending:
+            return {"status": "already_actioned", "citizens_notified": 0, "reports_updated": 0}
+
+        written = mark_sanctioned(db, [doc.reference for doc, _ in pending])
+        senders = list(dict.fromkeys(
+            sender for doc, sender in pending
+            if doc.id in written and sender and sender not in prior_senders and not sim.is_simulated_sender(sender)
+        ))
+        if written:
+            background_tasks.add_task(notify_sanctioned, senders, req.title, project_id)
+            try:
+                db.collection("sanctioned_projects").add({
+                    "project_id": project_id, "title": req.title, "zone": cluster_zone,
+                    "category": req.category, "semantic_tag": cluster_tag,
+                    "sanctioned_at": datetime.now().isoformat(), "citizens_notified": len(senders),
+                })
+            except Exception:
+                logger.exception("[SANCTION] Could not record sanction log for %s", project_id)
+
+        status = "sanctioned" if len(written) == len(pending) else "partial"
+        return {"status": status, "citizens_notified": len(senders), "reports_updated": len(written)}
+    finally:
+        try:
+            lock.delete()
+        except Exception:
+            logger.exception("[SANCTION] Could not release lock for %s", project_id)
+
 
 
 # Only these hosts may receive the Twilio credentials. Without this the proxy
@@ -2138,6 +2162,9 @@ def _run_asgi(asgi_app, req: https_fn.Request) -> https_fn.Response:
 @https_fn.on_request(
     memory=options.MemoryOption.GB_1,
     timeout_sec=300,
+    cpu=1,
+    concurrency=24,
+    max_instances=20,
     secrets=[
         "ADMIN_EMAILS",
         "GEMINI_API_KEY",
@@ -2186,7 +2213,7 @@ def _run_triage_task(data) -> None:
         return
     finished = JOBS.process_queued_report(
         firestore_db, doc_id,
-        client=LLM.get_provider(),
+        client_factory=LLM.get_provider,
         media_loader=fetch_twilio_media_part,
         notifier=_notify_triage_details,
     )
@@ -2194,15 +2221,15 @@ def _run_triage_task(data) -> None:
         raise RuntimeError(f"triage of {doc_id} is not finished")
 
 
-# The limits bound model spend and protect its quota; a backlog waits in the queue.
-# Ten a second is about four times the average of 2 lakh reports a day.
+# Routine rules-based triage has headroom over the 70/s intake target.
+# Separate urgent dispatch capacity prevents routine work from blocking it.
 @tasks_fn.on_task_dispatched(
     retry_config=TRIAGE_RETRY,
-    rate_limits=options.RateLimits(max_concurrent_dispatches=20, max_dispatches_per_second=10),
+    rate_limits=options.RateLimits(max_concurrent_dispatches=160, max_dispatches_per_second=80),
     memory=options.MemoryOption.GB_1,
     cpu=1,
     concurrency=10,
-    max_instances=5,
+    max_instances=16,
     timeout_sec=300,
     secrets=TRIAGE_SECRETS,
 )
@@ -2213,11 +2240,11 @@ def triagetask(req: tasks_fn.CallableRequest) -> None:
 # A lane of its own, so a flood of routine reports cannot delay an emergency.
 @tasks_fn.on_task_dispatched(
     retry_config=TRIAGE_RETRY,
-    rate_limits=options.RateLimits(max_concurrent_dispatches=10, max_dispatches_per_second=5),
+    rate_limits=options.RateLimits(max_concurrent_dispatches=40, max_dispatches_per_second=20),
     memory=options.MemoryOption.GB_1,
     cpu=1,
     concurrency=10,
-    max_instances=3,
+    max_instances=4,
     timeout_sec=300,
     secrets=TRIAGE_SECRETS,
 )

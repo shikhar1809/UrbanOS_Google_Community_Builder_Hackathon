@@ -590,6 +590,8 @@ def purge(raw_db) -> dict:
         _delete_matching(raw_db, raw_db.collection(sim.STREAM_PREFIX + name))
     for name in (FILES_COLLECTION, FILE_CHUNKS_COLLECTION):
         _delete_matching(raw_db, raw_db.collection(name))
+    from google.cloud.firestore import SERVER_TIMESTAMP
+    raw_db.collection(sim.CLEANUP_COLLECTION).document(sim.CLEANUP_DOC).set({"at": SERVER_TIMESTAMP})
     _control(raw_db).delete()
     logger.info("[STREAM] purged %s simulated reports", removed)
     return {"removed_reports": removed}

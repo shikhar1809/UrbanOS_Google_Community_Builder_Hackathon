@@ -1,5 +1,5 @@
 
-const CACHE_NAME = 'urbanos-cache-v4';
+const CACHE_NAME = 'urbanos-cache-v5';
 const urlsToCache = [
   '/',
   '/index.html',
@@ -33,7 +33,8 @@ self.addEventListener('fetch', event => {
   // Only cache GET requests
   if (event.request.method !== 'GET') return;
   // Don't cache API calls
-  if (event.request.url.includes('/messages') || event.request.url.includes('/projects')) return;
+  const path = new URL(event.request.url).pathname;
+  if (path === '/messages' || path.startsWith('/projects/') || path.startsWith('/api/')) return;
 
   // Use Network-First strategy
   event.respondWith(

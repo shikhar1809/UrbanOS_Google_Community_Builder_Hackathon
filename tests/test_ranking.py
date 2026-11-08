@@ -110,3 +110,65 @@ def test_clusters_are_split_by_zone(client):
     by_zone = {p["zone"]: p["demand_count"] for p in projects}
     assert by_zone.get("North") == 6
     assert by_zone.get("South") == 3
+
+
+
+def test_planning_totals_cover_clusters_outside_the_top_eight(client):
+    db = seed(FakeFirestore(), 10)
+    for i, report in enumerate(db.data["messages"].values()):
+        report.update(semantic_tag=f"issue_{i}", estimated_budget="₹1,00,000", status="Sanctioned")
+    main.app.dependency_overrides[main.get_db] = lambda: db
+
+    result = client.get("/projects/ranked?include_totals=true").json()
+    reports = client.get("/messages").json()
+
+    assert len(result["projects"]) == 8
+    assert result["totals"]["sanctioned_projects"] == 10
+    assert result["totals"]["sanctioned_reports"] == 10
+    assert result["totals"]["requested_report_estimate"] == sum(r["estimated_budget"] for r in reports) == 1_000_000
+    assert result["totals"]["sanctioned_report_estimate"] == 1_000_000
+
+
+def test_project_status_and_location_evidence_are_based_on_the_cluster(client):
+    db = seed(FakeFirestore(), 4, zone="Gomti Nagar")
+    reports = db.data["messages"]
+    reports["m00001"]["status"] = "Sanctioned"
+    reports["m00002"]["constituency_zone"] = "Chowk"
+    reports["m00003"]["constituency_zone"] = "Unmapped locality"
+    main.app.dependency_overrides[main.get_db] = lambda: db
+
+    projects = {p["zone"]: p for p in client.get("/projects/ranked").json()}
+
+    east = projects["Gomti Nagar"]
+    assert east["status"] == "Partially sanctioned"
+    assert east["impact_score"] == round(6 * 1.64, 1)
+    assert "East" in east["evidence"]["gap_signal"]["source"]
+    assert "Central" in projects["Chowk"]["evidence"]["gap_signal"]["source"]
+    assert projects["Unmapped locality"]["evidence"]["gap_signal"] is None
+
+
+def test_random_seed_priority_does_not_make_routine_park_work_urgent(client):
+    db = seed(FakeFirestore(), 7)
+    for i in range(5):
+        db.data["messages"][f"m{i:05d}"].update(
+            category="Parks & Rec", semantic_tag="broken swings", summary="Broken swings", priority="Critical",
+        )
+    for key in ("m00005", "m00006"):
+        db.data["messages"][key].update(priority="Critical")
+    main.app.dependency_overrides[main.get_db] = lambda: db
+
+    projects = client.get("/projects/ranked").json()
+
+    assert [p["semantic_tag"] for p in projects] == ["sewage_overflow", "broken swings"]
+    assert projects[1]["evidence"]["priority_score"] == 5
+
+
+
+def test_proposal_link_accepts_whitespace_around_the_configured_number(client, monkeypatch):
+    db = seed(FakeFirestore(), 1)
+    main.app.dependency_overrides[main.get_db] = lambda: db
+    monkeypatch.setattr(main, "TWILIO_WHATSAPP_NUMBER", "whatsapp:+15550102030\n")
+
+    result = client.get("/projects/ranked?include_totals=true").json()
+
+    assert result["proposal_url"] == "https://wa.me/15550102030?text=Hi"

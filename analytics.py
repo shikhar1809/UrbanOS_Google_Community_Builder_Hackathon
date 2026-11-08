@@ -41,7 +41,7 @@ logger = logging.getLogger(__name__)
 
 SNAPSHOT_TTL = 60.0  # seconds
 LIVE_DELTA_INTERVAL = 2.0  # seconds between checks for reports newer than the snapshot
-LIVE_DELTA_MAX = 200
+LIVE_DELTA_MAX = 500
 
 # Hard ceiling on how many reports are held in memory at once.
 #
@@ -169,6 +169,12 @@ def _to_int(v: Any, default: int = 0) -> int:
     return int(f) if f is not None else default
 
 
+def _report_budget(value: Any) -> int:
+    if isinstance(value, str):
+        value = value.strip().removeprefix("₹").replace(",", "")
+    return _to_int(value)
+
+
 def parse_ts(value: Any) -> datetime | None:
     """Parse the several timestamp shapes present in the collection."""
     if value is None:
@@ -237,6 +243,14 @@ def ward_number(raw: Any) -> int | None:
 # RECORD NORMALIZATION
 # ---------------------------------------------------------------------------
 
+def live_version(value: Any) -> str | None:
+    if not isinstance(value, datetime):
+        return None
+    if hasattr(value, "rfc3339"):
+        return value.rfc3339()
+    return value.isoformat().replace("+00:00", "Z")
+
+
 def normalize_record(doc_id: str, d: dict) -> dict:
     ts = parse_ts(d.get("timestamp"))
     cat = normalize_category(d.get("category"))
@@ -275,7 +289,7 @@ def normalize_record(doc_id: str, d: dict) -> dict:
         "location_source": d.get("location_source"),
         "latitude": _to_float(d.get("latitude")),
         "longitude": _to_float(d.get("longitude")),
-        "estimated_budget": _to_int(d.get("estimated_budget")),
+        "estimated_budget": _report_budget(d.get("estimated_budget")),
         "media_urls": media_urls,
         "media_type": d.get("media_type") if d.get("media_type") != "None" else None,
         "original_language": d.get("original_language"),
@@ -283,6 +297,8 @@ def normalize_record(doc_id: str, d: dict) -> dict:
         "visual_evidence": d.get("visual_evidence"),
         "simulated": bool(d.get("simulated")),
         "triage_source": d.get("triage_source"),
+        "triage_status": d.get("triage_status"),
+        "live_version": live_version(d.get("live_updated_at")),
         # Lowercased haystack built once so server-side search is a substring
         # test instead of six string concatenations per record per keystroke.
         "_search": " ".join(
@@ -400,22 +416,50 @@ def _merge_new_reports(db) -> None:
         _SNAPSHOT["records"] = (fresh + _SNAPSHOT["records"])[:SNAPSHOT_MAX_RECORDS]
         _SNAPSHOT["latest_ts"] = fresh[0]["timestamp"]
         _SNAPSHOT["total_count"] = _SNAPSHOT.get("total_count", 0) + len(fresh)
+        _SNAPSHOT["truncated"] = _SNAPSHOT["total_count"] > len(_SNAPSHOT["records"])
         _SNAPSHOT["version"] = _SNAPSHOT.get("version", 0) + 1
         logger.info(f"[SNAPSHOT] merged {len(fresh)} new reports (v{_SNAPSHOT['version']})")
+
+
+_cleanup_cache = {"db": None, "checked_at": 0.0, "version": None}
+_cleanup_lock = threading.Lock()
+
+
+def demo_cleanup_at(db) -> str | None:
+    """Share the cleanup signal between the live feed and each warm snapshot."""
+    import sim
+
+    if db is None:
+        return None
+    with _cleanup_lock:
+        now = time.monotonic()
+        if _cleanup_cache["db"] is not db:
+            _cleanup_cache.update(db=db, checked_at=0.0, version=None)
+        if now - _cleanup_cache["checked_at"] >= 1.0:
+            _cleanup_cache["checked_at"] = now
+            try:
+                marker = db.collection(sim.CLEANUP_COLLECTION).document(sim.CLEANUP_DOC).get()
+                _cleanup_cache["version"] = live_version((marker.to_dict() or {}).get("at"))
+            except Exception as exc:
+                logger.warning("[SNAPSHOT] could not read demo cleanup marker: %s", exc)
+        return _cleanup_cache["version"]
 
 
 def get_snapshot(db, force: bool = False) -> dict[str, Any]:
     """Return the shared, normalized, timestamp-DESC snapshot of all reports."""
     now = time.time()
+    cleanup = demo_cleanup_at(db)
     cached = _SNAPSHOT.get("records")
-    if not force and cached is not None and (now - _SNAPSHOT["at"]) < SNAPSHOT_TTL:
+    if (not force and cached is not None and _SNAPSHOT.get("demo_cleanup_at") == cleanup
+            and (now - _SNAPSHOT["at"]) < SNAPSHOT_TTL):
         _merge_new_reports(db)
         return _SNAPSHOT
 
     with _snapshot_lock:
         # Re-check: another thread may have rebuilt while we waited.
         cached = _SNAPSHOT.get("records")
-        if not force and cached is not None and (time.time() - _SNAPSHOT["at"]) < SNAPSHOT_TTL:
+        if (not force and cached is not None and _SNAPSHOT.get("demo_cleanup_at") == cleanup
+                and (time.time() - _SNAPSHOT["at"]) < SNAPSHOT_TTL):
             return _SNAPSHOT
 
         records: list[dict] = []
@@ -456,6 +500,7 @@ def get_snapshot(db, force: bool = False) -> dict[str, Any]:
 
         stamps = [r["timestamp"] for r in records if r["timestamp"]]
         _SNAPSHOT["records"] = records
+        _SNAPSHOT["demo_cleanup_at"] = cleanup
         _SNAPSHOT["at"] = time.time()
         _SNAPSHOT["version"] = _SNAPSHOT.get("version", 0) + 1
         _SNAPSHOT["latest_ts"] = max(stamps) if stamps else None

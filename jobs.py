@@ -40,6 +40,8 @@ import logging
 import os
 from datetime import datetime, timezone
 
+from google.cloud.firestore import SERVER_TIMESTAMP
+
 import idempotency as IDEM
 import sim
 import triage_rules
@@ -47,6 +49,7 @@ import triage_rules
 logger = logging.getLogger(__name__)
 
 COLLECTION = "messages"
+LIVE_UPDATED_FIELD = "live_updated_at"
 
 STATUS_PENDING = "pending"
 STATUS_DONE = "done"
@@ -95,6 +98,14 @@ def defers(db) -> bool:
     report would never be triaged at all.
     """
     return backend() != BACKEND_INLINE and not isinstance(db, sim.NamespacedDB)
+
+
+def uses_fast_triage(description: str, media_type: str = "") -> bool:
+    return (
+        os.getenv("TRIAGE_RULES_FIRST", "").strip().lower() in {"1", "true"}
+        and not media_type.startswith("image/")
+        and triage_rules.recognises_issue(description)
+    )
 
 
 def lane_for(report: dict) -> str:
@@ -188,7 +199,7 @@ def _estimated_pin(report: dict, result: dict) -> dict:
 
 
 def process_triage(db, doc_id: str, triage_module=None, client=None, media_loader=None, notifier=None,
-                   rules_fallback: bool = False) -> bool:
+                   rules_fallback: bool = False, client_factory=None) -> bool:
     """Classify an already-filed report and write the fields back.
 
     Returns True when the report ends up triaged. Never raises: this runs
@@ -222,16 +233,21 @@ def process_triage(db, doc_id: str, triage_module=None, client=None, media_loade
         _send_details(db, ref, doc_id, report, notifier)
         return True
 
+    description = report.get("body") or ""
+    media_type = report.get("media_type") or ""
+    fast = rules_fallback and uses_fast_triage(description, media_type)
+    if not fast and client_factory:
+        client = client_factory()
     image_part = None
-    if media_loader:
+    if media_loader and not fast:
         try:
             image_part = media_loader(report.get("media_url"), report.get("media_type") or "")
         except Exception as e:
             logger.warning("[JOBS] could not load evidence photo for %s: %s", doc_id, e)
 
     result = triage_module.run_triage(
-        client,
-        description=report.get("body") or "",
+        None if fast else client,
+        description=description,
         location_raw=report.get("extracted_location") or "",
         loc_source=report.get("location_source") or "",
         image_part=image_part,
@@ -240,10 +256,11 @@ def process_triage(db, doc_id: str, triage_module=None, client=None, media_loade
         rules_fallback=rules_fallback,
     )
 
-    if not result.get("ok"):
+    if not result.get("ok") and not (fast and result.get("triage_source") == "rules"):
         # Leave it pending-but-marked so a later run picks it up again.
         update = {
             "triage_status": STATUS_FAILED,
+            LIVE_UPDATED_FIELD: SERVER_TIMESTAMP,
             "triage_attempted_at": datetime.now(timezone.utc).isoformat(),
         }
         decided_by_rules = result.get("triage_source") == "rules"
@@ -258,6 +275,7 @@ def process_triage(db, doc_id: str, triage_module=None, client=None, media_loade
         **_triage_fields(result),
         **_estimated_pin(report, result),
         "triage_status": STATUS_DONE,
+        LIVE_UPDATED_FIELD: SERVER_TIMESTAMP,
         "triaged_at": datetime.now(timezone.utc).isoformat(),
     }
 

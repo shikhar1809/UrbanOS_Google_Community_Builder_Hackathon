@@ -139,6 +139,10 @@ def _match_issue(text: str) -> Optional[Issue]:
     return next((issue for issue in ISSUES if any(k in text for k in issue.keywords)), None)
 
 
+def recognises_issue(description: str) -> bool:
+    return _match_issue(description.lower()) is not None
+
+
 def _department(issue: Issue, text: str) -> str:
     # The prompt's own rule: an inner-lane pothole is Nagar Nigam, an arterial is PWD.
     if issue.tag == "road_repair" and any(k in text for k in _ARTERIAL):

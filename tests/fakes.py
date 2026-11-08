@@ -62,21 +62,21 @@ class FakeQuery:
     count and stream. Ordering drops documents missing the field, exactly as
     Firestore does -- that behaviour is the point of one of the tests."""
 
-    def __init__(self, docs: dict, order_field=None, descending=False, cap=None, filters=()):
+    def __init__(self, docs: dict, orders=(), cap=None, filters=(), after=None):
         self._docs = docs
-        self._order_field = order_field
-        self._descending = descending
+        self._orders = tuple(orders)
         self._cap = cap
-        # Evaluated on each read, as Firestore does, so a query re-run after a
-        # write sees that write. Holding matched rows here would loop forever in
-        # anything that deletes until a query comes back empty.
         self._filters = tuple(filters)
+        self._after = after
 
     def order_by(self, field, direction="ASCENDING"):
-        return FakeQuery(self._docs, field, direction == "DESCENDING", self._cap, self._filters)
+        return FakeQuery(self._docs, self._orders + ((field, direction),), self._cap, self._filters, self._after)
 
     def limit(self, cap):
-        return FakeQuery(self._docs, self._order_field, self._descending, cap, self._filters)
+        return FakeQuery(self._docs, self._orders, cap, self._filters, self._after)
+
+    def start_after(self, values):
+        return FakeQuery(self._docs, self._orders, self._cap, self._filters, values)
 
     def count(self):
         return FakeAggregationQuery(len(self._matching()))
@@ -87,18 +87,24 @@ class FakeQuery:
 
     def _rows(self):
         rows = list(self._matching().items())
-        if self._order_field:
-            rows = [r for r in rows if r[1].get(self._order_field) is not None]
-            rows.sort(key=lambda r: r[1][self._order_field], reverse=self._descending)
+
+        def value(row, field):
+            return row[0] if field == "__name__" else row[1].get(field)
+
+        for field, direction in reversed(self._orders):
+            rows = [row for row in rows if value(row, field) is not None]
+            rows.sort(key=lambda row: value(row, field), reverse=direction == "DESCENDING")
+        if self._after:
+            cursor = tuple(v.id if isinstance(v, FakeDocument) else v for v in self._after.values())
+            rows = [row for row in rows if tuple(value(row, f) for f, _ in self._orders) > cursor]
         if self._cap is not None:
-            rows = rows[: self._cap]
+            rows = rows[:self._cap]
         return rows
 
     def where(self, field=None, op=None, value=None, filter=None):
         if filter is not None:
             field, op, value = filter.field_path, filter.op_string, filter.value
-        return FakeQuery(self._docs, self._order_field, self._descending, self._cap,
-                         self._filters + ((field, op, value),))
+        return FakeQuery(self._docs, self._orders, self._cap, self._filters + ((field, op, value),), self._after)
 
     def stream(self):
         return iter([FakeDocSnapshot(k, v, self._docs) for k, v in self._rows()])
@@ -166,7 +172,9 @@ def _matches(doc, field, op, value):
     if op == ">":
         # Firestore excludes documents missing the field from a range query.
         return doc.get(field) is not None and doc.get(field) > value
-    raise NotImplementedError(f"fake only supports == and >, got {op}")
+    if op == ">=":
+        return doc.get(field) is not None and doc.get(field) >= value
+    raise NotImplementedError(f"Unsupported filter: {op}")
 
 
 class FakeFirestore:

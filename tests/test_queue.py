@@ -405,3 +405,16 @@ def test_the_sandbox_never_touches_the_queue(intake, queue):
 
 def test_rules_module_is_urgent_handles_empty_text():
     assert triage_rules.is_urgent("") is False
+
+
+
+def test_known_text_can_finish_triage_without_a_model(db, monkeypatch):
+    monkeypatch.setenv("TRIAGE_RULES_FIRST", "1")
+
+    def unused_provider():
+        pytest.fail("Known text must not consume model quota in the fast lane.")
+
+    assert jobs.process_queued_report(db, DOC, client_factory=unused_provider, notifier=lambda report: True)
+    assert report(db)["triage_source"] == "rules"
+    assert report(db)["triage_status"] == jobs.STATUS_DONE
+    assert report(db)[jobs.QUEUE_OPEN_FIELD] is False

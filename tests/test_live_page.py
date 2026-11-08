@@ -14,13 +14,14 @@ def script_of(name):
 
 
 def test_each_new_report_from_the_feed_reaches_the_live_layer():
-    assert "UrbanLive.arrive(d.items)" in script_of("UrbanFeed")
+    assert "UrbanLive.arrive(data.items)" in script_of("UrbanFeed")
 
 
 def test_arrivals_refresh_every_dashboard():
     live = script_of("UrbanLive")
-    for call in ("fetchMessages()", "UrbanInsights.refresh()", "fetchRankedProjects()"):
+    for call in ("mergeLiveReports(items)", "refreshReportDashboards()", "UrbanInsights.refresh()", "fetchRankedProjects()"):
         assert call in live, call
+    assert "fetchMessages()" not in live
 
 
 def test_insights_exposes_its_refresh():
@@ -28,8 +29,9 @@ def test_insights_exposes_its_refresh():
 
 
 def test_a_new_report_does_not_jump_the_map():
-    fetch_messages = PAGE[PAGE.index("async function fetchMessages()"):PAGE.index("MPLADS INSIGHTS LOGIC")]
-    assert "setView" not in fetch_messages
+    live_map = PAGE[PAGE.index("const LiveReportMap"):PAGE.index("window.updateMapFilters =")]
+    assert "setView" not in live_map
+    assert "flyTo" not in live_map
 
 
 def test_citizen_text_reaches_the_map_and_alerts_as_text_not_html():

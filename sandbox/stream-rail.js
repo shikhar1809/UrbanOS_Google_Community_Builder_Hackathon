@@ -154,6 +154,8 @@
   }
 
   // ---------- painting ----------
+  let clearing = false;
+
   function paintToggle() {
     const running = driving || othersLive;
     toggle.className = 'srail-btn ' + (running ? 'halt' : 'go');
@@ -161,15 +163,17 @@
     toggle.append(h('span', 'srail-label', running ? 'Stop data stream' : 'Start data stream'));
     toggle.setAttribute('aria-label', running ? 'Stop data stream' : 'Start data stream');
     // The server refuses to clear during a run, which would only write more.
-    clearBtn.disabled = running;
+    clearBtn.disabled = running || clearing;
+    clearBtn.title = running ? 'Stop the stream before cleaning demo data' : '';
+    clearBtn.querySelector('.srail-label').textContent = running ? 'Stop stream to clean' : 'Clean up demo data';
     scenarioSelect.disabled = running;
     rateSelect.disabled = running;
   }
 
-  function say(text, kind) {
+  function say(text, kind, holdMs = kind === 'bad' ? 8000 : 0) {
     status.textContent = text;
     status.className = 'srail-status' + (kind ? ' ' + kind : '');
-    holdStatusUntil = kind === 'bad' ? Date.now() + 8000 : 0;
+    holdStatusUntil = holdMs ? Date.now() + holdMs : 0;
   }
 
   function paintState(s) {
@@ -249,14 +253,18 @@
   clearBtn.addEventListener('click', async () => {
     if (!confirm('Delete all simulated reports and saved stream files from UrbanOS? '
       + 'Reports not marked as simulated are not touched. This cannot be undone.')) return;
-    clearBtn.disabled = true;
+    clearing = true;
+    toggle.disabled = true;
+    paintToggle();
+    say('Cleaning demo data…');
     try {
       const out = await call('purge', {});
-      holdStatusUntil = Date.now() + 8000;
-      say(`Removed ${out.removed_reports} simulated reports`);
+      say(out.removed_reports ? `Removed ${out.removed_reports} simulated reports` : 'No simulated reports remain', 'live', 10000);
     } catch (e) {
       say(e.message, 'bad');
     } finally {
+      clearing = false;
+      toggle.disabled = false;
       paintToggle();
     }
   });
@@ -373,7 +381,7 @@
 
   // ---------- watching ----------
   async function watch() {
-    if (driving || document.hidden) return;
+    if (driving || clearing || document.hidden) return;
     try {
       const s = await call('state');
       if (s.scenarios && !scenarioSelect.options.length) {
@@ -384,7 +392,7 @@
           scenarioSelect.append(opt);
         });
       }
-      if (!driving) paintState(s);
+      if (!driving && !clearing) paintState(s);
     } catch { /* a missed poll corrects itself on the next one */ }
   }
 

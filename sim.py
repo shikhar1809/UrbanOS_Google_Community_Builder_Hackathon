@@ -42,6 +42,8 @@ ALLOWED_MEDIA_TYPES = {
 _MEDIA_ID_RE = re.compile(r"[0-9a-f]{32}")
 
 STREAM_PREFIX = "stream_"
+CLEANUP_COLLECTION = "stream_control"
+CLEANUP_DOC = "dashboard_cleanup"
 REPORTS_COLLECTION = "messages"
 SIMULATED_PHONE_PREFIX = "+999"  # no country uses 999, so these reach no real phone
 
