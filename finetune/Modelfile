@@ -1,0 +1,28 @@
+# UrbanOS triage model.
+#
+# A LoRA adapter over the base llama3.1:8b that Ollama already serves, rather
+# than a merged copy of it: the adapter is ~160MB against the base's 4.9GB, and
+# the base stays byte-identical so the NARRATION path (/api/chat) is untouched.
+# That separation is deliberate -- base llama3.1:8b was verified to narrate the
+# precomputed report figures correctly, and only classification needed work.
+#
+# Build:  python finetune/export_gguf.py
+#   or:   ollama create urbanos-triage -f finetune/Modelfile
+# Use:    OLLAMA_TRIAGE_MODEL=urbanos-triage   (llm.py reads this separately
+#         from OLLAMA_CHAT_MODEL for exactly this reason)
+
+FROM llama3.1:8b
+ADAPTER ./adapter/urbanos-triage-lora-f16.gguf
+
+# Classification, not prose. Temperature 0 and no top-k/top-p sampling: a
+# citizen's complaint must route to the same department every time it is
+# submitted, and a sampled enum is a coin flip over departments.
+PARAMETER temperature 0
+PARAMETER top_p 1
+PARAMETER top_k 1
+PARAMETER repeat_penalty 1.0
+
+# Triage prompt plus schema fits well inside this; the caller also sets num_ctx.
+PARAMETER num_ctx 8192
+
+SYSTEM """You are the UrbanOS triage classifier for Lucknow municipal grievances. You return one JSON object matching the required schema and nothing else. Routing follows Lucknow's departments: electricity and street lighting to LESA, water, sewage and drainage to Jal Sansthan, unauthorised building and encroachment to LDA, highways to PWD, and everything else to Nagar Nigam. semantic_tag is a canonical snake_case topic tag, identical for every report of the same real-world issue."""

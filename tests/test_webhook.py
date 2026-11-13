@@ -35,8 +35,8 @@ def calls(monkeypatch):
     """Count pipeline runs, so a duplicate that reaches the pipeline is visible."""
     seen = []
 
-    def fake_pipeline(form_data, background_tasks, _db):
-        seen.append(dict(form_data))
+    def fake_pipeline(form_data, background_tasks, _db, *, intake_origin=None):
+        seen.append({**form_data, "intake_origin": intake_origin})
         return HTMLResponse(content=REPLY, media_type="application/xml")
 
     monkeypatch.setattr(main, "_process_whatsapp_sync", fake_pipeline)
@@ -63,6 +63,7 @@ def test_request_is_processed_when_signature_checking_is_not_configured(client, 
 
     assert response.status_code == 200
     assert len(calls) == 1
+    assert calls[0]["intake_origin"] is None
 
 
 def test_forged_request_is_rejected(client, calls, monkeypatch):
@@ -83,6 +84,7 @@ def test_valid_signature_is_accepted(client, calls, monkeypatch):
 
     assert response.status_code == 200
     assert len(calls) == 1
+    assert calls[0]["intake_origin"] == main.REVIEW.SIGNED_INTAKE
 
 
 def test_signature_checking_can_be_disabled_for_debugging(client, calls, monkeypatch):
@@ -144,6 +146,25 @@ def test_message_without_an_id_is_still_processed(client, calls, monkeypatch):
     assert response.status_code == 200
     assert len(calls) == 1
     assert idempotency.COLLECTION not in db_collections(client)
+
+
+@pytest.mark.parametrize("guided", [False, True])
+def test_tracking_accepts_case_insensitive_reference_and_requires_owner(client, db, monkeypatch, guided):
+    owner = "whatsapp:+15005550021"
+    other = "whatsapp:+15005550022"
+    reference = "UO7AB123"
+    monkeypatch.setattr(main, "twilio_validator", StubValidator(accept=True))
+    monkeypatch.setattr(main, "TWILIO_VALIDATE_SIGNATURE", True)
+    db.data["messages"] = {"test-report": {"sender": owner, "reference_id": reference,
+                                           "summary": "School water outage", "status": "Open"}}
+    if guided:
+        for sender in (owner, other):
+            main.update_session(db, sender, "awaiting_track_ref", {})
+    body = "#uo7Ab123" if guided else "status #uo7Ab123"
+    assert "School water outage" in post(client, From=owner, Body=body).text
+    denied = post(client, From=other, Body=body).text
+    assert "School water outage" not in denied
+    assert "not find report" in denied or "No report found" in denied
 
 
 def db_collections(client):

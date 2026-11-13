@@ -179,7 +179,7 @@ def _classify(client, prompt: str, image_part, model: str) -> TriageResult:
 
 def run_triage(client, description: str, location_raw: str = "", loc_source: str = "",
                image_part=None, lat=None, lng=None, model: str = TRIAGE_MODEL,
-               rules_fallback: bool = False) -> dict:
+               rules_fallback: bool = False, photo_only: bool = False) -> dict:
     """Classify one report. Never raises: on failure the defaults are returned
     so the report is still filed and can be triaged again later.
 
@@ -197,9 +197,14 @@ def run_triage(client, description: str, location_raw: str = "", loc_source: str
     # A GPS pin determines the ward whether or not the model answers.
     pinned = ward_from_coordinates(lat, lng)
 
-    if client and description and not (rules_fallback and model_cooling()):
+    usable_photo = photo_only and image_part is not None and getattr(client, "supports_photo_only", False)
+    if client and (description or usable_photo) and not (rules_fallback and model_cooling()):
         try:
-            parsed = _classify(client, build_prompt(description, location_raw), image_part, model)
+            prompt = build_prompt(description, location_raw)
+            if photo_only:
+                prompt += ("\nThe citizen submitted a photo without a description. Describe the visible issue "
+                           "using the photo and supplied location. Avoid inferring facts hidden from view.")
+            parsed = _classify(client, prompt, image_part, model)
             result.update({
                 "category": parsed.category,
                 "priority": parsed.priority,

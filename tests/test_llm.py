@@ -165,6 +165,33 @@ def test_ollama_classify_attaches_an_evidence_photo(monkeypatch):
     assert calls[0][1]["messages"][0]["images"] == ["iVBORw=="]
 
 
+def test_cloud_llama_server_uses_private_schema_request_without_startup_probe(monkeypatch):
+    requests = []
+
+    def handle(request):
+        requests.append(request)
+        return httpx.Response(200, json={"choices": [{"message": {
+            "content": '{"category": "Other", "priority": "Low"}',
+        }}]})
+
+    client = httpx.Client
+    transport = httpx.MockTransport(handle)
+    monkeypatch.setattr(llm.httpx, "Client", lambda **kwargs: client(transport=transport, **kwargs))
+    monkeypatch.setenv("LLM_PROVIDER", "llama_cpp")
+    monkeypatch.setenv("LLAMA_CPP_HOST", "https://urbanos-model.example")
+    monkeypatch.setenv("LLAMA_CPP_API_TOKEN", "test-key.test-secret")
+    provider = llm.get_provider()
+    assert isinstance(provider, llm.LlamaCppProvider)
+    assert not requests
+    assert provider.classify("prompt", Shape).category == "Other"
+
+    request, = requests
+    assert request.url.path == "/v1/chat/completions"
+    assert request.headers["Authorization"] == "Bearer test-key.test-secret"
+    payload = json.loads(request.content)
+    assert payload["response_format"]["schema"]["properties"].keys() >= {"category", "priority"}
+
+
 # --- groq -------------------------------------------------------------------
 
 class _GroqStub:

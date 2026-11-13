@@ -3,7 +3,10 @@ it really goes through the production intake pipeline and that it can never
 reach a real person or stay behind after a demo.
 """
 
+import json
 import random
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -16,6 +19,7 @@ import sim_api
 import sim_stream
 import triage
 import triage_rules
+from demo_locations import DEMO_SITES
 from tests.fakes import FakeFirestore
 
 
@@ -192,6 +196,41 @@ def test_the_stream_does_not_bind_twilio():
 
 # --- generation --------------------------------------------------------------
 
+def test_demo_locations_span_lucknow_and_stay_inside_the_displayed_boundary():
+    boundary = Path(__file__).resolve().parents[1] / "public" / "lucknow-boundary.geojson"
+    [ring] = json.loads(boundary.read_text(encoding="utf-8"))["geometry"]["coordinates"]
+    rng = random.Random(11)
+    lats, lngs = [], []
+    for site in DEMO_SITES:
+        for lat, lng in (site.start, site.end, *(site.sample(rng) for _ in range(8))):
+            crossings = sum(
+                lng < x1 + (x2 - x1) * (lat - y1) / (y2 - y1)
+                for (x1, y1), (x2, y2) in zip(ring, ring[1:])
+                if (y1 > lat) != (y2 > lat)
+            )
+            assert crossings % 2, site.name
+            lats.append(lat)
+            lngs.append(lng)
+    assert max(lats) - min(lats) > 0.2
+    assert max(lngs) - min(lngs) > 0.2
+
+
+def test_generated_text_report_uses_its_demo_road_location(db):
+    rng = random.Random(5)
+    e = next(e for e in (sim_stream.generate_event("steady", rng) for _ in range(200))
+             if e["kind"] == "citizen" and e["place"] == "Purseni" and "location_text" in e)
+
+    [result] = sim_stream.process_event(e, main._process_whatsapp_sync, db, "run1")
+
+    assert result["outcome"] == "filed"
+    assert (result["lat"], result["lng"]) == e["demo_point"]
+    assert result["zone"] == "South"
+    assert result["summary"].endswith(" in Purseni")
+    [stored] = reports(db)
+    assert (stored["latitude"], stored["longitude"]) == e["demo_point"]
+    assert stored["location_source"] == "text"
+
+
 def test_a_surge_concentrates_on_its_zone_and_issues():
     rng = random.Random(1)
     events = [sim_stream.generate_event("monsoon", rng) for _ in range(300)]
@@ -245,9 +284,10 @@ def test_a_tick_files_reports_and_updates_the_run(db):
 
 def test_clusters_accumulate_across_ticks(db):
     run = start(db, scenario="monsoon")
+    rng = random.Random(3)
     for _ in range(4):
         sim_stream._control(db).update({"last_tick_at": 0})
-        tick(db, run["run_id"], batch=5)
+        sim_stream.tick(db, main._process_whatsapp_sync, run["run_id"], 5, rng)
 
     clusters = sim_stream.read_state(db)["clusters"]
     assert clusters and clusters[0]["count"] >= 2
@@ -259,6 +299,67 @@ def test_batch_size_is_capped_on_the_server(db):
     out = sim_stream.tick(db, main._process_whatsapp_sync, run["run_id"], 100, random.Random(9))
 
     assert len([r for r in out["results"]]) <= sim_stream.MAX_BATCH * 2, "a duplicate may add one result each"
+
+
+def test_dashboard_load_has_an_exact_cap_and_writes_only_tagged_simulated_reports(db):
+    run = start(db, rate_per_min=4200, max_events=150, mode="dashboard")
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("Dashboard load must bypass messaging and triage pipeline")
+
+    first = sim_stream.tick(db, forbidden, run["run_id"], 120, random.Random(7))["state"]
+    assert first["events"] == 120
+    assert first["observed_per_min"] == 120
+    assert len(first["recent"]) == sim_stream.RECENT_EVENTS_KEPT
+    assert len(reports(db)) == first["filed"]
+    assert all(r["simulated"] and r["sender"].startswith("whatsapp:+999") for r in reports(db))
+    assert first["by_source"] == {"demo:dashboard": first["filed"]}
+    with pytest.raises(sim_stream.StreamError) as error:
+        sim_stream.tick(db, forbidden, run["run_id"], 120)
+    assert error.value.status == 429
+    sim_stream._control(db).update({"next_tick_at": 0})
+
+    final = sim_stream.tick(db, forbidden, run["run_id"], 120, random.Random(9))["state"]
+    assert final["status"] == "completed" and final["events"] == 150
+    assert final["filed"] + final["rejected"] == 150
+    assert len(sim_stream.file_rows(db, run["run_id"])) == 150
+    assert len(reports(db)) == final["filed"]
+
+
+def test_overlapping_tick_and_stop_cannot_overwrite_a_running_batch(db, monkeypatch):
+    run = start(db, max_events=1, mode="dashboard")
+    original = sim_stream._dashboard_batch
+    entered = threading.Event()
+    release = threading.Event()
+
+    def paused(*args):
+        entered.set()
+        assert release.wait(3)
+        return original(*args)
+
+    monkeypatch.setattr(sim_stream, "_dashboard_batch", paused)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        pending = pool.submit(sim_stream.tick, db, None, run["run_id"], 120, random.Random(7))
+        assert entered.wait(3)
+        try:
+            with pytest.raises(sim_stream.StreamError) as error:
+                sim_stream.tick(db, None, run["run_id"], 120)
+            assert error.value.status == 429
+            with pytest.raises(sim_stream.StreamError) as error:
+                sim_stream.stop(db)
+            assert error.value.status == 429
+        finally:
+            release.set()
+        assert pending.result()["state"]["events"] == 1
+
+
+def test_dashboard_daily_reservation_survives_cleanup(db, monkeypatch):
+    monkeypatch.setattr(sim_stream, "BULK_DAILY_EVENTS", 10000)
+    start(db, max_events=10000, mode="dashboard")
+    sim_stream.stop(db)
+    sim_stream.purge(db)
+    with pytest.raises(sim_stream.StreamError) as error:
+        start(db, max_events=1, mode="dashboard")
+    assert error.value.status == 429
 
 
 def test_rate_is_clamped_on_the_server(db):

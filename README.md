@@ -29,7 +29,7 @@ UrbanOS turns that messy public input into a ranked, evidence-backed planning qu
 
 UrbanOS is a working civic planning prototype for constituency development.
 
-Citizens submit proposals through WhatsApp or SMS using text, voice, photo, or location pins. Gemini converts each submission into structured civic data: category, priority, summary, zone, budget estimate, language, semantic cluster, and visual evidence when a photo is attached. The dashboard then groups similar proposals, weighs citizen demand against infrastructure gaps, recommends projects for sanction, and closes the loop by notifying citizens when action is taken.
+Citizens submit proposals through WhatsApp or SMS using text, voice, photos, or location pins. Triage turns those inputs into structured reports. Planning groups related reports, explains the ranking, and lets reviewers prepare a draft brief for the official decision.
 
 The core idea is simple:
 
@@ -67,9 +67,9 @@ Most civic tools stop at grievance collection. UrbanOS is built around planning.
 
 **We do not only store complaints.** We cluster them into projects an MP can act on.
 
-**We do not only count votes.** We weigh demand against deprivation. Ten requests for a school in an area where children travel 7.8 km should beat fifteen requests for a park in an already-served zone.
+**Staff can inspect the evidence.** Each recommendation shows how the submitted reports contributed to the score and identifies the coverage and age of any published evidence.
 
-**We do not only display dashboards.** The sanction button closes the citizen feedback loop by sending WhatsApp notifications to the people who raised the issue.
+**Staff can prepare a shortlist.** Reviewers can reorder the draft and export their reasons for the official who makes the decision.
 
 **We do not force one input format.** A citizen can type, speak, send a photo, or share a GPS pin. SMS fallback exists for low-connectivity cases.
 
@@ -85,10 +85,9 @@ flowchart TD
     D --> E["Gemini structured triage"]
     E --> F["Firestore proposal record"]
     F --> G["Semantic project clustering"]
-    G --> H["Impact score + evidence ranking"]
-    H --> I["MP office dashboard"]
-    I --> J["Project sanctioned"]
-    J --> K["Citizens notified"]
+    G --> H["Ranked recommendation and evidence"]
+    H --> I["Draft review brief"]
+    I --> J["Official review and decision"]
 ```
 
 ---
@@ -108,35 +107,17 @@ UrbanOS uses Gemini for three real jobs:
 
 ---
 
-## Ranking Formula
+## Project Recommendations
 
-The ranking engine groups proposals by `(semantic_tag, zone)`.
+Planning separates sourced examples, simulated reports, signature-checked intake, and history with unknown provenance. GPS reports with the same issue type can group across hex boundaries when they fall within 150 metres and 72 hours of the first report. The generator can also group reports by a known simulation site. Reports with uncertain locations stay separate. Each identified reporter contributes their highest urgency weight once. Historical public evidence is dated and shown alongside the score for the official to review.
 
-```text
-Impact Score = sum(report priority weights) * (1 + category_gap / 10)
-```
-
-The important detail is `category_gap`. It is not one generic number.
-
-UrbanOS uses illustrative zone-level figures for the project type when a locality maps to a known zone. Projects with no matching zone keep their base priority score.
-
-| Project type | Evidence signal |
-|---|---|
-| School / classroom | nearest school distance |
-| Clinic / PHC / health | nearest health facility distance |
-| Road / bridge / signal | road-connectivity gap index |
-| Water / drain / sewer | water-sanitation gap index |
-| Power / streetlights | utility gap index |
-| Park / waste / flooding | environment/public-space gap index |
-
-This makes the ranking easier to defend in front of citizens, officials, and auditors.
+The shortlist is a browser-local draft. Reviewers can reorder it, record reasons, and download a brief. The read-only `GET /api/planning/recommendations` and `GET /api/planning/recommendations/{project_id}` endpoints accept a `scope` and paginate recommendations and supporting references respectively. The legacy `/projects/ranked` contract continues to serve existing map markers.
 
 ---
 
 ## Things Judges Might Miss
 
-- **The sanction button is cluster-safe.** It updates only the exact semantic project cluster, not every proposal in the same broad category.
-- **The dashboard has real Firebase Auth.** Admin access uses Google sign-in and can be restricted with an `ADMIN_EMAILS` allowlist.
+- **Review drafts are local.** Preparing a draft leaves report status and citizen messaging untouched. The legacy sanction endpoint requires a verified Firebase account on the `ADMIN_EMAILS` allowlist.
 - **The Twilio webhook validates signatures** when `TWILIO_AUTH_TOKEN` is configured.
 - **Voice notes are asynchronous.** The webhook replies quickly, then the worker transcribes audio and continues the session.
 - **The AI chat degrades gracefully.** Gemini quota/rate-limit errors return useful live aggregate context instead of a 500.
@@ -209,6 +190,32 @@ Do not commit `.env` or `firebase-key.json`.
 
 ---
 
+## Testing
+
+Run the Python unit, feature, and edge-case tests with `python -m pytest -q --ignore=tests/e2e`.
+
+Install the desktop browser test dependencies and run the full suite from the repository root.
+
+```sh
+python -m pip install -r requirements-test.txt
+python -m playwright install chromium
+python -m pytest -q
+```
+
+The desktop tests open the real dashboard against a local FastAPI server with in-memory Firestore and a recording Twilio double. They exercise live intake, every dashboard tab, evidence links, recommendation downloads, and successful, cancelled, and failed survey sends. The browser loads the dashboard's JavaScript and CSS from its configured CDNs.
+
+Set `URBANOS_SMOKE_URL` to a deployed dashboard URL and run `python -m pytest -q tests/e2e/test_production_smoke.py` for a read-only deployment check. The browser blocks requests other than GET and HEAD in that test.
+
+### Prototype case operations
+
+Open **Analysis → Case Desk** to filter cases by source, department, stage, or exact case reference. A supporting report in Planning can open its matching Case Desk row. The demo desk records acknowledgment and closure for simulated cases. Signed intake is read-only. Select **Illustrative examples** to see a resolution range even when the live source lacks closure history. Ranges use the middle half of observed closure durations from at least five cases in the same source, department, and category.
+
+Residents can use `status <reference>` in WhatsApp or follow the tracking prompts. References accept either case and an optional `#`. The lookup only returns reports filed by that sender.
+
+**Backlog & Seasonality** shows completed calendar months and same-month comparisons with the prior year where available. The historical backlog omits completed cases with unknown closure dates and reports how many were omitted.
+
+In the WhatsApp sandbox, send a photo first and then send a location to file a photo-only case. It remains in review when a photo-capable triage model is unavailable. The Awadhi regression test uses a stubbed transcript and verifies that the original text is carried through intake. Measuring transcription accuracy requires recordings with reference transcripts.
+
 ## Deploy
 
 ```bash
@@ -235,14 +242,16 @@ https://api-<cloud-function-hash>-uc.a.run.app/webhook/whatsapp
 
 Production Firebase settings route filed reports to Cloud Tasks. Recognised text issues can complete using local civic rules. Photos and ambiguous reports still depend on model capacity. The normal queue is configured for 80 dispatches per second and the urgent queue for 20, with separate concurrency limits. Dispatch settings are ceilings. A production throughput check must also measure webhook acknowledgement latency, queue age, model quota and WhatsApp delivery.
 
-The dashboard requests at most 300 committed report changes per response using a timestamp and document-ID cursor. It updates the Review pipeline from the same changes and keeps the visible live feed bounded during bursts. Production validation needs a verified sender and isolated traffic that cannot notify citizens. Deploy the API, both task workers and the dashboard together when changing this contract.
+The API is configured for 32 simultaneous requests per instance across up to 32 instances. The dashboard reads at most 150 committed report changes per response and uses a timestamp and document-ID cursor to catch up during bursts. Identical dashboard reads share a short-lived response within each API instance.
+
+The stream console offers a Dashboard load mode with up to 10,000 synthetic events per run and a target ceiling of 4,200 events per minute. This mode exercises report storage and the dashboard using local rules. The WhatsApp pipeline mode exercises the intake conversation and has separate limits.
 
 ## Limitations
 
 This is a hackathon prototype, so we are explicit about what is real and what still needs production hardening.
 
 - **Twilio Sandbox:** the demo can run through Twilio Sandbox; production needs a verified WhatsApp Business number.
-- **Infrastructure data:** current gap metrics are constituency-zone proxy layers, not live government API pulls.
+- **Infrastructure data:** the sourced examples use dated municipal evidence. Current site conditions and official ward assignments still need verification.
 - **AI confidence:** Gemini triage should be human-reviewable before sanctions in production.
 - **Privacy:** phone numbers are stored as senders today; production should hash/anonymize citizen identifiers where possible.
 - **Scale:** Firestore scans are acceptable for the prototype but should move to precomputed aggregates/queues at district scale.

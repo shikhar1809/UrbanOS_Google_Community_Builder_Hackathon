@@ -172,6 +172,7 @@ def test_repeat_sanction_updates_and_notifies_only_new_members(monkeypatch):
     notices = []
     monkeypatch.setattr(main, "notify_sanctioned", lambda senders, *_: notices.extend(senders))
     monkeypatch.setitem(main.app.dependency_overrides, main.get_db, lambda: db)
+    monkeypatch.setitem(main.app.dependency_overrides, main.verify_planning_operator, lambda: {"email": "mp@example.com"})
     client = TestClient(main.app)
     payload = {"project_id": f"{TAG}|North", "title": "New drain", "zone": "North", "category": "Infrastructure"}
 
@@ -190,6 +191,7 @@ def test_an_in_flight_sanction_rejects_a_concurrent_request(monkeypatch):
     lock_id = hashlib.sha256(project_id.encode()).hexdigest()
     db.collection("project_sanction_locks").document(lock_id).create({"expires_at": time.time() + 600})
     monkeypatch.setitem(main.app.dependency_overrides, main.get_db, lambda: db)
+    monkeypatch.setitem(main.app.dependency_overrides, main.verify_planning_operator, lambda: {"email": "mp@example.com"})
     response = TestClient(main.app).post("/projects/sanction", json={
         "project_id": project_id, "title": "Drain", "zone": "North", "category": "Infrastructure",
     })

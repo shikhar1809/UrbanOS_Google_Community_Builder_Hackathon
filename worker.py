@@ -1,5 +1,5 @@
 import os
-import httpx
+import asyncio
 from twilio.rest import Client
 from dotenv import load_dotenv
 from google import genai
@@ -52,26 +52,25 @@ def notify_status_change(phone_number: str, reference_id: str, new_status: str, 
 async def process_voice_note(media_url: str, phone_number: str, lang: str = "English", db=None):
     # Delayed imports to avoid circular dependency
     from state import update_session
-    from main import firestore_db, get_reply
+    from main import detect_script_language, download_twilio_media, firestore_db, get_reply
     db = db or firestore_db
 
-    logger.info(f"[WORKER] Starting transcription for {phone_number}...")
+    logger.info("[WORKER] Starting voice transcription")
 
     if not gemini_client:
-        logger.error(f"[WORKER ERROR] Gemini API key not configured. Cannot transcribe for {phone_number}.")
+        logger.error("[WORKER] Voice transcription provider is unavailable")
         send_whatsapp_message(phone_number, "Transcription is currently unavailable. Could you please type your description instead?")
         return
 
     # 1. Download the audio file from Twilio (or read it from the sandbox store)
+    tmp_path = None
+    uploaded_file = None
     try:
         if sim.is_sim_media(media_url):
             audio_bytes, mime_type = sim.load_media(media_url)
             suffix = sim.ALLOWED_MEDIA_TYPES.get(mime_type, ".ogg")
         else:
-            async with httpx.AsyncClient() as http_client:
-                response = await http_client.get(media_url, auth=(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN))
-                response.raise_for_status()
-                audio_bytes = response.content
+            audio_bytes = await asyncio.to_thread(download_twilio_media, media_url, 10 * 1024 * 1024)
             suffix = ".ogg"
 
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
@@ -79,25 +78,27 @@ async def process_voice_note(media_url: str, phone_number: str, lang: str = "Eng
             tmp_path = tmp.name
 
         # 2. Upload to Gemini
-        logger.info(f"[WORKER] Uploading audio to Gemini for {phone_number}...")
         uploaded_file = gemini_client.files.upload(file=tmp_path)
         
         # 3. Transcribe
-        prompt = "Transcribe this audio message exactly. Only return the transcription, nothing else."
+        prompt = ("Transcribe the audio verbatim in its original language. Preserve Awadhi and other dialect words, "
+                  "locality names, and code-switching. Do not translate or standardize the speech. "
+                  "Return only the transcription and use [inaudible] for words you cannot hear.")
         transcription_response = gemini_client.models.generate_content(
             model='gemini-2.5-flash-lite',
             contents=[uploaded_file, prompt]
         )
         
-        transcript = transcription_response.text.strip()
-        logger.info(f"[WORKER] Transcription success for {phone_number}: {transcript}")
-        
-        # Clean up
-        os.remove(tmp_path)
-        gemini_client.files.delete(name=uploaded_file.name)
+        transcript = (transcription_response.text or "").strip()
+        if not transcript or transcript.lower() == "[inaudible]":
+            raise ValueError("Audio did not contain an intelligible complaint")
         
         # 4. Update Session and Reply
-        update_session(db, phone_number, "awaiting_location", {"description": transcript, "voice_url": media_url})
+        detected = detect_script_language(transcript)
+        lang = detected if detected != "English" else lang
+        update_session(db, phone_number, "awaiting_location", {
+            "description": transcript, "voice_url": media_url, "user_language": lang,
+        })
         reply = get_reply("ask_location", lang)
         # Prepend the transcription so the user knows what was captured
         reply = f"\"{transcript}\"\n\n{reply}"
@@ -106,3 +107,11 @@ async def process_voice_note(media_url: str, phone_number: str, lang: str = "Eng
     except Exception as e:
         logger.error(f"[WORKER ERROR] Voice note processing failed: {e}", exc_info=True)
         send_whatsapp_message(phone_number, "We had trouble transcribing your voice note. Could you please type your description instead?")
+    finally:
+        try:
+            if tmp_path:
+                os.remove(tmp_path)
+            if uploaded_file:
+                gemini_client.files.delete(name=uploaded_file.name)
+        except Exception:
+            logger.warning("[WORKER] Voice media cleanup failed", exc_info=True)

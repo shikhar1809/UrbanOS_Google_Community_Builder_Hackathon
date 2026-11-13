@@ -23,6 +23,7 @@ READ_ROUTES = [
     "/api/feed/stats",
     "/api/analytics",
     "/projects/ranked",
+    "/api/planning/recommendations?scope=legacy",
     "/surveys",
     "/surveys/s1/report",
 ]
@@ -99,10 +100,18 @@ def test_a_sanction_is_accepted_without_a_sender_list_and_still_finds_citizens(c
     notified = []
     monkeypatch.setattr(main, "notify_sanctioned", lambda senders, title, pid: notified.extend(senders))
 
-    response = client.post("/projects/sanction", json={
+    payload = {
         "project_id": "garbage_collection|East", "title": "Garbage", "zone": "East",
         "category": "Environmental Project",
-    })
+    }
+    assert client.post("/projects/sanction", json=payload).status_code == 401
+    assert not notified
+    monkeypatch.setenv("ADMIN_EMAILS", "operator@example.com")
+    monkeypatch.setattr(main.auth, "verify_id_token", lambda token, **_: {"email": token, "email_verified": True})
+    assert client.post("/projects/sanction", json=payload,
+                       headers={"Authorization": "Bearer someone@example.com"}).status_code == 403
+    response = client.post("/projects/sanction", json=payload,
+                           headers={"Authorization": "Bearer operator@example.com"})
 
     assert response.status_code == 200
     assert response.json()["citizens_notified"] == 2

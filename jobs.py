@@ -254,6 +254,7 @@ def process_triage(db, doc_id: str, triage_module=None, client=None, media_loade
         lat=report.get("latitude"),
         lng=report.get("longitude"),
         rules_fallback=rules_fallback,
+        **({"photo_only": True} if report.get("photo_only") else {}),
     )
 
     if not result.get("ok") and not (fast and result.get("triage_source") == "rules"):
@@ -278,6 +279,8 @@ def process_triage(db, doc_id: str, triage_module=None, client=None, media_loade
         LIVE_UPDATED_FIELD: SERVER_TIMESTAMP,
         "triaged_at": datetime.now(timezone.utc).isoformat(),
     }
+    if report.get("photo_only"):
+        update["original_language"] = None
 
     if not _safe_update(ref, update, doc_id):
         return False

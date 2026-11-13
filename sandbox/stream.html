@@ -133,6 +133,13 @@
 
 <form class="controls" id="controls" autocomplete="off">
   <div class="field">
+    <label for="stream-mode">Workload</label>
+    <select id="stream-mode">
+      <option value="pipeline">WhatsApp pipeline</option>
+      <option value="dashboard">Dashboard load</option>
+    </select>
+  </div>
+  <div class="field">
     <label for="scenario">Scenario</label>
     <select id="scenario"></select>
   </div>
@@ -146,6 +153,9 @@
       <option value="100">100 citizens</option>
       <option value="300" selected>300 citizens</option>
       <option value="1000">1000 citizens</option>
+      <option value="3000" data-bulk hidden disabled>3000 events</option>
+      <option value="5000" data-bulk hidden disabled>5000 events</option>
+      <option value="10000" data-bulk hidden disabled>10,000 events</option>
     </select>
   </div>
   <button class="btn primary" id="toggle" type="submit">Start stream</button>
@@ -195,7 +205,7 @@
     out_of_area: 'Outside Lucknow', off_topic: 'Not a civic issue', duplicate: 'Repeat of a filed report',
     rate_limited: 'Rate limited', guardrail: 'Other guardrail',
   };
-  const SOURCES = { rules: 'Keyword rules', unknown: 'Unknown' };
+  const SOURCES = { rules: 'Keyword rules', unknown: 'Unknown', 'demo:dashboard': 'Dashboard load fixture' };
 
   const $ = (id) => document.getElementById(id);
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -335,7 +345,7 @@
     $('toggle').textContent = driving ? 'Stop stream' : (elsewhere ? 'Stop their stream' : 'Start stream');
     $('toggle').className = 'btn ' + (driving || elsewhere ? 'stop' : 'primary');
     $('purge').disabled = live;
-    ['scenario', 'rate', 'budget'].forEach((id) => { $(id).disabled = live; });
+    ['stream-mode', 'scenario', 'rate', 'budget'].forEach((id) => { $(id).disabled = live; });
   }
 
   function populateScenarios(list) {
@@ -352,17 +362,24 @@
 
   function syncHint() {
     const opt = $('scenario').selectedOptions[0];
-    $('scenario-hint').textContent = opt ? opt.dataset.description : '';
+    const workload = $('stream-mode').value === 'dashboard'
+      ? 'Writes synthetic reports in batches for the dashboard. Uses local rules and skips WhatsApp conversations and AI.'
+      : 'Runs each simulated citizen through the WhatsApp intake pipeline.';
+    $('scenario-hint').textContent = [opt?.dataset.description, workload].filter(Boolean).join(' ');
   }
 
   // ---------- driving a run: one tick in flight at a time ----------
-  function pacing(rate) {
-    const batch = Math.max(1, Math.min(5, Math.ceil((rate / 60) * 2.5)));
-    return { batch, intervalMs: (batch * 60000) / rate };
+  let limits = {min_rate: 6, max_rate: 120, max_batch: 5};
+  let dashboardLimits = {min_rate: 60, max_rate: 4200, max_batch: 120};
+
+  function pacing(rate, mode) {
+    const config = mode === 'dashboard' ? dashboardLimits : limits;
+    const batch = Math.max(1, Math.min(config.max_batch, Math.ceil((rate / 60) * 2.5)));
+    return { batch, intervalMs: (batch * 60000) / rate + (mode === 'dashboard' ? 75 : 0) };
   }
 
-  async function drive(rate) {
-    const { batch, intervalMs } = pacing(rate);
+  async function drive(rate, mode) {
+    const { batch, intervalMs } = pacing(rate, mode);
     let failures = 0;
     while (driving) {
       const began = performance.now();
@@ -376,7 +393,7 @@
         if (out.state.status !== 'running') { driving = false; renderState(out.state); break; }
       } catch (e) {
         inFlight = 0;
-        if (e.status === 429) { await sleep(1500); continue; }
+        if (e.status === 429) { await sleep(mode === 'dashboard' ? 250 : 1500); continue; }
         if (e.status === 409) { driving = false; showError(e.message); break; }
         failures += 1;
         if (failures >= 5) { driving = false; showError('Stream stopped: ' + e.message); break; }
@@ -391,7 +408,8 @@
   async function startRun() {
     const rate = Number($('rate').value);
     const run = await call('start', {
-      scenario: $('scenario').value, rate_per_min: rate, max_events: Number($('budget').value),
+      scenario: $('scenario').value, mode: $('stream-mode').value,
+      rate_per_min: rate, max_events: Number($('budget').value),
     });
     seen.clear();
     $('incoming').textContent = '';
@@ -399,7 +417,7 @@
     runId = run.run_id;
     driving = true;
     renderState(run);
-    drive(rate);
+    drive(run.rate_per_min, run.mode);
   }
 
   async function refresh() {
@@ -412,12 +430,30 @@
   }
 
   function showConfigured(s) {
-    if (s.limits) { $('rate').min = s.limits.min_rate; $('rate').max = s.limits.max_rate; }
+    if (s.limits) limits = s.limits;
+    if (s.dashboard_limits) dashboardLimits = s.dashboard_limits;
+    syncMode(false);
+  }
+
+  function syncMode(reset) {
+    const bulk = $('stream-mode').value === 'dashboard';
+    const config = bulk ? dashboardLimits : limits;
+    $('rate').min = bulk ? 60 : config.min_rate;
+    $('rate').max = config.max_rate;
+    $('rate').step = bulk ? 60 : 6;
+    $('budget').querySelectorAll('[data-bulk]').forEach(option => { option.hidden = option.disabled = !bulk; });
+    if (reset) {
+      $('rate').value = bulk ? 3000 : 30;
+      $('budget').value = bulk ? 3000 : 300;
+    }
+    $('rate-label').textContent = $('rate').value;
+    syncHint();
   }
 
   // ---------- wiring ----------
   $('rate').addEventListener('input', () => { $('rate-label').textContent = $('rate').value; });
   $('scenario').addEventListener('change', syncHint);
+  $('stream-mode').addEventListener('change', () => syncMode(true));
 
   $('controls').addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -427,7 +463,14 @@
     try {
       if (driving || (state && state.live)) {
         driving = false;
-        renderState(await call('stop', {}));
+        while (inFlight) await sleep(150);
+        for (let attempt = 0; ; attempt++) {
+          try { renderState(await call('stop', {})); break; }
+          catch (error) {
+            if (error.status !== 429 || attempt === 4) throw error;
+            await sleep(500);
+          }
+        }
       } else {
         await startRun();
       }

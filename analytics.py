@@ -34,10 +34,11 @@ import re
 import time
 import threading
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Iterable
 
 logger = logging.getLogger(__name__)
+CASE_TIMEZONE = timezone(timedelta(hours=5, minutes=30))
 
 SNAPSHOT_TTL = 60.0  # seconds
 LIVE_DELTA_INTERVAL = 2.0  # seconds between checks for reports newer than the snapshot
@@ -204,6 +205,20 @@ def parse_ts(value: Any) -> datetime | None:
     return None
 
 
+def case_timestamp(value: Any) -> datetime | None:
+    """Normalize lifecycle times to Lucknow local time, including UTC writes."""
+    if isinstance(value, str):
+        try:
+            value = datetime.fromisoformat(value.strip())
+        except ValueError:
+            return None
+    if not isinstance(value, datetime):
+        return None
+    if value.tzinfo is not None:
+        value = value.astimezone(CASE_TIMEZONE)
+    return value.replace(tzinfo=None)
+
+
 def normalize_category(raw: Any) -> str:
     c = (str(raw) if raw is not None else "").strip()
     if c in PRIMARY_CATEGORIES:
@@ -269,6 +284,9 @@ def normalize_record(doc_id: str, d: dict) -> dict:
         "sender": d.get("sender"),
         "timestamp": ts,
         "ts_iso": ts.isoformat() if ts else None,
+        "filed_at": case_timestamp(d.get("timestamp")),
+        "desk_acknowledged_at": case_timestamp(d.get("desk_acknowledged_at")),
+        "resolved_at": case_timestamp(d.get("resolved_at")),
         "category": cat,
         "category_raw": d.get("category"),
         "semantic_tag": (d.get("semantic_tag") or "").strip() or None,
@@ -296,6 +314,8 @@ def normalize_record(doc_id: str, d: dict) -> dict:
         "is_urgent": bool(d.get("is_urgent")),
         "visual_evidence": d.get("visual_evidence"),
         "simulated": bool(d.get("simulated")),
+        "intake_origin": d.get("intake_origin"),
+        "intake_formats": d.get("intake_formats"),
         "triage_source": d.get("triage_source"),
         "triage_status": d.get("triage_status"),
         "live_version": live_version(d.get("live_updated_at")),

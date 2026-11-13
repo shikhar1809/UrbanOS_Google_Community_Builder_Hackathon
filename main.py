@@ -1,9 +1,12 @@
 import os
+import gzip
 import hashlib
 import httpx
+import threading
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
+from functools import wraps
 from urllib.parse import urlparse
 from fastapi import FastAPI, Request, HTTPException, Depends, BackgroundTasks, UploadFile, File, Query
 from twilio.twiml.messaging_response import MessagingResponse
@@ -13,7 +16,8 @@ from worker import process_voice_note, send_whatsapp_message
 import json
 import logging
 import asyncio
-from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse, FileResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse, FileResponse, PlainTextResponse
+from fastapi.responses import Response as ASGIResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 
@@ -30,6 +34,8 @@ import guardrails as GR
 import idempotency as IDEM
 import jobs as JOBS
 import llm as LLM
+import operations as OPS
+import planning_review as REVIEW
 import sim
 import sim_stream
 import triage as TRIAGE
@@ -55,17 +61,33 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 import firebase_admin
-from firebase_admin import credentials, firestore
+from firebase_admin import auth, credentials, firestore
 
 def verify_admin() -> dict:
     """Sign-in was removed at the owner's request, so every route is public.
 
     That includes the ones that message citizens, spend model quota and change
-    data. Routes keep this dependency so that restoring access control means
-    changing this one function, along with the login screen in public/index.html.
-    Responses must therefore never carry a citizen's phone number.
+    data unless a route explicitly requires an operator. Public responses
+    must never carry a citizen's phone number.
     """
     return {"email": "public"}
+
+
+def verify_planning_operator(request: Request) -> dict:
+    """Restrict the legacy sanction operation to allowlisted Firebase accounts."""
+    allowed = {email.strip().casefold() for email in os.getenv("ADMIN_EMAILS", "").split(",") if email.strip()}
+    scheme, _, token = request.headers.get("Authorization", "").partition(" ")
+    if scheme.casefold() != "bearer" or not token:
+        raise HTTPException(status_code=401, detail="Operator sign-in required")
+    if not allowed:
+        raise HTTPException(status_code=403, detail="Planning operator access is disabled")
+    try:
+        claims = auth.verify_id_token(token, check_revoked=True)
+    except (ValueError, auth.InvalidIdTokenError, auth.UserDisabledError) as exc:
+        raise HTTPException(status_code=401, detail="Invalid operator credentials") from exc
+    if not claims.get("email_verified") or (claims.get("email") or "").casefold() not in allowed:
+        raise HTTPException(status_code=403, detail="Planning operator access required")
+    return claims
 
 # Initialize Firebase
 try:
@@ -86,7 +108,7 @@ def get_db():
 app = FastAPI()
 
 # The feed ships the full 1000+ record dataset; gzip takes that from ~600KB to ~60KB.
-app.add_middleware(GZipMiddleware, minimum_size=1024)
+app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=3)
 
 app.add_middleware(
     CORSMiddleware,
@@ -258,11 +280,7 @@ def fetch_twilio_media_part(media_url: str, mime_type: str):
                 return None
             data = loaded[0]
         else:
-            auth_tuple = (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN) if TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN else None
-            with httpx.Client(timeout=12) as client:
-                response = client.get(media_url, auth=auth_tuple)
-                response.raise_for_status()
-                data = response.content
+            data = download_twilio_media(media_url, 5 * 1024 * 1024)
         if len(data) > 5 * 1024 * 1024:
             logger.warning("[MEDIA] Photo skipped because it exceeds 5MB.")
             return None
@@ -270,6 +288,25 @@ def fetch_twilio_media_part(media_url: str, mime_type: str):
     except Exception as e:
         logger.warning(f"[MEDIA] Could not fetch photo for multimodal triage: {e}")
         return None
+
+
+def evidence_photo_rejection(media_url: str, media_type: str) -> str | None:
+    if not intake_media_allowed(media_url):
+        return "Please attach the photo directly to the message."
+    if gemini_client:
+        try:
+            image = fetch_twilio_media_part(media_url, media_type)
+            if image:
+                part = types.Part.from_bytes(data=image.data, mime_type=image.mime_type)
+                response = gemini_client.models.generate_content(
+                    model="gemini-2.5-flash", contents=[GR.IMAGE_CLASSIFIER_PROMPT, part],
+                )
+                verdict = GR.parse_image_verdict(response.text)
+                if not verdict["accept"]:
+                    return verdict["message"]
+        except Exception as error:
+            logger.warning("[MEDIA] Photo screening unavailable: %s", error)
+    return None
 
 @app.get("/")
 def root():
@@ -282,6 +319,16 @@ async def health():
 @app.get("/sw.js")
 async def service_worker():
     return FileResponse("public/sw.js", media_type="application/javascript")
+
+@app.get("/lucknow-boundary.geojson")
+def lucknow_boundary():
+    return FileResponse("public/lucknow-boundary.geojson", media_type="application/geo+json")
+
+
+@app.get("/lucknow-roads.geojson")
+def lucknow_roads():
+    return FileResponse("public/lucknow-roads.geojson", media_type="application/geo+json")
+
 
 @app.get("/favicon.svg")
 async def favicon():
@@ -324,10 +371,11 @@ async def receive_whatsapp(request: Request, background_tasks: BackgroundTasks, 
         logger.warning(f"[SECURITY] Invalid Twilio signature from {client_host}. Rejecting request.")
         raise HTTPException(status_code=403, detail="Forbidden")
 
-    return await asyncio.to_thread(_handle_webhook, form_data, background_tasks, db)
+    origin = REVIEW.SIGNED_INTAKE if twilio_validator and TWILIO_VALIDATE_SIGNATURE else None
+    return await asyncio.to_thread(_handle_webhook, form_data, background_tasks, db, origin)
 
 
-def _handle_webhook(form_data, background_tasks, db):
+def _handle_webhook(form_data, background_tasks, db, intake_origin=None):
     # Twilio redelivers on timeout, and triage is slow enough that timeouts
     # happen under load. Without this, each redelivery files another report for
     # the same citizen message and inflates the demand count behind sanctioning.
@@ -337,7 +385,8 @@ def _handle_webhook(form_data, background_tasks, db):
         return HTMLResponse(content=ticket.reply or EMPTY_TWIML, media_type="application/xml")
 
     try:
-        response = _process_whatsapp_sync(form_data, background_tasks, db)
+        args = {"intake_origin": intake_origin} if intake_origin else {}
+        response = _process_whatsapp_sync(form_data, background_tasks, db, **args)
     except Exception:
         # Let the retry through rather than having it swallowed as a duplicate.
         IDEM.release(db, message_id)
@@ -375,7 +424,18 @@ def _notify_triage_details(report: dict) -> bool:
     return send_whatsapp_message(report.get("sender"), body) is not None
 
 
-def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db):
+def _owned_report(db, sender: str, reference: str):
+    if not sender or not reference:
+        return None
+    reports = db.collection('messages').where('sender', '==', sender)
+    for candidate in dict.fromkeys((reference.upper(), reference, reference.lower())):
+        match = next(reports.where('reference_id', '==', candidate).limit(1).stream(), None)
+        if match is not None:
+            return match.to_dict()
+    return None
+
+
+def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db, *, intake_origin=None):
     sender = form_data.get("From", "")
     body = form_data.get("Body", "").strip()
     media_url = form_data.get("MediaUrl0")
@@ -418,11 +478,10 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db):
             twiml.message(msg.strip())
             return HTMLResponse(content=str(twiml), media_type="application/xml")
         else:
-            parts = body_lower.split()
+            parts = body.split()
             if len(parts) > 1:
                 ref_id = parts[1].strip('#')
-                report_docs = list(db.collection('messages').where('reference_id', '==', ref_id).limit(1).stream())
-                report = report_docs[0].to_dict() if report_docs else None
+                report = _owned_report(db, sender, ref_id)
                 if report:
                     twiml.message(f"Report #{report.get('reference_id')}\nCategory: {report.get('category') or 'General'}\nStatus: {report.get('status')}\nSummary: {report.get('summary')}")
                 else:
@@ -447,6 +506,34 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db):
         except Exception:
             pass
     lang = session_data.get("user_language", msg_lang)
+
+    # A first photo or voice note starts the same intake conversation as text.
+    if current_step in {None, "awaiting_intent", "awaiting_description", "awaiting_another"} and media_url:
+        if media_type.startswith("audio/"):
+            if not intake_media_allowed(media_url):
+                twiml.message(get_reply("text_or_voice", lang))
+                return HTMLResponse(content=str(twiml), media_type="application/xml")
+            update_session(db, sender, "awaiting_description", {
+                "user_language": lang, "photo_first": False, "photo_urls": [], "photo_url": None,
+                "photo_type": "", "voice_url": None,
+            })
+            from worker import send_whatsapp_message
+            send_whatsapp_message(sender, get_reply("voice_ack", lang))
+            asyncio.run(process_voice_note(media_url, sender, lang, db))
+            return HTMLResponse(content=EMPTY_TWIML, media_type="application/xml")
+        if media_type.startswith("image/"):
+            rejection = evidence_photo_rejection(media_url, media_type)
+            if rejection:
+                if _spam:
+                    _spam.record_rejection(sender, "irrelevant_image")
+                twiml.message(f"Photo could not be accepted. {rejection} Send another photo or start a written report.")
+            else:
+                update_session(db, sender, "awaiting_location", {
+                    "description": body, "photo_urls": [media_url], "photo_type": media_type,
+                    "photo_first": True, "user_language": lang, "voice_url": None,
+                })
+                twiml.message(get_reply("ask_location", lang))
+            return HTMLResponse(content=str(twiml), media_type="application/xml")
     
     # ─── STEP 0: Fresh start — send greeting, ask name ───────────────────────
     if current_step is None:
@@ -491,12 +578,8 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db):
 
     # ─── STEP 2b: Track by reference ID ──────────────────────────────────────
     elif current_step == "awaiting_track_ref":
-        ref_query = body.strip().lstrip('#').upper()
-        try:
-            report_docs = list(db.collection('messages').where('reference_id', '==', ref_query).limit(1).stream())
-        except Exception:
-            report_docs = list(db.collection('messages').where('reference_id', '==', ref_query).limit(1).stream())
-        report = report_docs[0].to_dict() if report_docs else None
+        ref_query = body.strip().lstrip('#')
+        report = _owned_report(db, sender, ref_query)
         if report:
             status_msg = (
                 f"📋 *Report #{report.get('reference_id')}*\n"
@@ -515,13 +598,7 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db):
 
     # ─── STEP 3: Capture issue description ───────────────────────────────────
     elif current_step == "awaiting_description":
-        if "audio" in media_type and media_url:
-            from worker import send_whatsapp_message
-            send_whatsapp_message(sender, get_reply("voice_ack", lang))
-            import asyncio
-            asyncio.run(process_voice_note(media_url, sender, lang, db))
-            return HTMLResponse(content="<Response></Response>", media_type="application/xml")
-        elif body:
+        if body:
             detected_lang = detect_script_language(body)
             if detected_lang != "English":
                 lang = detected_lang
@@ -567,9 +644,11 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db):
             location_data = body
             source = "text"
         if location_data:
-            update_session(db, sender, "awaiting_photo", {"location": location_data, "location_source": source})
-            twiml.message(get_reply("ask_photo", lang))
-            return HTMLResponse(content=str(twiml), media_type="application/xml")
+            step = "finalize" if session_data.get("photo_first") else "awaiting_photo"
+            update_session(db, sender, step, {"location": location_data, "location_source": source})
+            if step == "awaiting_photo":
+                twiml.message(get_reply("ask_photo", lang))
+                return HTMLResponse(content=str(twiml), media_type="application/xml")
         else:
             twiml.message(get_reply("location_prompt", lang))
             return HTMLResponse(content=str(twiml), media_type="application/xml")
@@ -577,32 +656,12 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db):
     # ─── STEP 5: Multi-photo (up to 3) ───────────────────────────────────────
     elif current_step == "awaiting_photo":
         photo_urls = session_data.get("photo_urls", [])
-        if "image" in media_type and media_url:
-            # ─── GUARDRAIL 3: is this photo actually evidence? ───────────────
-            # Rejects selfies, screenshots and memes before they enter the
-            # evidence store. Only acts on a confident rejection, so a dim photo
-            # of a broken streetlight still gets through.
-            _img_ok = True
-            try:
-                if gemini_client:
-                    _part = fetch_twilio_media_part(media_url, media_type)
-                    if _part:
-                        _iresp = gemini_client.models.generate_content(
-                            model='gemini-2.5-flash',
-                            contents=[GR.IMAGE_CLASSIFIER_PROMPT, _part],
-                        )
-                        _verdict = GR.parse_image_verdict(_iresp.text)
-                        logger.info(f"[GUARDRAIL] image verdict for {sender}: "
-                                    f"{_verdict['label']}/{_verdict['confidence']} - {_verdict['reason']}")
-                        if not _verdict["accept"]:
-                            _img_ok = False
-                            if _spam:
-                                _spam.record_rejection(sender, "irrelevant_image")
-                            twiml.message(get_reply("image_reject", lang, detail=_verdict["message"]))
-            except Exception as _ie:
-                logger.warning(f"[GUARDRAIL] image check failed, accepting: {_ie}")
-            if not _img_ok:
-                update_session(db, sender, "awaiting_photo", {"photo_urls": photo_urls})
+        if media_type.startswith("image/") and media_url:
+            rejection = evidence_photo_rejection(media_url, media_type)
+            if rejection:
+                if _spam:
+                    _spam.record_rejection(sender, "irrelevant_image")
+                twiml.message(get_reply("image_reject", lang, detail=rejection))
                 return HTMLResponse(content=str(twiml), media_type="application/xml")
             photo_urls.append(media_url)
             if len(photo_urls) >= 3:
@@ -613,7 +672,7 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db):
                 twiml.message(get_reply("photo_received", lang, n=len(photo_urls)))
                 return HTMLResponse(content=str(twiml), media_type="application/xml")
         elif body_lower in ["done", "skip", "next", "submit", "s"]:
-            update_session(db, sender, "finalize", {"photo_urls": photo_urls, "photo_type": media_type})
+            update_session(db, sender, "finalize", {"photo_urls": photo_urls})
             twiml.message(get_reply("finalizing", lang))
         else:
             twiml.message(get_reply("skip_prompt", lang))
@@ -640,7 +699,10 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db):
     
     elif current_step == "awaiting_another":
         if body_lower in ["yes", "y", "haan", "ha", "haa", "ok", "okay", "sure"]:
-            update_session(db, sender, "awaiting_description", {"user_language": lang})
+            update_session(db, sender, "awaiting_description", {
+                "user_language": lang, "photo_first": False, "photo_urls": [], "photo_url": None,
+                "photo_type": "", "voice_url": None,
+            })
             twiml.message(get_reply("ask_issue", lang))
         else:
             clear_session(db, sender)
@@ -663,6 +725,8 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db):
         photo_urls_list = data.get("photo_urls", [])
         photo_url = photo_urls_list[0] if photo_urls_list else data.get("photo_url", "")
         photo_type = data.get("photo_type", "")
+        photo_only = bool(data.get("photo_first") and not description)
+        submission_key = f"photo {photo_url}" if photo_only else description
         lang = data.get("user_language", lang)
         
         lat = None
@@ -740,7 +804,7 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db):
         # Checked here rather than at message time so a citizen is never blocked
         # mid-conversation, only at the point of actually filing.
         if _spam:
-            sub_gate = _spam.check_submission(sender, description)
+            sub_gate = _spam.check_submission(sender, submission_key)
             if not sub_gate["allow"]:
                 logger.info(f"[GUARDRAIL] submission blocked for {sender}: {sub_gate['reason']}")
                 clear_session(db, sender)
@@ -775,6 +839,7 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db):
                 lat=lat,
                 lng=lng,
                 rules_fallback=True,
+                **({"photo_only": True} if photo_only else {}),
             )
             # A text location has no pin, but triage may know roughly where it is.
             # The geofence still applies, so a wrong guess cannot land off the map.
@@ -785,13 +850,13 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db):
         priority = _t["priority"]
         feasibility = _t["feasibility"]
         extracted_location = _t["extracted_location"]
-        summary = _t["summary"]
-        original_language = _t["original_language"]
+        summary = _t["summary"] or ("Photo awaiting review" if photo_only else None)
+        original_language = None if photo_only else _t["original_language"]
         constituency_zone = _t["constituency_zone"]
         estimated_budget = _t["estimated_budget"]
         semantic_tag = _t["semantic_tag"]
         visual_evidence = _t["visual_evidence"]
-        responsible_body = _t["responsible_body"]
+        responsible_body = "Needs triage" if photo_only and not _t.get("ok") else _t["responsible_body"]
         ward_no = _t["ward_no"]
         ward_officer = _t["ward_officer"]
 
@@ -828,6 +893,13 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db):
                 JOBS.STATUS_DONE if _t.get("ok") else JOBS.STATUS_FAILED
             ),
             "triage_source": _t.get("triage_source"),
+            "intake_origin": intake_origin,
+            **({"photo_only": True} if photo_only else {}),
+            "intake_formats": [
+                *(["Voice"] if data.get("voice_url") else ["Text"] if description else []),
+                *(["Photo"] if photo_url else []),
+                *(["GPS pin"] if loc_source == "gps_pin" else []),
+            ],
             "id": doc_ref.id
         }
         if defer_triage:
@@ -850,7 +922,7 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db):
         # The shared analytics cache merges new reports incrementally. Invalidating
         # it for every intake would force concurrent readers to reload history.
         if _spam:
-            _spam.record_submission(sender, description, ref_id)
+            _spam.record_submission(sender, submission_key, ref_id)
 
 
         survey_docs = list(db.collection('surveys').where('is_active', '==', True).limit(1).stream())
@@ -872,6 +944,8 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db):
                 f"⏳ We are assigning your report now. We will message you shortly with its "
                 f"category, priority, department and officer."
             )
+        elif photo_only and not _t.get("ok"):
+            receipt_msg = f"Photo report logged. Reference #{ref_id}. Your photo and location are saved for review."
         else:
             receipt_msg = (
                 f"✅ *Issue Logged Successfully!*\n\n"
@@ -879,11 +953,11 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db):
                 f"👤 Reported by: {user_name}\n"
                 f"📂 Category: {category or 'General'}\n"
                 f"⚡ Priority: {priority or 'Normal'}\n\n"
-                f"🏛️ *Assigned To:*\n"
+                f"🏛️ *Suggested routing:*\n"
                 f"• Ward: *{_ward_no}*\n"
                 f"• Department: *{_responsible_body}*\n"
                 f"• Officer: *{_ward_officer}*\n\n"
-                f"ℹ️ {_ward_officer} of {_responsible_body} has been notified. You will receive swift updates. Please await a follow-up survey."
+                "ℹ️ Your report is in UrbanOS for desk review."
             )
         
         if active_survey:
@@ -1030,6 +1104,7 @@ async def preview_audience(audience: AudienceFilter, db = Depends(get_db), admin
         "label": AN.describe_audience(a),
         "range": {"key": window["key"], "label": window["label"]},
         "recipient_count": res["recipient_count"],
+        "eligible_recipient_count": len(_survey_senders(res)),
         "matched_reports": res["matched_reports"],
         "scoped_reports": res["scoped_reports"],
         "breakdown": res["breakdown"],
@@ -1078,6 +1153,11 @@ async def delete_survey(survey_id: str, db = Depends(get_db), admin = Depends(ve
     return {"status": "success"}
 
 
+def _survey_senders(resolved: dict) -> list[str]:
+    return [row["sender"] for row in resolved["recipients"]
+            if row["sender"] and not sim.is_simulated_sender(row["sender"])]
+
+
 @app.post("/surveys/{survey_id}/broadcast")
 async def broadcast_survey(survey_id: str, req: BroadcastRequest | None = None, db = Depends(get_db), admin = Depends(verify_admin)):
     """Send a survey to its targeted audience.
@@ -1096,8 +1176,7 @@ async def broadcast_survey(survey_id: str, req: BroadcastRequest | None = None, 
     snap = AN.get_snapshot(db)
     window = _audience_window(snap, audience)
     resolved = AN.resolve_audience(snap["records"] or [], audience, window)
-    senders = [r["sender"] for r in resolved["recipients"]
-               if r["sender"] and not sim.is_simulated_sender(r["sender"])]
+    senders = _survey_senders(resolved)
     label = AN.describe_audience(audience)
 
     if req.dry_run:
@@ -1295,6 +1374,8 @@ async def api_chat(req: ChatRequest, db = Depends(get_db), admin = Depends(verif
         "matched_timeframe": bool(plan["timeframe"]),
         "scoped_total": len(scoped),
         "grand_total": len(records),
+        "simulated_count": sum(r["simulated"] for r in scoped),
+        "truncated": bool(snap.get("truncated")),
     }
 
     # Deterministic fallback: even with every model unavailable the operator
@@ -1425,6 +1506,7 @@ def _feed_item(r: dict) -> dict:
         "summary": r["summary"],
         "raw_body": r["body"][:280],
         "status": r["status"],
+        "desk_acknowledged_at": r["desk_acknowledged_at"].isoformat() if r["desk_acknowledged_at"] else None,
         "priority": r["priority"],
         "sentiment": r["sentiment"],
         "polarity": r["polarity"],
@@ -1449,18 +1531,38 @@ def _feed_item(r: dict) -> dict:
     }
 
 
-@app.get("/api/feed/live")
-def api_live_reports(
-    cursor: str = Query(default="", max_length=240),
-    db = Depends(get_db),
-    admin = Depends(verify_admin),
-):
-    """Bounded, ordered changes to report cards, including queued triage updates."""
+_DASHBOARD_READ_LOCKS = tuple(threading.Lock() for _ in range(32))
+_DASHBOARD_READS = [None] * len(_DASHBOARD_READ_LOCKS)
+LIVE_FEED_PAGE_SIZE = 150
+
+
+def _dashboard_read(db, key, ttl, read):
+    """Coalesce identical reads in one instance while keeping each query's cursor and filters."""
+    slot = hash((id(db), key)) % len(_DASHBOARD_READ_LOCKS)
+    with _DASHBOARD_READ_LOCKS[slot]:
+        cached = _DASHBOARD_READS[slot]
+        if cached and cached[0] is db and cached[1] == key and time.monotonic() < cached[2]:
+            return cached[3]
+        response = read()
+        _DASHBOARD_READS[slot] = (db, key, time.monotonic() + ttl, response)
+        return response
+
+
+def _share_dashboard_reads(ttl):
+    """Only for public, read-only dashboard routes with scalar query parameters."""
+    def decorate(fn):
+        @wraps(fn)
+        def cached(**params):
+            filters = tuple(sorted((k, v) for k, v in params.items() if k not in {"db", "admin"}))
+            return _dashboard_read(params.get("db"), (fn.__name__, filters), ttl, lambda: fn(**params))
+        return cached
+    return decorate
+
+
+def _read_live_page(db, cursor: str) -> JSONResponse:
     from google.cloud.firestore_v1.base_query import FieldFilter
     from google.api_core.datetime_helpers import DatetimeWithNanoseconds
 
-    if db is None:
-        raise HTTPException(status_code=503, detail="Database unavailable")
     collection = db.collection("messages")
     field = JOBS.LIVE_UPDATED_FIELD
     start = datetime.now(timezone.utc) - timedelta(seconds=10)
@@ -1476,7 +1578,7 @@ def api_live_reports(
     query = collection.where(filter=FieldFilter(field, ">=", start)).order_by(field).order_by("__name__")
     if cursor and doc_id:
         query = query.start_after({field: start, "__name__": collection.document(doc_id)})
-    limit = 300
+    limit = LIVE_FEED_PAGE_SIZE
     docs = list(query.limit(limit + 1).stream())
     items = []
     for doc in docs[:limit]:
@@ -1490,6 +1592,32 @@ def api_live_reports(
         "has_more": len(docs) > limit,
         "demo_cleanup_at": AN.demo_cleanup_at(db),
     }, headers={"Cache-Control": "no-store"})
+
+
+@app.get("/api/feed/live")
+def api_live_reports(
+    request: Request,
+    cursor: str = Query(default="", max_length=240),
+    db = Depends(get_db),
+    admin = Depends(verify_admin),
+):
+    """Bounded, ordered changes to report cards, including queued triage updates."""
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    accepts_gzip = "gzip" in request.headers.get("accept-encoding", "")
+
+    def read():
+        page = _read_live_page(db, cursor)
+        page.headers["Vary"] = "Accept-Encoding"
+        if not accepts_gzip or len(page.body) < 1024:
+            return page
+        return ASGIResponse(
+            content=gzip.compress(page.body, compresslevel=3),
+            media_type="application/json",
+            headers={"Cache-Control": "no-store", "Vary": "Accept-Encoding", "Content-Encoding": "gzip"},
+        )
+
+    return _dashboard_read(db, ("live", cursor, accepts_gzip), 0.75, read)
 
 
 @app.get("/api/stream/state")
@@ -1515,7 +1643,8 @@ def _range_payload(window):
 
 
 @app.get("/api/feed")
-async def api_feed(
+@_share_dashboard_reads(0.75)
+def api_feed(
     range: str = "all",
     anchor: str = "now",
     q: str = "",
@@ -1592,7 +1721,8 @@ async def api_feed(
 
 
 @app.get("/api/feed/stats")
-async def api_feed_stats(range: str = "all", anchor: str = "now", db = Depends(get_db), admin = Depends(verify_admin)):
+@_share_dashboard_reads(1.0)
+def api_feed_stats(range: str = "all", anchor: str = "now", db = Depends(get_db), admin = Depends(verify_admin)):
     """Header counts plus the size of every timeline window, so the control can
     show how much data sits behind each option before it is clicked."""
     snap = AN.get_snapshot(db)
@@ -1622,7 +1752,8 @@ async def api_feed_stats(range: str = "all", anchor: str = "now", db = Depends(g
 
 
 @app.get("/api/analytics")
-async def api_analytics(
+@_share_dashboard_reads(1.0)
+def api_analytics(
     range: str = "all",
     anchor: str = "now",
     category: str = "",
@@ -1651,6 +1782,7 @@ async def api_analytics(
     return JSONResponse(content={
         "range": _range_payload(window),
         "headline": AN.headline_stats(scoped),
+        "coverage": {"simulated_count": sum(r["simulated"] for r in scoped), "truncated": bool(snap.get("truncated"))},
         "wards": AN.ward_performance(scoped)[:40],
         "officers": AN.officer_scorecard(scoped),
         "categories": AN.breakdown(scoped, "category"),
@@ -1664,8 +1796,49 @@ async def api_analytics(
     })
 
 
+def _operations_records(db, source: OPS.Source, now: datetime):
+    if source == "examples":
+        snapshot = {}
+    elif source == "signed":
+        snapshot = _signed_intake_snapshot(db)
+    else:
+        snapshot = AN.get_snapshot(db)
+    return OPS.records_for(snapshot.get("records") or [], source, now), bool(snapshot.get("truncated"))
+
+
+@app.get("/api/operations/queue")
+def operations_queue(source: OPS.Source = "demo", stage: OPS.Stage = "all", department: str = "",
+                     offset: int = Query(0, ge=0), limit: int = Query(20, ge=1, le=50),
+                     reference: str = Query("", max_length=100), db=Depends(get_db)):
+    """List prototype desk cases and closure-time evidence for the selected source."""
+    now = OPS.local_now()
+    records, truncated = _operations_records(db, source, now)
+    payload = OPS.queue(records, source, stage, department, offset, limit, now, reference=reference)
+    return {**payload, "truncated": truncated}
+
+
+@app.get("/api/operations/history")
+def operations_history(source: OPS.Source = "demo", department: str = "", db=Depends(get_db)):
+    """Show complete calendar months and compare intake with the same month a year earlier."""
+    now = OPS.local_now()
+    records, truncated = _operations_records(db, source, now)
+    return OPS.history(records, department, now, truncated)
+
+
+@app.post("/api/operations/queue/{case_id}/{action}")
+def update_operations_case(case_id: str, action: OPS.Action, db=Depends(get_db)):
+    """Acknowledge or resolve a simulated report inside the prototype desk."""
+    try:
+        stage = OPS.change_desk_stage(db, case_id, action)
+    except OPS.DeskError as error:
+        raise HTTPException(status_code=error.status, detail=str(error)) from error
+    AN.invalidate_snapshot()
+    return {"id": case_id, "stage": stage}
+
+
 @app.get("/messages")
-async def get_messages(
+@_share_dashboard_reads(0.75)
+def get_messages(
     range: str = "all",
     anchor: str = "now",
     limit: int = 0,
@@ -1702,7 +1875,7 @@ DEMO_DEMOGRAPHICS = {
     "Central": {"population": 421000, "youth_pct": 24, "nearest_school_km": 1.6, "nearest_hospital_km": 2.4,  "literacy_rate": 85, "road_gap_index": 3.8, "water_gap_index": 3.5, "sanitation_gap_index": 4.2, "utility_gap_index": 3.1, "environment_gap_index": 4.0, "civic_amenity_gap_index": 3.6},
 }
 
-PRIORITY_WEIGHTS = {"Critical": 4, "High": 3, "Medium": 2, "Low": 1}
+PRIORITY_WEIGHTS = REVIEW.PRIORITY_WEIGHTS
 
 def project_gap_signal(category: str, semantic_tag: str, title: str, demo: dict) -> dict:
     """Pick the deprivation signal that matches the project type."""
@@ -1836,6 +2009,129 @@ async def get_ranked_projects(include_totals: bool = False, db = Depends(get_db)
     return JSONResponse(content=result if include_totals else result["projects"])
 
 
+PlanningScope = Literal["examples", "demo", "verified", "legacy"]
+_PLANNING_CACHE = {}
+_SIGNED_INTAKE_LOCK = threading.Lock()
+_SIGNED_INTAKE_CACHE = {"db": None, "at": 0.0, "snapshot": {}}
+
+
+def _signed_intake_snapshot(db) -> dict:
+    if db is None:
+        return {}
+    from google.cloud.firestore_v1.base_query import FieldFilter
+
+    with _SIGNED_INTAKE_LOCK:
+        now = time.monotonic()
+        if _SIGNED_INTAKE_CACHE["db"] is db and now - _SIGNED_INTAKE_CACHE["at"] < AN.LIVE_DELTA_INTERVAL:
+            return _SIGNED_INTAKE_CACHE["snapshot"]
+        limit = AN.SNAPSHOT_MAX_RECORDS
+        query = db.collection("messages").where(filter=FieldFilter("intake_origin", "==", REVIEW.SIGNED_INTAKE))
+        docs = list(query.limit(limit + 1).stream())
+        records = [AN.normalize_record(doc.id, doc.to_dict() or {}) for doc in docs[:limit]]
+        records.sort(key=lambda report: report["ts_iso"] or "", reverse=True)
+        snapshot = {"records": records, "truncated": len(docs) > limit}
+        _SIGNED_INTAKE_CACHE.update(db=db, at=now, snapshot=snapshot)
+        return snapshot
+
+
+def _planning_recommendations(db, scope: PlanningScope) -> tuple[list, int, bool]:
+    if scope == "examples":
+        snapshot = {}
+    elif scope == "verified":
+        snapshot = _signed_intake_snapshot(db)
+    else:
+        snapshot = AN.get_snapshot(db)
+    records = snapshot.get("records")
+    cached = _PLANNING_CACHE.get(scope)
+    if cached is not None and cached[0] is records:
+        return cached[1]
+    projects, report_count = REVIEW.recommendations(records or [], scope)
+    result = projects, report_count, bool(snapshot.get("truncated"))
+    _PLANNING_CACHE[scope] = records, result
+    return result
+
+
+@app.get("/api/planning/recommendations")
+@_share_dashboard_reads(0.75)
+def list_planning_recommendations(
+    scope: PlanningScope = "examples", offset: int = Query(0, ge=0),
+    limit: int = Query(12, ge=1, le=24), db=Depends(get_db),
+):
+    """Rank open recommendations within one intake scope. Each row is a candidate for human review."""
+    projects, report_count, truncated = _planning_recommendations(db, scope)
+    return {
+        "scope": scope, "report_count": report_count, "total": len(projects), "truncated": truncated,
+        "projects": [
+            {**{key: value for key, value in project.items() if key != "reports"}, "rank": rank}
+            for rank, project in enumerate(projects[offset:offset + limit], offset + 1)
+        ],
+    }
+
+
+@app.get("/api/planning/recommendations/export", response_class=PlainTextResponse)
+def export_planning_recommendations(scope: PlanningScope = "examples", db=Depends(get_db)):
+    """Download all ranked recommendations in one intake scope as a plain-text report."""
+    projects, report_count, truncated = _planning_recommendations(db, scope)
+    source = {
+        "examples": "Sourced examples", "demo": "Live demo (simulated reports)",
+        "verified": "Signed intake", "legacy": "Unverified history",
+    }[scope]
+    sections = [
+        "UrbanOS · Lucknow Planning Recommendations",
+        f"Source: {source}\n{len(projects)} recommendations across {report_count} reports",
+        "Recommendations for official review and decision. Each reporter contributes their highest priority once.",
+    ]
+    if truncated:
+        sections.append("This report covers the available data window.")
+    if not projects:
+        sections.append("No open recommendations in this source.")
+    for rank, project in enumerate(projects, 1):
+        evidence = project["evidence"]
+        lines = [
+            f"{rank}. {project['title']}",
+            f"Category: {project['category']} | Site: {project['site']}",
+            f"Score: {project['score']} | {project['unique_reporters']} unique reporters across {project['report_count']} reports",
+            f"Recommended next check: {project['next_check']}",
+        ]
+        if evidence:
+            lines.extend([
+                f"Evidence: {evidence['finding']}", evidence["limitation"],
+                f"{evidence['title']} · {evidence['publisher']} · {evidence['published']} · {evidence['page']}",
+                evidence["url"],
+            ])
+        else:
+            lines.append("Infrastructure evidence: Pending verification")
+        sections.append("\n".join(lines))
+    return PlainTextResponse(
+        "\n\n".join(sections) + "\n",
+        headers={
+            "Content-Disposition": f'attachment; filename="urbanos-recommendations-{scope}.txt"',
+            "Cache-Control": "no-store",
+        },
+    )
+
+
+@app.get("/api/planning/recommendations/{project_id}")
+def planning_recommendation(
+    project_id: str, scope: PlanningScope = "examples", offset: int = Query(0, ge=0),
+    limit: int = Query(12, ge=1, le=24), db=Depends(get_db),
+):
+    """Read the reasons for a rank and a page of supporting references without exposing sender data."""
+    projects, _, _ = _planning_recommendations(db, scope)
+    for rank, project in enumerate(projects, 1):
+        if project["id"] != project_id:
+            continue
+        reports = project["reports"]
+        page = reports[offset:offset + limit]
+        if scope != "examples":
+            page = [REVIEW.supporting_report(report, scope) for report in page]
+        return {
+            **project, "rank": rank, "scope": scope, "reports": page, "priority_weights": REVIEW.PRIORITY_WEIGHTS,
+            "next_offset": offset + limit if offset + limit < len(reports) else None,
+        }
+    raise HTTPException(status_code=404, detail="Recommendation not found in this scope")
+
+
 # Firestore caps a batched write at 500 operations.
 FIRESTORE_BATCH_LIMIT = 500
 
@@ -1935,7 +2231,8 @@ class SanctionRequest(BaseModel):
     category: str
 
 @app.post("/projects/sanction")
-async def sanction_project(req: SanctionRequest, background_tasks: BackgroundTasks, db = Depends(get_db), admin = Depends(verify_admin)):
+async def sanction_project(req: SanctionRequest, background_tasks: BackgroundTasks, db = Depends(get_db),
+                           admin = Depends(verify_planning_operator)):
     """Sanction open reports once per cluster and notify newly affected citizens."""
     cluster_zone = req.zone
     cluster_tag = AN.normalize_category(req.category)
@@ -2030,6 +2327,38 @@ def media_redirect_is_allowed(raw_url: str) -> bool:
     """True when a redirect target may be fetched (always without credentials)."""
     host = _media_host(raw_url)
     return any(host == s.lstrip(".") or host.endswith(s) for s in MEDIA_REDIRECT_SUFFIXES)
+
+
+def intake_media_allowed(url: str) -> bool:
+    if sim.is_sim_media(url):
+        return sim.outbound_sink() is not None
+    try:
+        return media_url_is_credentialed(url)
+    except HTTPException:
+        return False
+
+
+def download_twilio_media(url: str, max_bytes: int) -> bytes:
+    if not media_url_is_credentialed(url):
+        raise ValueError("Media must come from the Twilio API.")
+    auth_pair = (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN) if TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN else None
+    with httpx.Client(follow_redirects=False, timeout=12) as client:
+        for _ in range(MEDIA_MAX_REDIRECTS):
+            with client.stream("GET", url, auth=auth_pair) as response:
+                if response.is_redirect:
+                    url = response.headers.get("location", "")
+                    if not media_redirect_is_allowed(url):
+                        raise ValueError("Media redirect left the approved hosts.")
+                    auth_pair = None
+                    continue
+                response.raise_for_status()
+                content = bytearray()
+                for chunk in response.iter_bytes(chunk_size=8192):
+                    content.extend(chunk)
+                    if len(content) > max_bytes:
+                        raise ValueError("Media exceeds the size limit.")
+                return bytes(content)
+    raise ValueError("Too many media redirects.")
 
 
 @app.post("/admin/retriage")
@@ -2156,15 +2485,13 @@ def _run_asgi(asgi_app, req: https_fn.Request) -> https_fn.Response:
 
 # The secrets list is what actually binds Secret Manager values to the deployed
 # function: the Python SDK builds the manifest from this decorator, so a secret
-# declared only in firebase.json never reaches the container. ADMIN_EMAILS has
-# to be here or verify_admin() fails closed in production and every dashboard
-# request comes back 503 - correct behaviour, but for the wrong reason.
+# declared only in firebase.json never reaches the container.
 @https_fn.on_request(
     memory=options.MemoryOption.GB_1,
     timeout_sec=300,
     cpu=1,
-    concurrency=24,
-    max_instances=20,
+    concurrency=32,
+    max_instances=32,
     secrets=[
         "ADMIN_EMAILS",
         "GEMINI_API_KEY",

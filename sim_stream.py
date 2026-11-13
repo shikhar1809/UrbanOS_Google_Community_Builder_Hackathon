@@ -26,18 +26,24 @@ import io
 import json
 import logging
 import random
+import threading
 import time
 import uuid
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from contextlib import contextmanager
+from datetime import datetime, timedelta, timezone
+from functools import wraps
 from typing import Callable, Optional
 
 from fastapi import BackgroundTasks
+from google.cloud.firestore import SERVER_TIMESTAMP
 
 import sim
+from demo_locations import DEMO_SITES, DemoSite
 from state import clear_session, get_session
-from triage_rules import GAZETTEER, Locality
+from triage import ward_from_coordinates
+from triage_rules import ISSUES, classify
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +52,6 @@ CONTROL_DOC = "current"
 FILES_COLLECTION = "stream_files"
 FILE_CHUNKS_COLLECTION = "stream_file_chunks"
 FILES_LISTED = 50
-MAX_FILE_CHUNKS = 1000  # a run is capped at 1000 events, so this always covers one
 FILE_COLUMNS = ("at", "outcome", "kind", "reason", "name", "phone", "language", "text", "place", "location",
                 "lat", "lng", "reference_id", "category", "priority", "department", "ward", "officer", "zone",
                 "tag", "summary", "triage_source", "pipeline_ms", "reply")
@@ -55,6 +60,13 @@ MAX_BATCH = 5
 MIN_TICK_GAP_SECONDS = 0.8
 MIN_RATE, MAX_RATE = 6, 120
 DEFAULT_MAX_EVENTS, HARD_MAX_EVENTS = 300, 1000
+BULK_MAX_RATE = 4200
+BULK_MAX_BATCH = 120
+BULK_MAX_EVENTS = 10000
+BULK_DAILY_EVENTS = 20000
+LOCK_SECONDS = 360
+_local_driver_lock = threading.Lock()
+IST = timezone(timedelta(hours=5, minutes=30))
 # With no tick for this long, the tab driving the run has gone away.
 STALE_AFTER_SECONDS = 30
 RECENT_EVENTS_KEPT = 40
@@ -160,9 +172,11 @@ OUT_OF_AREA_TEXT = ("Sewage overflowing on the main road in {city}, please fix t
                     "Potholes everywhere in {city} sector 5, nobody is listening.")
 
 # Keyed by zone so a surge concentrates demand somewhere an MP could act on.
-_BY_ZONE: dict[str, list[Locality]] = {}
-for _loc in GAZETTEER:
-    _BY_ZONE.setdefault(_loc.zone, []).append(_loc)
+_BY_ZONE: dict[str, list[DemoSite]] = {}
+for _site in DEMO_SITES:
+    _BY_ZONE.setdefault(_site.zone, []).append(_site)
+_ZONES = tuple(_BY_ZONE)
+_ISSUE_LABELS = {issue.tag: issue.label for issue in ISSUES}
 
 SCENARIOS: dict[str, dict] = {
     "steady": {
@@ -174,13 +188,15 @@ SCENARIOS: dict[str, dict] = {
         "label": "Monsoon surge, East Lucknow",
         "description": "Flooding hits Gomti Nagar and Indira Nagar. Watch one project climb the queue.",
         "focus": ("drainage_improvement", "sewage_overflow", "manhole_repair"),
-        "zones": ("East",), "focus_share": 0.75, "noise": 0.05,
+        "places": ("Gomti Nagar", "Indira Nagar", "Vibhuti Khand", "Munshipulia"),
+        "focus_share": 0.75, "noise": 0.05,
     },
     "outage": {
         "label": "Power failure, North Lucknow",
         "description": "A grid fault across Aliganj and Jankipuram, with live-wire hazards mixed in.",
         "focus": ("power_supply", "electrical_hazard", "street_lighting"),
-        "zones": ("North",), "focus_share": 0.75, "noise": 0.05,
+        "places": ("Aliganj", "Jankipuram", "Mahanagar", "Vikas Nagar"),
+        "focus_share": 0.75, "noise": 0.05,
     },
     "adversarial": {
         "label": "Adversarial traffic",
@@ -201,9 +217,11 @@ def _mask(phone: str) -> str:
 def _civic_event(rng: random.Random, scenario: dict, kind: str = "citizen") -> dict:
     focused = scenario["focus"] and rng.random() < scenario["focus_share"]
     tag = rng.choice(scenario["focus"]) if focused else rng.choice(list(COMPLAINTS))
-    places = (_BY_ZONE[rng.choice(scenario["zones"])] if focused else GAZETTEER)
+    places = ([site for site in DEMO_SITES if site.name in scenario["places"]]
+              if focused else _BY_ZONE[rng.choice(_ZONES)])
     place = rng.choice(places)
     lang, template = rng.choice(COMPLAINTS[tag])
+    point = place.sample(rng)
 
     event = {
         "kind": kind,
@@ -213,12 +231,15 @@ def _civic_event(rng: random.Random, scenario: dict, kind: str = "citizen") -> d
         "language": LANGUAGE_LABELS[lang],
         "place": place.name,
     }
+    if kind in ("citizen", "duplicate"):
+        event["demo_point"] = point
+        event["demo_zone"] = place.zone
+        event["demo_summary"] = f"{_ISSUE_LABELS[tag]} in {place.name}"
     if rng.random() < 0.6:
-        event["lat"] = round(place.lat + rng.uniform(-0.008, 0.008), 6)
-        event["lng"] = round(place.lng + rng.uniform(-0.008, 0.008), 6)
+        event["lat"], event["lng"] = point
         event["location_label"] = f"GPS pin, {place.name}"
     else:
-        event["location_text"] = f"{rng.choice(LANDMARKS)}, {place.name}"
+        event["location_text"] = f"{rng.choice(LANDMARKS)}, {place.name}, Lucknow"
         event["location_label"] = event["location_text"]
     return event
 
@@ -285,6 +306,14 @@ def _rejection_reason(event: dict, replies: list[str]) -> str:
 def _run_conversation(event: dict, pipeline: Callable, db, run_id: str) -> tuple[list[dict], list[str]]:
     sender = "whatsapp:" + event["phone"]
     tags = {"simulated": True, "stream_run": run_id, "stream_kind": event["kind"]}
+    if "demo_point" in event:
+        lat, lng = event["demo_point"]
+        tags.update(latitude=lat, longitude=lng, constituency_zone=event["demo_zone"],
+                    extracted_location=event.get("location_text", event["place"]),
+                    summary=event["demo_summary"])
+        ward = ward_from_coordinates(lat, lng)
+        if ward:
+            tags["ward_no"], tags["ward_officer"] = ward
     filed: list[dict] = []
     replies: list[str] = []
     outbox: list[str] = []
@@ -328,6 +357,8 @@ def _result(event: dict, filed: list[dict], replies: list[str], started: float) 
     report = filed[0]
     result.update(
         outcome="filed",
+        lat=report.get("latitude"),
+        lng=report.get("longitude"),
         reference_id=report.get("reference_id"),
         category=report.get("category"),
         priority=report.get("priority"),
@@ -380,36 +411,96 @@ def _load(raw_db) -> dict:
     return (snap.to_dict() or {}) if snap.exists else {}
 
 
+@contextmanager
+def _stream_lock(raw_db):
+    if not _local_driver_lock.acquire(blocking=False):
+        raise StreamError(429, "A stream operation is in progress.")
+    try:
+        lock = raw_db.collection(CONTROL_COLLECTION).document("driver_lease")
+        lease = {"expires_at": time.time() + LOCK_SECONDS}
+        try:
+            result = lock.create(lease)
+        except Exception as exc:
+            if type(exc).__name__ != "AlreadyExists":
+                raise
+            old = lock.get()
+            if not old.exists or (old.to_dict() or {}).get("expires_at", 0) > time.time():
+                raise StreamError(429, "A stream operation is in progress.") from exc
+            try:
+                lock.delete(option=raw_db.write_option(last_update_time=old.update_time))
+                result = lock.create(lease)
+            except Exception as conflict:
+                if type(conflict).__name__ not in {"AlreadyExists", "FailedPrecondition", "NotFound"}:
+                    raise
+                raise StreamError(429, "A stream operation is in progress.") from conflict
+        try:
+            yield
+        finally:
+            try:
+                if result is None:
+                    lock.delete()
+                else:
+                    lock.delete(option=raw_db.write_option(last_update_time=result.update_time))
+            except Exception as exc:
+                logger.warning("[STREAM] could not release driver lease: %s", exc)
+    finally:
+        _local_driver_lock.release()
+
+
+def _serialized(operation):
+    @wraps(operation)
+    def guarded(raw_db, *args, **kwargs):
+        with _stream_lock(raw_db):
+            return operation(raw_db, *args, **kwargs)
+    return guarded
+
+
 def _is_live(state: dict, now: Optional[float] = None) -> bool:
     now = now or time.time()
     return state.get("status") == "running" and now - state.get("last_tick_at", 0) < STALE_AFTER_SECONDS
 
 
-def _empty_run(run_id: str, scenario: str, rate: int, max_events: int) -> dict:
+def _empty_run(run_id: str, scenario: str, rate: int, max_events: int, mode: str) -> dict:
     now = time.time()
     return {
-        "run_id": run_id, "status": "running", "scenario": scenario, "rate_per_min": rate,
+        "run_id": run_id, "status": "running", "scenario": scenario, "mode": mode, "rate_per_min": rate,
         "max_events": max_events, "started_at": now, "last_tick_at": now, "events": 0, "filed": 0,
         "rejected": 0, "errors": 0, "pipeline_ms_total": 0, "by_priority": {}, "by_source": {},
-        "by_reason": {}, "clusters": {}, "recent": [],
+        "by_reason": {}, "clusters": {}, "recent": [], "activity": {},
     }
 
 
-def start(raw_db, scenario: str, rate_per_min: int, max_events: int) -> dict:
+@_serialized
+def start(raw_db, scenario: str, rate_per_min: int, max_events: int, mode: str = "pipeline") -> dict:
     if scenario not in SCENARIOS:
         raise StreamError(422, "Unknown scenario")
     current = _load(raw_db)
     if _is_live(current):
         raise StreamError(409, "A stream is already running. Stop it first.")
+    rate_cap, event_cap = (BULK_MAX_RATE, BULK_MAX_EVENTS) if mode == "dashboard" else (MAX_RATE, HARD_MAX_EVENTS)
     run = _empty_run(uuid.uuid4().hex[:10], scenario,
-                     max(MIN_RATE, min(rate_per_min, MAX_RATE)),
-                     max(1, min(max_events, HARD_MAX_EVENTS)))
-    _control(raw_db).set(run)
+                     max(MIN_RATE, min(rate_per_min, rate_cap)),
+                     max(1, min(max_events, event_cap)), mode)
+    if mode == "dashboard":
+        budget_ref = raw_db.collection(CONTROL_COLLECTION).document("dashboard_budget")
+        budget = budget_ref.get().to_dict() or {}
+        today = datetime.now(IST).date().isoformat()
+        reserved = budget.get("reserved", 0) if budget.get("date") == today else 0
+        reserved += run["max_events"]
+        if reserved > BULK_DAILY_EVENTS:
+            raise StreamError(429, "Today's dashboard demo event budget has been reached.")
+        batch = raw_db.batch()
+        batch.set(budget_ref, {"date": today, "reserved": reserved})
+        batch.set(_control(raw_db), run)
+        batch.commit()
+    else:
+        _control(raw_db).set(run)
     _write_file_index(raw_db, run)
     logger.info("[STREAM] run %s started: %s at %s/min", run["run_id"], scenario, run["rate_per_min"])
     return public_state(run)
 
 
+@_serialized
 def stop(raw_db) -> dict:
     state = _load(raw_db)
     if state:
@@ -426,22 +517,22 @@ def stop(raw_db) -> dict:
 # `messages`, so neither can answer "what exactly was sent?". Each tick appends
 # its results as one document, which costs one write however large the batch.
 
+def _file_index(state: dict) -> dict:
+    return {
+        "run_id": state["run_id"], "scenario": state["scenario"],
+        "scenario_label": SCENARIOS[state["scenario"]]["label"],
+        "mode": state.get("mode", "pipeline"), "status": state["status"],
+        "started_at": state["started_at"], "last_tick_at": state["last_tick_at"],
+        "events": state["events"], "filed": state["filed"],
+        "rejected": state["rejected"], "errors": state["errors"],
+    }
+
+
 def _write_file_index(raw_db, state: dict) -> None:
     # A failed write here loses part of an export, not a citizen's report, so it
     # must not stop the stream.
     try:
-        raw_db.collection(FILES_COLLECTION).document(state["run_id"]).set({
-            "run_id": state["run_id"],
-            "scenario": state["scenario"],
-            "scenario_label": SCENARIOS[state["scenario"]]["label"],
-            "status": state["status"],
-            "started_at": state["started_at"],
-            "last_tick_at": state["last_tick_at"],
-            "events": state["events"],
-            "filed": state["filed"],
-            "rejected": state["rejected"],
-            "errors": state["errors"],
-        })
+        raw_db.collection(FILES_COLLECTION).document(state["run_id"]).set(_file_index(state))
     except Exception as e:
         logger.warning("[STREAM] could not update the file index: %s", e)
 
@@ -465,7 +556,7 @@ def file_rows(raw_db, run_id: str) -> list[dict]:
     """Every result in one run, in the order it happened."""
     if not raw_db.collection(FILES_COLLECTION).document(run_id).get().exists:
         raise StreamError(404, "No such run.")
-    query = raw_db.collection(FILE_CHUNKS_COLLECTION).where("run_id", "==", run_id).limit(MAX_FILE_CHUNKS)
+    query = raw_db.collection(FILE_CHUNKS_COLLECTION).where("run_id", "==", run_id).limit(BULK_MAX_EVENTS)
     chunks = sorted((d.to_dict() for d in query.stream()), key=lambda c: c.get("seq", 0))
     return [row for chunk in chunks for row in chunk.get("results", [])]
 
@@ -488,7 +579,12 @@ def _absorb(state: dict, results: list[dict]) -> None:
         if key:
             state[bucket][key] = state[bucket].get(key, 0) + 1
 
+    cutoff = int(time.time()) - 60
+    activity = {second: count for second, count in state.get("activity", {}).items() if int(second) > cutoff}
     for r in results:
+        second = str(int(r["at"]))
+        if int(second) > cutoff:
+            activity[second] = activity.get(second, 0) + 1
         state["events"] += 1
         state["pipeline_ms_total"] += r["pipeline_ms"]
         if r["outcome"] == "filed":
@@ -503,12 +599,59 @@ def _absorb(state: dict, results: list[dict]) -> None:
         else:
             state["errors"] += 1
     state["recent"] = (state["recent"] + results)[-RECENT_EVENTS_KEPT:]
+    state["activity"] = activity
 
 
+def _dashboard_batch(raw_db, state: dict, count: int, rng: random.Random, began: float) -> list[dict]:
+    """Exercise report storage and the dashboard with one atomic synthetic batch."""
+    results = []
+    writes = raw_db.batch()
+    run_id = state["run_id"]
+    seq = state.get("ticks", 0)
+    for _ in range(count):
+        if len(results) == count:
+            break
+        started = time.perf_counter()
+        event = generate_event(state["scenario"], rng)
+        if event["kind"] not in {"citizen", "duplicate"}:
+            results.append(_result(event, [], [], started))
+            continue
+        lat, lng = event["demo_point"]
+        source = "gps_pin" if "lat" in event else "text"
+        triage = classify(event["text"], event["place"], lat, lng)
+        ref = raw_db.collection(sim.REPORTS_COLLECTION).document()
+        report = {
+            **triage, "id": ref.id, "reference_id": "UO" + uuid.uuid4().hex[:10].upper(),
+            "timestamp": datetime.now(IST).replace(tzinfo=None).isoformat(), "live_updated_at": SERVER_TIMESTAMP,
+            "sender": "whatsapp:" + event["phone"], "body": event["text"],
+            "latitude": lat, "longitude": lng, "location_source": source,
+            "extracted_location": event.get("location_text", event["place"]),
+            "intake_formats": ["Text", "GPS pin"] if source == "gps_pin" else ["Text"],
+            "constituency_zone": event["demo_zone"], "summary": event["demo_summary"], "status": "Open",
+            "triage_status": "done", "triage_source": "demo:dashboard",
+            "simulated": True, "stream_run": run_id, "stream_kind": event["kind"],
+        }
+        writes.set(ref, report)
+        results.append(_result(event, [report], [], started))
+        if event["kind"] == "duplicate" and len(results) < count:
+            results.append(_result(event, [], ["Already reported"], started))
+    _absorb(state, results)
+    state["ticks"] = seq + 1
+    state["last_tick_at"] = time.time()
+    state["next_tick_at"] = began + len(results) * 60 / state["rate_per_min"]
+    if state["events"] >= state["max_events"]:
+        state["status"] = "completed"
+    writes.set(_control(raw_db), state)
+    writes.set(raw_db.collection(FILES_COLLECTION).document(run_id), _file_index(state))
+    writes.set(raw_db.collection(FILE_CHUNKS_COLLECTION).document(f"{run_id}-{seq:06d}"),
+               {"run_id": run_id, "seq": seq, "results": results})
+    writes.commit()
+    return results
+
+
+@_serialized
 def tick(raw_db, pipeline: Callable, run_id: str, batch: int, rng: Optional[random.Random] = None) -> dict:
-    """Generate and process one batch. The page driving the run keeps a single
-    tick in flight, so this read-modify-write of the run document has no writer
-    to race with."""
+    """Generate one batch under a lease shared by every sandbox instance."""
     state = _load(raw_db)
     if state.get("run_id") != run_id:
         raise StreamError(409, "This run is no longer current.")
@@ -516,12 +659,19 @@ def tick(raw_db, pipeline: Callable, run_id: str, batch: int, rng: Optional[rand
         raise StreamError(409, "This run has stopped.")
 
     now = time.time()
+    remaining = state["max_events"] - state["events"]
+    rng = rng or random.Random()
+    if state.get("mode") == "dashboard":
+        if now < state.get("next_tick_at", 0):
+            raise StreamError(429, "Ticking too fast.")
+        count = max(1, min(batch, BULK_MAX_BATCH, remaining))
+        results = _dashboard_batch(raw_db, state, count, rng, now)
+        return {"results": results, "state": public_state(state)}
+
     if now - state.get("last_tick_at", 0) < MIN_TICK_GAP_SECONDS and state.get("events"):
         raise StreamError(429, "Ticking too fast.")
 
-    remaining = state["max_events"] - state["events"]
     count = max(1, min(batch, MAX_BATCH, remaining))
-    rng = rng or random.Random()
     events = [generate_event(state["scenario"], rng) for _ in range(count)]
 
     state["last_tick_at"] = now
@@ -553,6 +703,7 @@ def public_state(state: dict) -> dict:
         "status": state.get("status", "idle"),
         "live": _is_live(state, now),
         "scenario": state.get("scenario"),
+        "mode": state.get("mode", "pipeline"),
         "rate_per_min": state.get("rate_per_min"),
         "max_events": state.get("max_events"),
         "started_at": state.get("started_at"),
@@ -562,7 +713,8 @@ def public_state(state: dict) -> dict:
         "rejected": state.get("rejected", 0),
         "errors": state.get("errors", 0),
         "avg_pipeline_ms": int(state.get("pipeline_ms_total", 0) / events) if events else None,
-        "observed_per_min": sum(1 for r in recent if now - r.get("at", 0) < 60),
+        "observed_per_min": (sum(count for second, count in state["activity"].items() if now - int(second) < 60)
+                             if "activity" in state else sum(1 for r in recent if now - r.get("at", 0) < 60)),
         "by_priority": state.get("by_priority") or {},
         "by_source": state.get("by_source") or {},
         "by_reason": state.get("by_reason") or {},
@@ -579,6 +731,7 @@ def scenarios() -> list[dict]:
     return [{"key": k, "label": v["label"], "description": v["description"]} for k, v in SCENARIOS.items()]
 
 
+@_serialized
 def purge(raw_db) -> dict:
     """Remove every simulated report and the stream's own state. Refuses while a
     run is live, because that run would only write more."""

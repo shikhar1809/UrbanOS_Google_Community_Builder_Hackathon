@@ -6,6 +6,9 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 from dotenv import load_dotenv
 
+from demo_locations import DEMO_SITES
+from sim import SIMULATED_PHONE_PREFIX
+
 load_dotenv()
 
 if not firebase_admin._apps:
@@ -15,11 +18,6 @@ if not firebase_admin._apps:
     else:
         firebase_admin.initialize_app()
 db = firestore.client()
-
-zones = [
-    "Central Lucknow", "Gomti Nagar", "Alambagh", "Hazratganj", 
-    "Chowk", "Indira Nagar", "Mahanagar", "Aminabad", "Ashiyana", "Rajajipuram"
-]
 
 categories = {
     "Infrastructure": ["pothole", "broken road", "bridge repair", "footpath damage"],
@@ -58,16 +56,16 @@ def generate_proposals(count=1000):
     
     print(f"Generating {count} realistic proposals...")
     
+    rng = random.Random()
     for _ in range(count):
         cat = random.choice(list(categories.keys()))
         tag = random.choice(categories[cat])
-        zone = random.choice(zones)
+        site = rng.choice(DEMO_SITES)
         lang = random.choices(["en", "hi"], weights=[0.7, 0.3])[0]
         
         priority = random.choices(["Critical", "High", "Medium", "Low"], weights=[0.1, 0.3, 0.4, 0.2])[0]
         
-        lat = round(random.uniform(26.75, 26.95), 5) # Approx Lucknow bounds
-        lng = round(random.uniform(80.85, 81.05), 5)
+        lat, lng = site.sample(rng)
         
         doc_ref = db.collection('messages').document()
         ref_id = f"REF-{str(uuid.uuid4())[:8].upper()}"
@@ -80,8 +78,10 @@ def generate_proposals(count=1000):
             
         data = {
             "timestamp": get_random_date().isoformat(),
-            "sender": f"whatsapp:+9198{random.randint(10000000, 99999999)}",
-            "body": generate_body(cat, tag, zone),
+            "live_updated_at": firestore.SERVER_TIMESTAMP,
+            "sender": f"whatsapp:{SIMULATED_PHONE_PREFIX}{rng.randrange(10**9):09}",
+            "simulated": True,
+            "body": generate_body(cat, tag, site.name),
             "media_url": None,
             "media_type": None,
             "latitude": lat,
@@ -90,10 +90,10 @@ def generate_proposals(count=1000):
             "category": cat,
             "priority": priority,
             "sentiment": random.choice(sentiments),
-            "extracted_location": zone,
-            "summary": f"{tag.capitalize()} in {zone}",
+            "extracted_location": site.name,
+            "summary": f"{tag.capitalize()} in {site.name}",
             "original_language": lang,
-            "constituency_zone": zone,
+            "constituency_zone": site.zone,
             "estimated_budget": budget,
             "semantic_tag": tag,
             "reference_id": ref_id,

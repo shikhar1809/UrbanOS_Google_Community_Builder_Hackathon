@@ -172,6 +172,7 @@ class Provider:
     """What UrbanOS needs from a model. Two methods, because there are two jobs."""
 
     name = "none"
+    supports_photo_only = False
 
     def narrate(self, system: str, history: Sequence[Turn], user: str,
                 max_tokens: int = 2048, temperature: float = 0.2) -> str:
@@ -266,11 +267,52 @@ class OllamaProvider(Provider):
                 "chat_model": self.chat_model, "triage_model": self.triage_model}
 
 
+class LlamaCppProvider(OllamaProvider):
+    """Use an explicitly configured llama-server for text triage."""
+
+    name = "llama_cpp"
+
+    def __init__(self, host: Optional[str] = None, model: Optional[str] = None):
+        server = host or os.getenv("LLAMA_CPP_HOST", "http://127.0.0.1:8082")
+        alias = model or os.getenv("LLAMA_CPP_MODEL", "urbanos-qwen-triage")
+        super().__init__(host=server, chat_model=alias, triage_model=alias)
+        token = os.getenv("LLAMA_CPP_API_TOKEN", "").strip()
+        self.headers = {"Authorization": f"Bearer {token}"} if token else {}
+
+    def _chat(self, messages: list[dict], model: str, *, fmt: Any = None,
+              max_tokens: int = 2048, temperature: float = 0.2) -> str:
+        payload = {"model": model, "stream": False, "temperature": temperature,
+                   "messages": [{"role": turn["role"], "content": turn["content"]} for turn in messages]}
+        if max_tokens:
+            payload["max_tokens"] = max_tokens
+        if fmt is not None:
+            payload["response_format"] = {"type": "json_schema", "schema": fmt}
+        try:
+            with httpx.Client(timeout=120, headers=self.headers) as client:
+                response = client.post(f"{self.host}/v1/chat/completions", json=payload)
+                response.raise_for_status()
+                return response.json()["choices"][0]["message"]["content"] or ""
+        except (httpx.HTTPError, ValueError, IndexError, KeyError, TypeError) as error:
+            raise LLMUnavailable("llama-server could not complete the request") from error
+
+    def narrate(self, system: str, history: Sequence[Turn], user: str,
+                max_tokens: int = 2048, temperature: float = 0.2) -> str:
+        raise LLMUnavailable("The UrbanOS fine-tune is configured for structured triage")
+
+    def available(self) -> bool:
+        try:
+            with httpx.Client(timeout=3, headers=self.headers) as client:
+                return client.get(f"{self.host}/health").status_code == 200
+        except httpx.HTTPError:
+            return False
+
+
 class GeminiProvider(Provider):
     """google-genai. The original triage backend, kept as a fallback and for the
     multimodal path, which it handles better than a small local model."""
 
     name = "gemini"
+    supports_photo_only = True
 
     def __init__(self, client, chat_model: Optional[str] = None,
                  triage_model: Optional[str] = None):
@@ -308,7 +350,7 @@ class GeminiProvider(Provider):
                 contents.append(types.Part.from_bytes(data=image.data,
                                                       mime_type=image.mime_type))
             except Exception as e:
-                logger.warning("[LLM] dropping evidence photo for gemini triage: %s", e)
+                raise LLMUnavailable("Gemini could not attach the evidence photo") from e
         try:
             response = self.client.models.generate_content(
                 model=self.triage_model,
@@ -386,6 +428,11 @@ class GroqProvider(Provider):
 
 
 def _build(kind: str) -> Optional[Provider]:
+    if kind == "llama_cpp":
+        # Cloud endpoints can take time to wake up. Request failures already fall back
+        # through normal triage, so a startup probe should not disable the provider.
+        return LlamaCppProvider() if os.getenv("LLAMA_CPP_HOST") else None
+
     if kind == "ollama":
         provider = OllamaProvider()
         return provider if provider.available() else None

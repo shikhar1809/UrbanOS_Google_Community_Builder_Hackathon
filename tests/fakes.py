@@ -31,7 +31,7 @@ class FakeDocument:
         self._key = key
         self.id = key
 
-    def get(self):
+    def get(self, transaction=None):
         return FakeSnapshot(self._store.get(self._key))
 
     def create(self, data):
@@ -139,13 +139,18 @@ class FakeBatch:
     def update(self, ref, data):
         self.ops.append((ref, data))
 
+    def set(self, ref, data):
+        self.ops.append((ref, data, "set"))
+
     def delete(self, ref):
         self.ops.append((ref, None))
 
     def commit(self):
-        for ref, data in self.ops:
+        for ref, data, *kind in self.ops:
             if data is None:
                 ref.delete()
+            elif kind:
+                ref.set(data)
             else:
                 ref.update(data)
         self.commits += 1

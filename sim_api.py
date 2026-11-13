@@ -14,6 +14,7 @@ import logging
 import os
 import re
 import xml.etree.ElementTree as ET
+from typing import Literal
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Path, Query, Request
 from fastapi.responses import Response
@@ -146,13 +147,14 @@ def _raw_db():
 
 class StreamStart(BaseModel):
     scenario: str = Field(default="steady", max_length=32)
-    rate_per_min: int = Field(default=30, ge=1, le=1000)
+    mode: Literal["pipeline", "dashboard"] = "pipeline"
+    rate_per_min: int = Field(default=30, ge=1, le=sim_stream.BULK_MAX_RATE)
     max_events: int = Field(default=sim_stream.DEFAULT_MAX_EVENTS, ge=1, le=100000)
 
 
 class StreamTick(BaseModel):
     run_id: str = Field(max_length=32)
-    batch: int = Field(default=1, ge=1, le=100)
+    batch: int = Field(default=1, ge=1, le=sim_stream.BULK_MAX_BATCH)
 
 
 def _stream_call(fn, *args):
@@ -170,6 +172,9 @@ def stream_state():
     state["scenarios"] = sim_stream.scenarios()
     state["limits"] = {"min_rate": sim_stream.MIN_RATE, "max_rate": sim_stream.MAX_RATE,
                        "max_batch": sim_stream.MAX_BATCH, "hard_max_events": sim_stream.HARD_MAX_EVENTS}
+    state["dashboard_limits"] = {"min_rate": sim_stream.MIN_RATE, "max_rate": sim_stream.BULK_MAX_RATE,
+                                 "max_batch": sim_stream.BULK_MAX_BATCH, "hard_max_events": sim_stream.BULK_MAX_EVENTS,
+                                 "daily_events": sim_stream.BULK_DAILY_EVENTS}
     return state
 
 
@@ -199,7 +204,7 @@ def stream_file(run_id: str = Path(pattern=RUN_ID_PATTERN), format: str = Query(
 
 @sim_app.post("/sim/api/stream/start")
 def stream_start(req: StreamStart):
-    return _stream_call(sim_stream.start, _raw_db(), req.scenario, req.rate_per_min, req.max_events)
+    return _stream_call(sim_stream.start, _raw_db(), req.scenario, req.rate_per_min, req.max_events, req.mode)
 
 
 @sim_app.post("/sim/api/stream/tick")
