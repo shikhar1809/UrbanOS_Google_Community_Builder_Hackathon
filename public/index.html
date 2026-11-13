@@ -180,6 +180,12 @@
         stroke-dasharray: 4 9;
         animation: lucknow-boundary-flow 4s linear infinite;
     }
+    .leaflet-tooltip.aud-area-label {
+        background: transparent; border: 0; box-shadow: none; padding: 0;
+        color: #3730a3; font: 700 11px/1 'Inter', system-ui, sans-serif;
+    }
+    .leaflet-tooltip.aud-area-label::before { display: none; }
+    #aud-map .leaflet-control-attribution { font-size: 8px; line-height: 1.3; max-width: 70%; opacity: .75; }
     @keyframes lucknow-boundary-flow {
         to { stroke-dashoffset: -52; }
     }
@@ -1122,28 +1128,19 @@
 
   <section id="survey-panel-send" role="tabpanel" aria-labelledby="survey-tab-send" tabindex="0" hidden>
     <div class="grid grid-cols-1 items-start gap-3 md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-      <div class="card min-w-0 bg-white p-3">
-        <h3 class="border-b border-gray-100 pb-2 text-lg font-bold text-gray-900">Create a survey</h3>
-          <div class="flex flex-col gap-3 pt-2">
-              <div class="flex flex-col gap-2">
-                  <label for="survey-q" class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Question / Prompt</label>
-                  <textarea id="survey-q" rows="3" class="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-blue-500 resize-none" placeholder="e.g. Rate the quality of the new Aliganj streetlights."></textarea>
-              </div>
-              <div class="flex flex-col gap-2">
-                  <label for="survey-opt" class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Options (Comma separated)</label>
-                  <input type="text" id="survey-opt" class="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-blue-500" placeholder="Excellent, Good, Poor">
-              </div>
-              
-              <!-- AUDIENCE TARGETING -->
-              <details class="bg-indigo-50 border border-indigo-200 rounded-lg p-2">
-                  <summary class="cursor-pointer text-sm font-semibold text-indigo-700">Audience targeting</summary>
-                  <div class="mt-2 flex flex-col gap-2">
-                      <div class="flex items-center justify-between gap-2">
-                          <p class="text-xs text-indigo-700">Leave the filters blank to reach every citizen who has reported.</p>
-                          <button type="button" onclick="SurveyAudience.reset()" class="text-[10px] text-indigo-600 hover:text-indigo-900 underline">Reset</button>
-                      </div>
-
-                      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+      <div class="card min-w-0 bg-white p-3 md:col-start-2 md:row-start-1 md:row-span-2" role="group" aria-labelledby="survey-audience-heading">
+          <div class="flex flex-col gap-2">
+                  <div class="flex items-center justify-between gap-2">
+                      <h3 id="survey-audience-heading" class="text-lg font-bold text-gray-900">Who gets it</h3>
+                      <button type="button" onclick="SurveyAudience.reset()" class="text-[11px] text-indigo-600 hover:text-indigo-900 underline">Clear</button>
+                  </div>
+                  <p class="text-xs text-gray-600">Click the map to circle an area. Citizens who reported inside a circle get the survey. With no circles, everyone who has reported gets it.</p>
+                  <div id="aud-map" class="h-80 overflow-hidden rounded-lg border border-gray-200 bg-gray-100" role="region" aria-label="Map for choosing who gets the survey"></div>
+                  <div id="aud-areas" class="flex flex-wrap gap-1.5"></div>
+                  <details class="rounded-lg border border-gray-200 bg-white p-2">
+                      <summary class="cursor-pointer text-xs font-semibold text-gray-600">More filters</summary>
+                      <div class="mt-2 flex flex-col gap-2">
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                           <div class="flex flex-col gap-1">
                               <label class="text-[10px] font-semibold text-indigo-700 uppercase">Wards</label>
                               <input type="text" id="aud-wards" oninput="SurveyAudience.preview()" placeholder="e.g. 9, 46, 65"
@@ -1201,17 +1198,30 @@
                           <input type="number" id="aud-minreports" min="1" value="1" oninput="SurveyAudience.preview()"
                                  class="w-16 bg-white border border-indigo-200 rounded px-2 py-1 text-[11px]">
                       </div>
-
-                  </div>
-              </details>
-
-              <!-- Keep the audience preview visible while targeting filters are collapsed. -->
+                      </div>
+                  </details>
+              </div>
+      </div>
+      <div class="card min-w-0 bg-white p-3 md:col-start-1 md:row-start-1">
+        <h3 class="border-b border-gray-100 pb-2 text-lg font-bold text-gray-900">Create a survey</h3>
+          <div class="flex flex-col gap-3 pt-2">
+              <div class="flex flex-col gap-2">
+                  <label for="survey-q" class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Question / Prompt</label>
+                  <textarea id="survey-q" rows="3" class="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-blue-500 resize-none" placeholder="e.g. Rate the quality of the new Aliganj streetlights."></textarea>
+              </div>
+              <div class="flex flex-col gap-2">
+                  <label for="survey-opt" class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Options (Comma separated)</label>
+                  <input type="text" id="survey-opt" class="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-blue-500" placeholder="Excellent, Good, Poor">
+              </div>
+              
+              <!-- The audience summary sits beside the send button, whatever was chosen on the map. -->
               <div class="bg-indigo-50 border border-indigo-200 rounded-lg p-2">
                   <div class="flex items-baseline justify-between">
-                      <span class="text-[10px] text-gray-500 uppercase font-bold">Eligible WhatsApp recipients</span>
+                      <span class="text-[10px] text-gray-500 uppercase font-bold">Matching citizens</span>
                       <span class="text-lg font-bold text-indigo-700" id="aud-count">-</span>
                   </div>
                   <div class="text-[10px] text-gray-600 mt-0.5" id="aud-label">All citizens who have reported</div>
+                  <div class="text-[10px] text-indigo-700 mt-0.5" id="aud-delivery">Goes to the WhatsApp sandbox.</div>
                   <div class="text-[10px] text-gray-500 mt-1" id="aud-detail"></div>
                   <div class="flex flex-wrap gap-1 mt-1.5" id="aud-chips"></div>
               </div>
@@ -1223,7 +1233,7 @@
               <p id="survey-send-status" class="text-xs text-slate-700 empty:hidden" role="status"></p>
           </div>
       </div>
-      <div class="card min-w-0 bg-white p-3">
+      <div class="card min-w-0 bg-white p-3 md:col-start-1 md:row-start-2">
         <h3 id="survey-manage-heading" class="text-lg font-bold text-gray-900">Manage surveys</h3>
         <p class="mt-1 mb-2 text-xs text-gray-500">Activate, broadcast, stop, or delete existing surveys.</p>
         <div id="survey-list" class="workspace-list flex flex-col gap-2 pr-1" role="region" aria-labelledby="survey-manage-heading" tabindex="0" aria-live="polite">
@@ -3954,6 +3964,96 @@
         const el = id => document.getElementById(id);
         const multi = id => Array.from((el(id) || {}).selectedOptions || []).map(o => o.value);
 
+        // ── Targeting map: click to drop a circle, every report inside it is in the audience.
+        const AREA_SIZES = [0.5, 1, 2, 3, 5];
+        const INSIDE = '#4f46e5', OUTSIDE = '#94a3b8';
+        let areas = [];
+        let map = null, areaLayer = null, dotLayer = null, dots = [];
+
+        function km(a, lat, lng) {
+            const r = Math.PI / 180, dp = (lat - a.lat) * r, dl = (lng - a.lng) * r;
+            const h = Math.sin(dp / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(lat * r) * Math.sin(dl / 2) ** 2;
+            return 6371 * 2 * Math.asin(Math.sqrt(h));
+        }
+        const inside = (lat, lng) => areas.some(a => km(a, lat, lng) <= a.radius_km);
+
+        function paintMap() {
+            if (!map) return;
+            areaLayer.clearLayers();
+            areas.forEach((a, i) => {
+                L.circle([a.lat, a.lng], {radius: a.radius_km * 1000, color: INSIDE, weight: 2, fillColor: INSIDE, fillOpacity: 0.12})
+                    .bindTooltip('Area ' + (i + 1), {permanent: true, direction: 'center', className: 'aud-area-label'})
+                    .addTo(areaLayer);
+            });
+            dots.forEach(d => {
+                const on = areas.length === 0 || inside(d.lat, d.lng);
+                d.marker.setStyle({color: on ? INSIDE : OUTSIDE, fillColor: on ? INSIDE : OUTSIDE, fillOpacity: on ? 0.75 : 0.35});
+            });
+            paintChips();
+        }
+
+        function paintChips() {
+            const box = el('aud-areas');
+            if (!box) return;
+            box.replaceChildren(...areas.map((a, i) => {
+                const chip = document.createElement('span');
+                chip.className = 'inline-flex items-center gap-1 rounded-full border border-indigo-200 bg-indigo-50 pl-2.5 pr-1 py-0.5 text-[11px] text-indigo-800';
+                const name = document.createElement('span');
+                name.textContent = 'Area ' + (i + 1);
+                const size = document.createElement('select');
+                size.className = 'bg-transparent text-[11px] text-indigo-800 focus:outline-none';
+                size.setAttribute('aria-label', 'Size of area ' + (i + 1));
+                AREA_SIZES.forEach(v => size.add(new Option(v + ' km', String(v), false, v === a.radius_km)));
+                size.addEventListener('change', () => { a.radius_km = Number(size.value); paintMap(); api.preview(); });
+                const remove = document.createElement('button');
+                remove.type = 'button';
+                remove.className = 'rounded-full px-1.5 text-indigo-500 hover:bg-indigo-100 hover:text-indigo-900';
+                remove.setAttribute('aria-label', 'Remove area ' + (i + 1));
+                remove.textContent = '×';
+                remove.addEventListener('click', () => { areas.splice(i, 1); paintMap(); api.preview(); });
+                chip.append(name, size, remove);
+                return chip;
+            }));
+        }
+
+        let dotAttempts = 0;
+        function loadDots() {
+            if (!map || dots.length) return;
+            // Report locations arrive with the dashboard's first data load, which can
+            // finish after this tab is opened. Keep checking for a minute.
+            if (!Array.isArray(window.liveMessagesData)) {
+                if (dotAttempts++ < 40) setTimeout(loadDots, 1500);
+                return;
+            }
+            const renderer = L.canvas({padding: 0.25});
+            window.liveMessagesData.forEach(m => {
+                const lat = Number(m.latitude), lng = Number(m.longitude);
+                if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+                const marker = L.circleMarker([lat, lng], {renderer, radius: 2.5, weight: 0, interactive: false}).addTo(dotLayer);
+                dots.push({lat, lng, marker});
+            });
+            paintMap();
+        }
+
+        function initMap() {
+            const box = el('aud-map');
+            if (!box || box.offsetParent === null || !window.L || !lucknowBounds) return;
+            if (!map) {
+                map = createLucknowMap('aud-map', {zoomControl: true});
+                areaLayer = L.layerGroup().addTo(map);
+                dotLayer = L.layerGroup().addTo(map);
+                map.on('click', e => {
+                    if (areas.length >= 12) return;
+                    areas.push({lat: +e.latlng.lat.toFixed(5), lng: +e.latlng.lng.toFixed(5), radius_km: 1});
+                    paintMap();
+                    api.preview();
+                });
+            } else {
+                map.invalidateSize();
+            }
+            loadDots();
+        }
+
         function build() {
             const wardsRaw = (el('aud-wards') || {}).value || '';
             const wards = wardsRaw.split(',').map(w => w.trim()).filter(Boolean);
@@ -3970,6 +4070,7 @@
                 min_reports: parseInt((el('aud-minreports') || {}).value || '1', 10) || 1,
                 range: (el('aud-range') || {}).value || 'all',
                 anchor: 'now',
+                areas: areas.map(a => ({lat: a.lat, lng: a.lng, radius_km: a.radius_km})),
             };
         }
 
@@ -3989,6 +4090,11 @@
                 if (version !== previewVersion) return;
                 if (el('aud-count')) el('aud-count').textContent = d.eligible_recipient_count ?? '–';
                 if (el('aud-label')) el('aud-label').textContent = d.label;
+                if (el('aud-delivery')) {
+                    const real = d.whatsapp_recipients || 0;
+                    el('aud-delivery').textContent = 'Goes to the WhatsApp sandbox' +
+                        (real ? ' and ' + real + ' approved real number' + (real === 1 ? '' : 's') : '; no real WhatsApp numbers are approved') + '.';
+                }
                 if (el('aud-detail')) {
                     el('aud-detail').textContent =
                         d.matched_reports + ' matching reports of ' + d.scoped_reports +
@@ -4009,9 +4115,10 @@
             }
         }
 
-        return {
+        const api = {
             build,
             resolve,
+            initMap,
             preview() {
                 clearTimeout(previewTimer);
                 const version = ++previewVersion;
@@ -4029,6 +4136,8 @@
                 if (el('aud-sentiment')) el('aud-sentiment').value = '';
                 if (el('aud-range')) el('aud-range').value = 'all';
                 if (el('aud-minreports')) el('aud-minreports').value = '1';
+                areas = [];
+                paintMap();
                 doPreview();
             },
             // Populate the pickers from live data so the options always match what
@@ -4050,6 +4159,7 @@
                         fill('aud-officers', (d.officers || []).map(o => ({key: o.officer, total: o.total})));
                         audienceOptionsLoaded = true;
                         doPreview();
+                        requestAnimationFrame(initMap);
                     } catch (error) {
                         console.warn('[SurveyAudience] populate failed', error);
                     } finally {
@@ -4059,6 +4169,7 @@
                 return audienceOptionsRequest;
             },
         };
+        return api;
     })();
 
     // ─── SURVEY SENTIMENT REPORT ──────────────────────────────────────────
@@ -4181,7 +4292,10 @@
                 updateSurveyAnalytics();
             });
         }
-        else if (window.SurveyAudience) SurveyAudience.populate();
+        else if (window.SurveyAudience) {
+            SurveyAudience.populate();
+            requestAnimationFrame(() => SurveyAudience.initMap());
+        }
     }
 
     function handleSurveyTabKey(event) {

@@ -996,6 +996,13 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db, *, 
     return HTMLResponse(content=str(twiml), media_type="application/xml")
 
 
+class AudienceArea(BaseModel):
+    """A circle drawn on the targeting map."""
+    lat: float = Field(ge=-90, le=90)
+    lng: float = Field(ge=-180, le=180)
+    radius_km: float = Field(ge=0.1, le=15)
+
+
 class AudienceFilter(BaseModel):
     """Who should receive a survey.
 
@@ -1012,6 +1019,8 @@ class AudienceFilter(BaseModel):
     sentiments: list[str] = []
     officers: list[str] = []
     departments: list[str] = []
+    # Circles on the targeting map. A citizen matches when one of their reports is inside any of them.
+    areas: list[AudienceArea] = Field(default_factory=list, max_length=12)
     min_reports: int = 1
     range: str = "all"
     anchor: str = "now"
@@ -1111,6 +1120,7 @@ async def preview_audience(audience: AudienceFilter, db = Depends(get_db), admin
         "range": {"key": window["key"], "label": window["label"]},
         "recipient_count": res["recipient_count"],
         "eligible_recipient_count": len(_survey_senders(res)),
+        "whatsapp_recipients": len(_approved_whatsapp(db, _survey_senders(res))),
         "matched_reports": res["matched_reports"],
         "scoped_reports": res["scoped_reports"],
         "breakdown": res["breakdown"],

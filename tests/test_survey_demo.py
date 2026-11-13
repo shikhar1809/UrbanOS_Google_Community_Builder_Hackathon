@@ -175,3 +175,39 @@ def test_the_sandbox_shares_only_survey_collections_with_the_dashboard():
         ns.collection(name)
 
     assert raw.names == ["surveys", "survey_responses", "sim_messages", "sim_sessions", "sim_inbox"]
+
+
+# --- choosing the audience on the map ------------------------------------------
+
+def test_a_map_circle_targets_only_citizens_who_reported_inside_it(dashboard, db):
+    db.data["messages"]["r0"].update({"latitude": 26.8467, "longitude": 80.9462})  # Hazratganj
+    db.data["messages"]["r1"].update({"latitude": 26.8534, "longitude": 80.9981})  # Gomti Nagar, about 5 km east
+
+    preview = dashboard.post("/surveys/audience/preview", json={
+        "areas": [{"lat": 26.8467, "lng": 80.9462, "radius_km": 1}],
+    }).json()
+
+    assert preview["eligible_recipient_count"] == 1
+    assert preview["label"] == "1 map area"
+
+
+def test_reports_without_a_location_never_match_a_map_area(dashboard, db):
+    preview = dashboard.post("/surveys/audience/preview", json={
+        "areas": [{"lat": 26.85, "lng": 80.95, "radius_km": 15}],
+    }).json()
+
+    assert preview["eligible_recipient_count"] == 0
+
+
+def test_the_preview_says_how_many_real_numbers_are_approved(dashboard, db):
+    approve(db, REAL_CITIZENS[1])
+
+    assert dashboard.post("/surveys/audience/preview", json={}).json()["whatsapp_recipients"] == 1
+
+
+def test_an_absurd_circle_is_refused(dashboard):
+    response = dashboard.post("/surveys/audience/preview", json={
+        "areas": [{"lat": 26.85, "lng": 80.95, "radius_km": 500}],
+    })
+
+    assert response.status_code == 422

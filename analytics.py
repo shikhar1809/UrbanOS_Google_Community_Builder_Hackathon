@@ -29,6 +29,7 @@ Design principles
 
 from __future__ import annotations
 
+import math
 import os
 import re
 import time
@@ -1437,7 +1438,30 @@ def filter_by_audience(records: list[dict], audience: dict) -> list[dict]:
     if depts:
         out = [r for r in out if any(d in r["responsible_body"].lower() for d in depts)]
 
+    areas = [x for x in (a.get("areas") or []) if isinstance(x, dict)]
+    if areas:
+        out = [r for r in out if _inside_any_area(r.get("latitude"), r.get("longitude"), areas)]
+
     return out
+
+
+def _inside_any_area(lat, lng, areas: list[dict]) -> bool:
+    """Whether a report falls inside any circle drawn on the targeting map.
+    Reports with no location cannot be placed, so they never match an area."""
+    if lat is None or lng is None:
+        return False
+    for area in areas:
+        try:
+            clat, clng, radius = float(area["lat"]), float(area["lng"]), float(area["radius_km"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        # Haversine distance in km; exact enough at city scale.
+        p1, p2 = math.radians(clat), math.radians(lat)
+        dp, dl = math.radians(lat - clat), math.radians(lng - clng)
+        h = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+        if 6371.0 * 2 * math.asin(math.sqrt(h)) <= radius:
+            return True
+    return False
 
 
 def resolve_audience(records: list[dict], audience: dict, window: dict | None = None) -> dict:
@@ -1498,6 +1522,9 @@ def describe_audience(audience: dict) -> str:
         if vals:
             label = ", ".join(vals[:4]) + (f" +{len(vals) - 4}" if len(vals) > 4 else "")
             bits.append(f"{prefix} {label}".strip())
+    areas = [x for x in (a.get("areas") or []) if isinstance(x, dict)]
+    if areas:
+        bits.append(f"{len(areas)} map area" + ("s" if len(areas) > 1 else ""))
     if int(a.get("min_reports") or 1) > 1:
         bits.append(f"{a['min_reports']}+ reports filed")
     return " | ".join(bits) if bits else "All citizens who have reported"
