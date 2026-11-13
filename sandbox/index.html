@@ -848,6 +848,32 @@
     }
   }
 
+  // Surveys launched from the UrbanOS dashboard arrive here, like a pushed WhatsApp message.
+  const INBOX_POLL_MS = 4000;
+  let inboxBusy = false;
+  async function checkInbox() {
+    if (!session || inboxBusy || pending > 0 || document.hidden) return;
+    inboxBusy = true;
+    try {
+      // The first check only learns the server's time, so this device's clock never matters.
+      const params = new URLSearchParams({ phone: session.phone });
+      if (session.inboxSince != null) params.set('since', String(session.inboxSince));
+      const data = await api('/sim/api/inbox?' + params.toString());
+      if (session && session.inboxSince == null) { session.inboxSince = data.latest; saveSession(); return; }
+      if (session && data.messages && data.messages.length) {
+        for (const message of data.messages) session.thread.push(incoming(message.text));
+        session.inboxSince = data.latest;
+        saveSession();
+        renderThread();
+      }
+    } catch (err) {
+      // A missed check is retried on the next tick.
+    } finally {
+      inboxBusy = false;
+    }
+  }
+  setInterval(checkInbox, INBOX_POLL_MS);
+
   function sendText() {
     const input = $('#text');
     const body = input.value.trim();

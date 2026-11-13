@@ -13,6 +13,7 @@ import binascii
 import logging
 import os
 import re
+import time
 import xml.etree.ElementTree as ET
 from typing import Literal
 
@@ -23,7 +24,7 @@ from pydantic import BaseModel, Field
 import sim
 import sim_stream
 from main import _process_whatsapp_sync, firestore_db
-from state import clear_session
+from state import clear_session, update_session
 
 logger = logging.getLogger(__name__)
 
@@ -127,6 +128,36 @@ def get_media(media_id: str):
         raise HTTPException(status_code=404, detail="Not found")
     data, content_type = found
     return Response(content=data, media_type=content_type, headers={"Cache-Control": "private, max-age=3600"})
+
+
+@sim_app.get("/sim/api/inbox")
+def inbox(phone: str = Query(pattern=PHONE_PATTERN), since: float | None = Query(default=None, ge=0)):
+    """Broadcasts posted after `since`, for an open sandbox chat to show.
+
+    Without `since`, nothing is returned and `latest` is the server's current
+    time. A chat starts from that rather than its own clock: a laptop running a
+    few seconds fast would otherwise skip a survey sent just after it opened.
+
+    Receiving a survey puts the chat in the same state as a citizen who was just
+    asked one, so a numeric reply is recorded as the answer.
+    """
+    if since is None:
+        return {"messages": [], "latest": time.time()}
+    db = _sandbox_db()
+    query = db.collection("inbox")
+    try:
+        from google.cloud.firestore_v1.base_query import FieldFilter
+        query = query.where(filter=FieldFilter("sent_epoch", ">", since))
+    except Exception:
+        query = query.where("sent_epoch", ">", since)
+    items = [d.to_dict() for d in query.order_by("sent_epoch").limit(5).stream()]
+    surveys = [i for i in items if i.get("kind") == "survey"]
+    if surveys:
+        update_session(db, _sender(phone), "awaiting_survey", {"survey_id": surveys[-1].get("survey_id")})
+    return {
+        "messages": [{"text": i.get("text", ""), "sent_epoch": i.get("sent_epoch")} for i in items],
+        "latest": max([i.get("sent_epoch", since) for i in items], default=since),
+    }
 
 
 @sim_app.post("/sim/api/reset")

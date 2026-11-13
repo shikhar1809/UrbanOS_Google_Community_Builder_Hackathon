@@ -547,7 +547,7 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db, *, 
                     choice_idx = int(body.strip()) - 1
                     if 0 <= choice_idx < len(options):
                         choice = options[choice_idx]
-                        db.collection('survey_responses').add({'survey_id': active_survey.get('id'), 'sender': sender, 'selected_option': choice})
+                        db.collection('survey_responses').add(sim.tag_response({'survey_id': active_survey.get('id'), 'sender': sender, 'selected_option': choice}))
                         twiml.message(get_reply("survey_thanks", lang))
                         return HTMLResponse(content=str(twiml), media_type="application/xml")
                 except Exception:
@@ -687,7 +687,7 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db, *, 
             choice_idx = int(body.strip()) - 1
             if 0 <= choice_idx < len(options):
                 choice = options[choice_idx]
-                db.collection('survey_responses').add({'survey_id': active_survey.get('id'), 'sender': sender, 'selected_option': choice})
+                db.collection('survey_responses').add(sim.tag_response({'survey_id': active_survey.get('id'), 'sender': sender, 'selected_option': choice}))
                 twiml.message(get_reply("survey_thanks", lang))
             else:
                 twiml.message(get_reply("invalid_option", lang, n=len(options)))
@@ -1052,9 +1052,13 @@ async def get_surveys(db = Depends(get_db), admin = Depends(verify_admin)):
         resp_docs = list(db.collection('survey_responses').where('survey_id', '==', sid).stream())
 
         counts_dict = {}
+        sandbox_answers = 0
         for d in resp_docs:
-            opt = d.to_dict().get('selected_option')
+            row = d.to_dict()
+            opt = row.get('selected_option')
             counts_dict[opt] = counts_dict.get(opt, 0) + 1
+            sandbox_answers += 1 if row.get('simulated') else 0
+        real_answers = len(resp_docs) - sandbox_answers
 
         sent_to = s.get('sent_to') or []
         results.append({
@@ -1068,7 +1072,9 @@ async def get_surveys(db = Depends(get_db), admin = Depends(verify_admin)):
             "sent_count": len(sent_to),
             "sent_at": s.get('sent_at'),
             "response_count": len(resp_docs),
-            "response_rate": round(len(resp_docs) / len(sent_to), 3) if sent_to else None,
+            "sandbox_response_count": sandbox_answers,
+            # Only real WhatsApp recipients are in sent_to, so only their answers count here.
+            "response_rate": round(real_answers / len(sent_to), 3) if sent_to else None,
         })
     return results
 
@@ -1153,6 +1159,41 @@ async def delete_survey(survey_id: str, db = Depends(get_db), admin = Depends(ve
     return {"status": "success"}
 
 
+SANDBOX_INBOX = "sim_inbox"
+WHATSAPP_ALLOWLIST_DOC = ("config", "whatsapp_allowlist")
+
+
+def _approved_whatsapp(db, senders: list[str]) -> list[str]:
+    """Senders that may receive a real WhatsApp broadcast.
+
+    Only numbers listed in config/whatsapp_allowlist (field `phones`) qualify.
+    The seeded data holds over a thousand real-looking numbers and the dashboard
+    needs no sign-in, so an empty or unreadable list sends to nobody.
+    """
+    try:
+        snap = db.collection(WHATSAPP_ALLOWLIST_DOC[0]).document(WHATSAPP_ALLOWLIST_DOC[1]).get()
+        listed = (snap.to_dict() or {}).get("phones") or [] if getattr(snap, "exists", False) else []
+    except Exception as e:
+        logger.warning(f"[SURVEY] could not read the WhatsApp allowlist, sending to nobody: {e}")
+        return []
+    digits = lambda value: "".join(ch for ch in str(value) if ch.isdigit())
+    allowed = {digits(p) for p in listed if digits(p)}
+    return [s for s in senders if digits(s) in allowed]
+
+
+def _post_to_sandbox(db, survey_id: str, text: str) -> bool:
+    """Put a broadcast in the sandbox inbox, which open sandbox chats check."""
+    try:
+        db.collection(SANDBOX_INBOX).add({
+            "kind": "survey", "survey_id": survey_id, "text": text,
+            "sent_at": datetime.now().isoformat(), "sent_epoch": time.time(),
+        })
+        return True
+    except Exception as e:
+        logger.error(f"[SURVEY] could not post the survey to the sandbox: {e}")
+        return False
+
+
 def _survey_senders(resolved: dict) -> list[str]:
     return [row["sender"] for row in resolved["recipients"]
             if row["sender"] and not sim.is_simulated_sender(row["sender"])]
@@ -1178,18 +1219,16 @@ async def broadcast_survey(survey_id: str, req: BroadcastRequest | None = None, 
     resolved = AN.resolve_audience(snap["records"] or [], audience, window)
     senders = _survey_senders(resolved)
     label = AN.describe_audience(audience)
+    approved = _approved_whatsapp(db, senders)
 
     if req.dry_run:
         return JSONResponse(content={
             "status": "dry_run", "audience_label": label,
             "would_send_to": len(senders), "matched_reports": resolved["matched_reports"],
+            "whatsapp_recipients": len(approved), "sandbox": True,
             "breakdown": resolved["breakdown"],
         })
 
-    if not TWILIO_ACCOUNT_SID or not TWILIO_AUTH_TOKEN or not TWILIO_WHATSAPP_NUMBER:
-        raise HTTPException(status_code=500, detail="Twilio credentials missing")
-
-    client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
     options = [opt.strip() for opt in survey.get('options').split(',')]
     opt_text = "\n".join([f"{i+1}. {opt}" for i, opt in enumerate(options)])
     msg_body = (
@@ -1197,8 +1236,15 @@ async def broadcast_survey(survey_id: str, req: BroadcastRequest | None = None, 
         f"Reply with the number of your choice:\n{opt_text}"
     )
 
+    # The sandbox gets every broadcast, so the demo never depends on real phones.
+    sandbox_delivered = _post_to_sandbox(db, survey_id, msg_body)
+
+    if approved and not (TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN and TWILIO_WHATSAPP_NUMBER):
+        raise HTTPException(status_code=500, detail="Twilio credentials missing")
+
     sent, failed = [], []
-    for sender_phone in senders:
+    client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN) if approved else None
+    for sender_phone in approved:
         try:
             client.messages.create(from_=TWILIO_WHATSAPP_NUMBER, body=msg_body, to=sender_phone)
             sent.append(sender_phone)
@@ -1216,7 +1262,8 @@ async def broadcast_survey(survey_id: str, req: BroadcastRequest | None = None, 
     })
 
     return {"status": "success", "broadcast_count": len(sent), "failed_count": len(failed),
-            "audience_label": label, "targeted": len(senders)}
+            "audience_label": label, "targeted": len(senders),
+            "whatsapp_recipients": len(approved), "sandbox_delivered": sandbox_delivered}
 
 
 class ChatMessage(BaseModel):

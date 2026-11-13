@@ -4393,7 +4393,7 @@
 
         const audience = SurveyAudience.build();
         const confirmSend = (count, label) => confirm(
-            `Activate this survey and send it to ${count} WhatsApp recipients?\n\n${label}\n\nThis replaces any active survey.`);
+            `Activate this survey for ${count} matching citizens?\n\n${label}\n\nIt appears in the WhatsApp sandbox at once. Real WhatsApp goes only to approved numbers. This replaces any active survey.`);
         let created = false, active = false;
         button.disabled = true;
         status.textContent = 'Checking the current audience…';
@@ -4435,7 +4435,7 @@
             status.textContent = 'Sending survey…';
             const sent = await broadcast(false);
             if (sent.status !== 'success') throw new Error('Broadcast outcome unavailable.');
-            status.textContent = `${sent.broadcast_count} sent${sent.failed_count ? ` · ${sent.failed_count} failed` : ''}.`;
+            status.textContent = `${sent.sandbox_delivered ? 'Sent to the sandbox' : 'Sandbox delivery failed'} · ${sent.broadcast_count} real WhatsApp${sent.failed_count ? ` · ${sent.failed_count} failed` : ''}.`;
             question.value = '';
             options.value = '';
         } catch (error) {
@@ -4458,7 +4458,7 @@
             if (!dryRes.ok) throw new Error(`Audience check returned ${dryRes.status}.`);
             let dry = await dryRes.json();
             if (!dry.would_send_to) { alert('No eligible recipients match this survey audience.'); return; }
-            if(!confirm(`Broadcast to ${dry.would_send_to} citizen(s)?\n\nAudience: ${dry.audience_label}\nMatching reports: ${dry.matched_reports}\n\nThis sends real WhatsApp messages and cannot be undone.`)) return;
+            if(!confirm(`Broadcast to ${dry.would_send_to} citizen(s)?\n\nAudience: ${dry.audience_label}\nMatching reports: ${dry.matched_reports}\n\nIt appears in the WhatsApp sandbox at once. Real WhatsApp goes only to ${dry.whatsapp_recipients || 0} approved number(s).`)) return;
 
             let res = await authFetch(`/surveys/${id}/broadcast`, {
                 method: 'POST',
@@ -4467,7 +4467,7 @@
             });
             let data = await res.json();
             if(data.status === 'success') {
-                alert(`Broadcast sent to ${data.broadcast_count} citizens (${data.audience_label}).` + (data.failed_count ? `\n${data.failed_count} failed.` : ''));
+                alert(`Survey sent to the sandbox and ${data.broadcast_count} real WhatsApp number(s) (${data.audience_label}).` + (data.failed_count ? `\n${data.failed_count} failed.` : ''));
                 loadSurveys();
             } else {
                 alert("Broadcast failed.");
@@ -4509,7 +4509,7 @@
             });
             let dry = await dryRes.json();
             if (dry.would_send_to > 0) {
-                if (!confirm(`Broadcast to ${dry.would_send_to} citizen(s)?\n\nAudience: ${dry.audience_label}\nMatching reports: ${dry.matched_reports}\n\nThis sends real WhatsApp messages and cannot be undone.`)) {
+                if (!confirm(`Broadcast to ${dry.would_send_to} citizen(s)?\n\nAudience: ${dry.audience_label}\nMatching reports: ${dry.matched_reports}\n\nIt appears in the WhatsApp sandbox at once. Real WhatsApp goes only to ${dry.whatsapp_recipients || 0} approved number(s).`)) {
                     loadSurveys();
                     return;
                 }
@@ -4519,8 +4519,8 @@
                     body: JSON.stringify({dry_run: false})
                 });
                 let bData = await bRes.json();
-                if(bData.broadcast_count > 0) {
-                    alert(`✅ Survey activated & broadcast to ${bData.broadcast_count} citizens!`);
+                if (bData.status === 'success') {
+                    alert(`✅ Survey activated and sent to the sandbox, plus ${bData.broadcast_count} real WhatsApp number(s).`);
                 }
             }
         } catch(e) {

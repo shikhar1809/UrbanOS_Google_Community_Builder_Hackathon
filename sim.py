@@ -52,6 +52,12 @@ _sink_var: contextvars.ContextVar = contextvars.ContextVar("sim_outbound", defau
 _report_tags_var: contextvars.ContextVar = contextvars.ContextVar("sim_report_tags", default=None)
 
 
+# Collections the sandbox shares with the dashboard instead of copying, so a survey
+# launched on the dashboard reaches the sandbox chat and its answers are counted.
+# Answers written from the sandbox are tagged simulated (see tag_response).
+SHARED_WITH_DASHBOARD = ("surveys", "survey_responses")
+
+
 class NamespacedDB:
     """Proxy that prefixes every collection name, so the production pipeline
     runs against ``sim_*`` collections while its code stays unchanged."""
@@ -61,6 +67,8 @@ class NamespacedDB:
         self._prefix = prefix
 
     def collection(self, name: str):
+        if name in SHARED_WITH_DASHBOARD:
+            return self._db.collection(name)
         return self._db.collection(self._prefix + name)
 
     def __getattr__(self, item):
@@ -121,6 +129,14 @@ def session(db, outbox: list) -> Iterator[None]:
     finally:
         _sink_var.reset(sink_token)
         _db_var.reset(db_token)
+
+
+def tag_response(record: dict) -> dict:
+    """Mark a survey answer given in the sandbox, so the dashboard can tell it from
+    a real citizen's. Real answers pass through unchanged."""
+    if _db_var.get() is not None:
+        record["simulated"] = True
+    return record
 
 
 def outbound_sink() -> Optional[Callable[[str, str], None]]:

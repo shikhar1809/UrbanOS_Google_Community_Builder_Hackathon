@@ -208,16 +208,28 @@ def test_detailed_survey_report_displays_markup_as_text(desktop, dashboard):
 
 
 def test_confirmed_survey_sends_once_to_the_eligible_recipient(desktop, dashboard):
+    dashboard.db.data.setdefault("config", {})["whatsapp_allowlist"] = {"phones": [RECIPIENT]}
     page = desktop()
     compose_survey(page)
     page.once("dialog", lambda dialog: dialog.accept())
     page.get_by_role("button", name="Review and send survey").click()
-    expect(page.locator("#survey-send-status")).to_have_text("1 sent.")
+    expect(page.locator("#survey-send-status")).to_have_text("Sent to the sandbox · 1 real WhatsApp.")
     assert [delivery["to"] for delivery in dashboard.deliveries] == [RECIPIENT]
+    assert len(dashboard.db.data["sim_inbox"]) == 1, "the sandbox chat gets every broadcast"
     assert not dashboard.db.data["surveys"]["qa"]["is_active"]
     assert [survey["question"] for survey in dashboard.db.data["surveys"].values() if survey["is_active"]] == [
         "How do you rate road repairs?",
     ]
+
+
+def test_an_unapproved_recipient_gets_no_real_whatsapp_but_the_sandbox_does(desktop, dashboard):
+    page = desktop()
+    compose_survey(page)
+    page.once("dialog", lambda dialog: dialog.accept())
+    page.get_by_role("button", name="Review and send survey").click()
+    expect(page.locator("#survey-send-status")).to_have_text("Sent to the sandbox · 0 real WhatsApp.")
+    assert dashboard.deliveries == []
+    assert len(dashboard.db.data["sim_inbox"]) == 1
 
 
 def test_survey_activation_failure_preserves_the_draft_and_sends_nothing(desktop, dashboard):
