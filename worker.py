@@ -7,6 +7,7 @@ import tempfile
 import time
 import logging
 
+import llm
 import sim
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -85,7 +86,7 @@ async def process_voice_note(media_url: str, phone_number: str, lang: str = "Eng
                   "locality names, and code-switching. Do not translate or standardize the speech. "
                   "Return only the transcription and use [inaudible] for words you cannot hear.")
         transcription_response = gemini_client.models.generate_content(
-            model='gemini-2.5-flash-lite',
+            model=llm.gemini_model(),
             contents=[uploaded_file, prompt]
         )
         

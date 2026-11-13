@@ -31,6 +31,7 @@ import json
 import logging
 import os
 import re
+import time
 from dataclasses import dataclass
 from typing import Any, Optional, Sequence, Type
 
@@ -55,12 +56,19 @@ AUTO_ORDER = ("ollama", "groq", "gemini")
 # known, and defaults baked into a signature have the same problem.
 DEFAULT_OLLAMA_HOST = "http://localhost:11434"
 DEFAULT_OLLAMA_MODEL = "llama3.1:8b"
-DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
+# Google retires older models for new projects: gemini-2.5-flash now answers 404
+# "no longer available to new users". Override with GEMINI_CHAT_MODEL.
+DEFAULT_GEMINI_MODEL = "gemini-3.8-flash"
 DEFAULT_GROQ_MODEL = "groq/compound"
 DEFAULT_GROQ_TRIAGE_MODEL = "llama-3.1-8b-instant"
 # Deployed functions cannot start without their declared secrets existing, so an
 # unconfigured key is stored as this value rather than left missing.
 UNSET_SECRET = "unset"
+
+
+def gemini_model() -> str:
+    """The one Gemini model every call uses, so a retirement is a one-line change."""
+    return os.getenv("GEMINI_CHAT_MODEL", DEFAULT_GEMINI_MODEL)
 
 
 def groq_api_key() -> Optional[str]:
@@ -271,6 +279,8 @@ class LlamaCppProvider(OllamaProvider):
     """Use an explicitly configured llama-server for text triage."""
 
     name = "llama_cpp"
+    # The fine-tune reads text only. In a chain it is asked without the photo.
+    text_only = True
 
     def __init__(self, host: Optional[str] = None, model: Optional[str] = None):
         server = host or os.getenv("LLAMA_CPP_HOST", "http://127.0.0.1:8082")
@@ -317,7 +327,7 @@ class GeminiProvider(Provider):
     def __init__(self, client, chat_model: Optional[str] = None,
                  triage_model: Optional[str] = None):
         self.client = client
-        self.chat_model = chat_model or os.getenv("GEMINI_CHAT_MODEL", DEFAULT_GEMINI_MODEL)
+        self.chat_model = chat_model or gemini_model()
         self.triage_model = triage_model or self.chat_model
 
     def narrate(self, system: str, history: Sequence[Turn], user: str,
@@ -463,6 +473,65 @@ def _build(kind: str) -> Optional[Provider]:
     return None
 
 
+_QUOTA_MARKERS = ("402", "429", "resource_exhausted", "quota", "depleted", "rate limit")
+
+
+class ChainProvider(Provider):
+    """Several providers in priority order, set as `LLM_PROVIDER=gemini,llama_cpp`.
+
+    Each job goes to the first provider that answers. A provider refused on
+    quota or billing is skipped for a while, because its next call would fail
+    the same way and every report would wait on it first. Only when every
+    provider fails does the caller see LLMUnavailable, and triage then falls
+    back to its keyword rules as it always has.
+    """
+
+    COOLDOWN_SECONDS = 120
+
+    def __init__(self, providers: Sequence[Provider]):
+        self.providers = list(providers)
+        self._cooling_until: dict[str, float] = {}
+        self._last: Optional[Provider] = None
+
+    @property
+    def name(self) -> str:
+        # Triage records "model:" + name, so report who actually answered.
+        return self._last.name if self._last else "+".join(p.name for p in self.providers)
+
+    @property
+    def supports_photo_only(self) -> bool:
+        return any(getattr(p, "supports_photo_only", False) for p in self.providers)
+
+    def _run(self, job: str, call):
+        now = time.time()
+        ready = [p for p in self.providers if self._cooling_until.get(p.name, 0.0) <= now]
+        errors = []
+        for provider in ready or self.providers:
+            try:
+                answer = call(provider)
+            except Exception as e:
+                errors.append(f"{provider.name}: {e}")
+                if any(marker in str(e).lower() for marker in _QUOTA_MARKERS):
+                    self._cooling_until[provider.name] = now + self.COOLDOWN_SECONDS
+                logger.warning("[LLM] %s %s failed, trying the next provider: %s", provider.name, job, e)
+                continue
+            self._last = provider
+            return answer
+        raise LLMUnavailable(f"every provider failed {job}: " + "; ".join(errors))
+
+    def narrate(self, system: str, history: Sequence[Turn], user: str,
+                max_tokens: int = 2048, temperature: float = 0.2) -> str:
+        return self._run("narration", lambda p: p.narrate(system, history, user, max_tokens, temperature))
+
+    def classify(self, prompt: str, schema: Type[BaseModel],
+                 image: Optional[ImageRef] = None) -> BaseModel:
+        return self._run("triage", lambda p: p.classify(
+            prompt, schema, image=None if getattr(p, "text_only", False) else image))
+
+    def describe(self) -> dict:
+        return {"provider": "chain", "order": [p.describe() for p in self.providers]}
+
+
 _cached: Optional[Provider] = None
 _resolved = False
 
@@ -478,6 +547,18 @@ def get_provider(refresh: bool = False) -> Optional[Provider]:
         return _cached
 
     requested = os.getenv("LLM_PROVIDER", "auto").strip().lower()
+    chain = [kind.strip() for kind in requested.split(",") if kind.strip()]
+    if len(chain) > 1:
+        # A list is an explicit priority order: use every configured provider in it.
+        built = [provider for provider in (_build(kind) for kind in chain) if provider is not None]
+        _cached = built[0] if len(built) == 1 else (ChainProvider(built) if built else None)
+        if _cached is None:
+            logger.warning("[LLM] none of %s is configured; serving computed answers only", chain)
+        else:
+            logger.info("[LLM] using %s", _cached.describe())
+        _resolved = True
+        return _cached
+
     order = AUTO_ORDER if requested in ("", "auto") else (requested,)
 
     _cached = None

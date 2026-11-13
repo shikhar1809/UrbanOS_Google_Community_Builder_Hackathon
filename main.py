@@ -299,7 +299,7 @@ def evidence_photo_rejection(media_url: str, media_type: str) -> str | None:
             if image:
                 part = types.Part.from_bytes(data=image.data, mime_type=image.mime_type)
                 response = gemini_client.models.generate_content(
-                    model="gemini-2.5-flash", contents=[GR.IMAGE_CLASSIFIER_PROMPT, part],
+                    model=LLM.gemini_model(), contents=[GR.IMAGE_CLASSIFIER_PROMPT, part],
                 )
                 verdict = GR.parse_image_verdict(response.text)
                 if not verdict["accept"]:
@@ -415,7 +415,7 @@ def _notify_triage_details(report: dict) -> bool:
     if lang != "English" and gemini_client and not TRIAGE.model_cooling():
         try:
             tr = gemini_client.models.generate_content(
-                model='gemini-2.5-flash',
+                model=LLM.gemini_model(),
                 contents=f"Translate ONLY this text to {lang}, keep the reference ID #{ref_id}, the word STATUS and names exactly as is. Preserve newlines:\n{body}"
             )
             body = tr.text.strip()
@@ -775,7 +775,7 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db, *, 
                     gate_raw = gresp.choices[0].message.content
                 else:
                     gate_raw = gemini_client.models.generate_content(
-                        model='gemini-2.5-flash', contents=gate_prompt
+                        model=LLM.gemini_model(), contents=gate_prompt
                     ).text
                 parsed_gate = GR.parse_location_check(gate_raw)
                 gate_verdict = parsed_gate["verdict"]
@@ -968,7 +968,7 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db, *, 
             if lang != "English" and gemini_client and not TRIAGE.model_cooling():
                 try:
                     tr = gemini_client.models.generate_content(
-                        model='gemini-2.5-flash',
+                        model=LLM.gemini_model(),
                         contents=f"Translate ONLY this sentence to {lang}, keep numbers and formatting intact, return only the translation:\n{survey_q}"
                     )
                     survey_q = tr.text.strip()
@@ -979,7 +979,7 @@ def _process_whatsapp_sync(form_data, background_tasks: BackgroundTasks, db, *, 
             if lang != "English" and gemini_client and not TRIAGE.model_cooling():
                 try:
                     tr = gemini_client.models.generate_content(
-                        model='gemini-2.5-flash',
+                        model=LLM.gemini_model(),
                         contents=f"Translate ONLY this text to {lang}, keep the reference ID #{ref_id} and names exactly as is. Preserve newlines:\n{receipt_msg}"
                     )
                     receipt_msg = tr.text.strip()

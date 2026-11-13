@@ -28,7 +28,8 @@ import triage_rules
 
 logger = logging.getLogger(__name__)
 
-TRIAGE_MODEL = "gemini-2.5-flash"
+# Only the legacy raw google-genai path uses this; providers choose their own.
+TRIAGE_MODEL = "gemini-3.8-flash"
 
 # After a quota or billing refusal the next call will fail the same way, and each
 # attempt adds a second of latency to a report the rules can file at once.
